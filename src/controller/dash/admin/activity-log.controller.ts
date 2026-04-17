@@ -1,6 +1,7 @@
 import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import { ActivityLoggerPlugin } from '../../../middleware/logger.middleware';
 import activityLogService from '../../../services/activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
 
@@ -8,6 +9,7 @@ const ObjectId = mongoose.Types.ObjectId;
 
 export const activityLogController = new Elysia({ prefix: '/activity-logs' })
     .use(AuthPlugin)
+    .use(ActivityLoggerPlugin)
 
     .get(
         '/',
