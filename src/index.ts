@@ -1,7 +1,22 @@
-import { Elysia } from "elysia";
+import { Elysia } from 'elysia';
+import { MongoDB } from './databases/database';
+import RedisClient from './databases/redis';
+import { loadMongoConfigFromEnv } from './databases/config';
+import { dashboardController } from './controller/dash/index';
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+async function bootstrap() {
+    // Connect MongoDB
+    const db = MongoDB.getInstance(loadMongoConfigFromEnv());
+    await db.connect();
 
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
+    // Connect Redis
+    await RedisClient.getInstance().connect();
+
+    const app = new Elysia()
+        .use(dashboardController)
+        .listen(3000);
+
+    console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+}
+
+bootstrap();
