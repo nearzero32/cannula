@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import type { ITimestamps } from './common.interface';
 
 export const IAdsStatusEnum = {
     ACTIVE: 'active',
@@ -7,7 +8,7 @@ export const IAdsStatusEnum = {
 
 export type IAdsStatus = (typeof IAdsStatusEnum)[keyof typeof IAdsStatusEnum];
 
-export interface IAds {
+export interface IAds extends ITimestamps {
     title: string | null;
     description: string | null;
     image: string;
@@ -15,6 +16,4 @@ export interface IAds {
     clinicId: mongoose.Types.ObjectId;
     status: IAdsStatus;
     endDate: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

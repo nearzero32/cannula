@@ -1,4 +1,6 @@
-export interface IAboutUs {
+import type { ITimestamps } from './common.interface';
+
+export interface IAboutUs extends ITimestamps {
     name: string;
     logo: string;
     description: string | null;
@@ -7,6 +9,4 @@ export interface IAboutUs {
     website: string | null;
     facebook: string | null;
     instagram: string | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

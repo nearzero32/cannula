@@ -1,4 +1,5 @@
 import type mongoose from 'mongoose';
+import type { IBaseDocument } from './common.interface';
 
 export const IAdminPermissionEnum = {
     MANAGE_USERS: 'manage_users',
@@ -16,8 +17,7 @@ export const IAdminPermissionEnum = {
 
 export type IAdminPermission = (typeof IAdminPermissionEnum)[keyof typeof IAdminPermissionEnum];
 
-export interface IAdmin {
-    _id: string;
+export interface IAdmin extends IBaseDocument {
     userId: mongoose.Types.ObjectId;
     displayName: string;
     jobTitle?: string | null;
@@ -26,6 +26,4 @@ export interface IAdmin {
     isActive: boolean;
     createdBy?: mongoose.Types.ObjectId | null;
     lastActionAt?: Date | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

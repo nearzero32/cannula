@@ -15,8 +15,9 @@ export const IUserStatusEnum = {
 
 export type IUserStatus = (typeof IUserStatusEnum)[keyof typeof IUserStatusEnum];
 
-export interface IUser {
-    _id: string;
+import type { IBaseDocument } from './common.interface';
+
+export interface IUser extends IBaseDocument {
     fullName: string;
     email?: string;
     phone: string;
@@ -26,6 +27,4 @@ export interface IUser {
     isPhoneVerified: boolean;
     isEmailVerified: boolean;
     lastLoginAt?: Date;
-    createdAt: Date;
-    updatedAt: Date;
 }

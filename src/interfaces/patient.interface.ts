@@ -1,4 +1,5 @@
 import type mongoose from 'mongoose';
+import type { IBaseDocument, IWithNotesInternal } from './common.interface';
 
 export const IPatientGenderEnum = {
     MALE: 'male',
@@ -28,8 +29,7 @@ export const IPatientStatusEnum = {
 
 export type IPatientStatus = (typeof IPatientStatusEnum)[keyof typeof IPatientStatusEnum];
 
-export interface IPatient {
-    _id: string;
+export interface IPatient extends IBaseDocument, IWithNotesInternal {
     userId: mongoose.Types.ObjectId;
     fullName: string;
     gender?: IPatientGender | null;
@@ -43,7 +43,4 @@ export interface IPatient {
     emergencyContactName?: string | null;
     emergencyContactPhone?: string | null;
     status: IPatientStatus;
-    notesInternal?: string | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

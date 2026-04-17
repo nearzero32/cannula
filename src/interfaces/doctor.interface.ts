@@ -1,4 +1,5 @@
 import type mongoose from 'mongoose';
+import type { IBaseDocument, IWithNotesInternal } from './common.interface';
 
 export const IDoctorGenderEnum = {
     MALE: 'male',
@@ -30,8 +31,7 @@ export interface IDoctorMapLocation {
     lng?: number | null;
 }
 
-export interface IDoctor {
-    _id: string;
+export interface IDoctor extends IBaseDocument, IWithNotesInternal {
     userId: mongoose.Types.ObjectId;
     fullName: string;
     displayName: string;
@@ -63,7 +63,4 @@ export interface IDoctor {
     acceptingNewPatients: boolean;
     isFeatured: boolean;
     status: IDoctorStatus;
-    notesInternal?: string | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

@@ -1,4 +1,5 @@
 import type mongoose from 'mongoose';
+import type { IBaseDocument, IWithCreatedBy } from './common.interface';
 
 export const ISpecialtyStatusEnum = {
     ACTIVE: 'active',
@@ -7,14 +8,10 @@ export const ISpecialtyStatusEnum = {
 
 export type ISpecialtyStatus = (typeof ISpecialtyStatusEnum)[keyof typeof ISpecialtyStatusEnum];
 
-export interface ISpecialty {
-    _id: string;
+export interface ISpecialty extends IBaseDocument, IWithCreatedBy {
     name: string;
     description?: string | null;
     icon?: string | null;
     status: ISpecialtyStatus;
     sortOrder: number;
-    createdBy?: mongoose.Types.ObjectId | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import type { ITimestamps } from './common.interface';
 
 export const IActivityLogActionEnum = {
     CREATE: 'create',
@@ -20,7 +21,7 @@ export const IActivityLogSourceEnum = {
 
 export type IActivityLogSource = (typeof IActivityLogSourceEnum)[keyof typeof IActivityLogSourceEnum];
 
-export interface IActivityLog {
+export interface IActivityLog extends ITimestamps {
     centerId: mongoose.Types.ObjectId | null;
     userId: mongoose.Types.ObjectId;
     userName: string;
@@ -37,6 +38,4 @@ export interface IActivityLog {
     responseStatus: number;
     ipAddress: string;
     source: IActivityLogSource;
-    createdAt: Date;
-    updatedAt: Date;
 }

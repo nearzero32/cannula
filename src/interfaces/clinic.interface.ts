@@ -1,4 +1,5 @@
 import type mongoose from 'mongoose';
+import type { IBaseDocument, IWithNotesInternal, IWithCreatedBy } from './common.interface';
 
 export const IClinicStatusEnum = {
     ACTIVE: 'active',
@@ -20,16 +21,11 @@ export interface IClinicWorkingDay {
     to?: string | null;
 }
 
-export interface IClinic {
-    _id: string;
+export interface IClinic extends IBaseDocument, IWithNotesInternal, IWithCreatedBy {
     name: string;
     description?: string | null;
     address: string;
     mapLocation?: IClinicMapLocation | null;
     workingDays: IClinicWorkingDay[];
     status: IClinicStatus;
-    createdBy?: mongoose.Types.ObjectId | null;
-    notesInternal?: string | null;
-    createdAt: Date;
-    updatedAt: Date;
 }

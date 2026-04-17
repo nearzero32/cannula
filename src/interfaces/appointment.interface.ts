@@ -1,4 +1,5 @@
 import type mongoose from 'mongoose';
+import type { IBaseDocument, IWithNotesInternal } from './common.interface';
 
 export const IAppointmentStatusEnum = {
     PENDING: 'pending',
@@ -19,8 +20,7 @@ export const IAppointmentBookingSourceEnum = {
 export type IAppointmentBookingSource =
     (typeof IAppointmentBookingSourceEnum)[keyof typeof IAppointmentBookingSourceEnum];
 
-export interface IAppointment {
-    _id: string;
+export interface IAppointment extends IBaseDocument, IWithNotesInternal {
     appointmentNumber: string;
     patientId: mongoose.Types.ObjectId;
     doctorId: mongoose.Types.ObjectId;
@@ -33,9 +33,6 @@ export interface IAppointment {
     bookedBy?: mongoose.Types.ObjectId | null;
     bookingSource: IAppointmentBookingSource;
     reason?: string | null;
-    notesInternal?: string | null;
     cancelReason?: string | null;
     rescheduledFrom?: mongoose.Types.ObjectId | null;
-    createdAt: Date;
-    updatedAt: Date;
 }
