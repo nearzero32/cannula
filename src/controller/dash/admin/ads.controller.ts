@@ -40,11 +40,13 @@ export const adsController = new Elysia({ prefix: '/ads' })
             }
 
             const { data, count } = await adsService.getPaginated({ main_match, page, limit });
+            const totalPages = Math.ceil(count / limit);
 
             return {
                 error: false,
+                message: 'تم جلب الإعلانات بنجاح',
                 data,
-                meta: { page, limit, total: count, pages: Math.ceil(count / limit) },
+                pagination: { page, limit, total: count, pages: totalPages, hasNext: page < totalPages, hasPrev: page > 1 },
             };
         },
         {
@@ -63,16 +65,16 @@ export const adsController = new Elysia({ prefix: '/ads' })
         async ({ params, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid ad ID' };
+                return { error: true, message: 'معرف الإعلان غير صالح' };
             }
 
             const ad = await adsService.getById(params.id);
             if (!ad) {
                 set.status = 404;
-                return { error: true, message: 'Ad not found' };
+                return { error: true, message: 'الإعلان غير موجود' };
             }
 
-            return { error: false, data: ad };
+            return { error: false, message: 'تم جلب الإعلان بنجاح', data: ad };
         },
         { params: t.Object({ id: t.String() }) }
     )
@@ -82,7 +84,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
         async ({ body, set }) => {
             if (!ObjectId.isValid(body.clinicId)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid clinic ID' };
+                return { error: true, message: 'معرف العيادة غير صالح' };
             }
 
             const ad = await adsService.create({
@@ -92,7 +94,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
             });
 
             set.status = 201;
-            return { error: false, data: ad };
+            return { error: false, message: 'تم إنشاء الإعلان بنجاح', data: ad };
         },
         { body: adsBodySchema }
     )
@@ -102,13 +104,13 @@ export const adsController = new Elysia({ prefix: '/ads' })
         async ({ params, body, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid ad ID' };
+                return { error: true, message: 'معرف الإعلان غير صالح' };
             }
 
             const ad = await adsService.getById(params.id);
             if (!ad) {
                 set.status = 404;
-                return { error: true, message: 'Ad not found' };
+                return { error: true, message: 'الإعلان غير موجود' };
             }
 
             const payload: Record<string, unknown> = { ...body };
@@ -116,7 +118,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
             if (body.clinicId) {
                 if (!ObjectId.isValid(body.clinicId)) {
                     set.status = 400;
-                    return { error: true, message: 'Invalid clinic ID' };
+                    return { error: true, message: 'معرف العيادة غير صالح' };
                 }
                 payload.clinicId = new ObjectId(body.clinicId);
             }
@@ -126,7 +128,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
             }
 
             const updated = await adsService.update(params.id, payload);
-            return { error: false, data: updated };
+            return { error: false, message: 'تم تحديث الإعلان بنجاح', data: updated };
         },
         {
             params: t.Object({ id: t.String() }),
@@ -139,17 +141,17 @@ export const adsController = new Elysia({ prefix: '/ads' })
         async ({ params, body, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid ad ID' };
+                return { error: true, message: 'معرف الإعلان غير صالح' };
             }
 
             const ad = await adsService.getById(params.id);
             if (!ad) {
                 set.status = 404;
-                return { error: true, message: 'Ad not found' };
+                return { error: true, message: 'الإعلان غير موجود' };
             }
 
             const updated = await adsService.updateStatus(params.id, body.status);
-            return { error: false, data: updated };
+            return { error: false, message: 'تم تحديث حالة الإعلان بنجاح', data: updated };
         },
         {
             params: t.Object({ id: t.String() }),

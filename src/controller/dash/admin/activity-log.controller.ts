@@ -45,11 +45,13 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
             }
 
             const { data, count } = await activityLogService.getPaginated({ main_match, page, limit });
+            const totalPages = Math.ceil(count / limit);
 
             return {
                 error: false,
+                message: 'تم جلب سجلات النشاط بنجاح',
                 data,
-                meta: { page, limit, total: count, pages: Math.ceil(count / limit) },
+                pagination: { page, limit, total: count, pages: totalPages, hasNext: page < totalPages, hasPrev: page > 1 },
             };
         },
         {
@@ -73,16 +75,16 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
         async ({ params, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid activity log ID' };
+                return { error: true, message: 'معرف سجل النشاط غير صالح' };
             }
 
             const log = await activityLogService.getById(params.id);
             if (!log) {
                 set.status = 404;
-                return { error: true, message: 'Activity log not found' };
+                return { error: true, message: 'سجل النشاط غير موجود' };
             }
 
-            return { error: false, data: log };
+            return { error: false, message: 'تم جلب سجل النشاط بنجاح', data: log };
         },
         { params: t.Object({ id: t.String() }) }
     );

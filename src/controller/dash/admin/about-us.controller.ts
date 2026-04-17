@@ -21,17 +21,17 @@ export const aboutUsController = new Elysia({ prefix: '/about-us' })
 
         if (!data) {
             set.status = 404;
-            return { error: true, message: 'About us not found' };
+            return { error: true, message: 'بيانات من نحن غير موجودة' };
         }
 
-        return { error: false, data };
+        return { error: false, message: 'تم جلب بيانات من نحن بنجاح', data };
     })
 
     .patch(
         '/',
         async ({ body }) => {
             const data = await aboutUsService.upsert(body);
-            return { error: false, data };
+            return { error: false, message: 'تم تحديث بيانات من نحن بنجاح', data };
         },
         { body: aboutUsBodySchema }
     );

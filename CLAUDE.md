@@ -117,3 +117,14 @@ QI_UAT_PAYMENT_BASE_URL=, QI_PAYMENT_BASE_URL=
 - Swagger docs are auto-generated and served via `@elysiajs/swagger`
 - TypeScript target is ES2021; Bun handles transpilation natively (no build step needed for dev)
 - **No hard deletes** — services must never implement `deleteById` or any `findByIdAndDelete` call; records are deactivated via a `status` field update instead. Controllers expose `PATCH /:id/status` for status changes, never a `DELETE` endpoint.
+- **All response messages must be in Arabic.** Every `message` string returned from a controller must be written in Arabic (e.g. `'تم جلب البيانات بنجاح'`, `'غير موجود'`). No English messages in controller responses.
+- **Pagination response shape** — all paginated list endpoints must return:
+  ```ts
+  {
+    error: false,
+    message: '...Arabic...',
+    data: [...],
+    pagination: { page, limit, total, pages, hasNext, hasPrev }
+  }
+  ```
+  Use `const totalPages = Math.ceil(count / limit)` then derive `hasNext: page < totalPages` and `hasPrev: page > 1`. Never use a `meta` key.

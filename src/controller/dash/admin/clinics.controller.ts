@@ -53,11 +53,13 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             }
 
             const { data, count } = await clinicService.getPaginated({ main_match, page, limit });
+            const totalPages = Math.ceil(count / limit);
 
             return {
                 error: false,
+                message: 'تم جلب العيادات بنجاح',
                 data,
-                meta: { page, limit, total: count, pages: Math.ceil(count / limit) },
+                pagination: { page, limit, total: count, pages: totalPages, hasNext: page < totalPages, hasPrev: page > 1 },
             };
         },
         {
@@ -75,16 +77,16 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         async ({ params, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid clinic ID' };
+                return { error: true, message: 'معرف العيادة غير صالح' };
             }
 
             const clinic = await clinicService.getById(params.id);
             if (!clinic) {
                 set.status = 404;
-                return { error: true, message: 'Clinic not found' };
+                return { error: true, message: 'العيادة غير موجودة' };
             }
 
-            return { error: false, data: clinic };
+            return { error: false, message: 'تم جلب العيادة بنجاح', data: clinic };
         },
         { params: t.Object({ id: t.String() }) }
     )
@@ -100,7 +102,7 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             });
 
             set.status = 201;
-            return { error: false, data: clinic };
+            return { error: false, message: 'تم إنشاء العيادة بنجاح', data: clinic };
         },
         { body: clinicBodySchema }
     )
@@ -110,17 +112,17 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         async ({ params, body, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid clinic ID' };
+                return { error: true, message: 'معرف العيادة غير صالح' };
             }
 
             const clinic = await clinicService.getById(params.id);
             if (!clinic) {
                 set.status = 404;
-                return { error: true, message: 'Clinic not found' };
+                return { error: true, message: 'العيادة غير موجودة' };
             }
 
             const updated = await clinicService.update(params.id, body);
-            return { error: false, data: updated };
+            return { error: false, message: 'تم تحديث العيادة بنجاح', data: updated };
         },
         {
             params: t.Object({ id: t.String() }),
@@ -133,17 +135,17 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         async ({ params, body, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
-                return { error: true, message: 'Invalid clinic ID' };
+                return { error: true, message: 'معرف العيادة غير صالح' };
             }
 
             const clinic = await clinicService.getById(params.id);
             if (!clinic) {
                 set.status = 404;
-                return { error: true, message: 'Clinic not found' };
+                return { error: true, message: 'العيادة غير موجودة' };
             }
 
             const updated = await clinicService.update(params.id, { status: body.status });
-            return { error: false, data: updated };
+            return { error: false, message: 'تم تحديث حالة العيادة بنجاح', data: updated };
         },
         {
             params: t.Object({ id: t.String() }),

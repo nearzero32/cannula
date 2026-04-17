@@ -42,12 +42,12 @@ export const authController = new Elysia({ prefix: '/auth' })
 
             if (!user) {
                 set.status = 401;
-                return { error: true, message: 'Invalid phone or password' };
+                return { error: true, message: 'رقم الهاتف أو كلمة المرور غير صحيحة' };
             }
 
             if (user.status !== 'active') {
                 set.status = 401;
-                return { error: true, message: 'Account is not active' };
+                return { error: true, message: 'الحساب غير مفعّل' };
             }
 
             const userId = (user._id as any).toString();
@@ -61,7 +61,7 @@ export const authController = new Elysia({ prefix: '/auth' })
 
             return {
                 error: false,
-                message: 'Login successful',
+                message: 'تم تسجيل الدخول بنجاح',
                 data: {
                     accessToken,
                     refreshToken,
@@ -89,19 +89,19 @@ export const authController = new Elysia({ prefix: '/auth' })
             const payload = verifyRefreshToken(body.refreshToken);
             if (!payload) {
                 set.status = 401;
-                return { error: true, message: 'Invalid refresh token' };
+                return { error: true, message: 'رمز التحديث غير صالح' };
             }
 
             const isValid = await isRefreshSessionValid(payload._id, body.refreshToken);
             if (!isValid) {
                 set.status = 401;
-                return { error: true, message: 'Refresh token revoked' };
+                return { error: true, message: 'تم إلغاء رمز التحديث' };
             }
 
             const user = await userService.getById(payload._id);
             if (!user || user.status !== 'active') {
                 set.status = 401;
-                return { error: true, message: 'Account not found or inactive' };
+                return { error: true, message: 'الحساب غير موجود أو غير مفعّل' };
             }
 
             // Rotate both tokens
@@ -132,6 +132,6 @@ export const authController = new Elysia({ prefix: '/auth' })
             const raw = headers.authorization ?? '';
             const token = raw.trim().toLowerCase().startsWith('bearer ') ? raw.trim().slice(7).trim() : raw.trim();
             await revokeAccessSession(phrase._id, token);
-            return { error: false, message: 'Logged out successfully' };
+            return { error: false, message: 'تم تسجيل الخروج بنجاح' };
         })
     );
