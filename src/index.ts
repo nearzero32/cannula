@@ -3,6 +3,7 @@ import { MongoDB } from './databases/database';
 import RedisClient from './databases/redis';
 import { loadMongoConfigFromEnv } from './databases/config';
 import { dashboardController } from './controller/dash/index';
+import { mobileController } from './controller/mobile/index';
 
 async function bootstrap() {
     // Connect MongoDB
@@ -14,6 +15,7 @@ async function bootstrap() {
 
     const app = new Elysia()
         .use(dashboardController)
+        .use(mobileController)
         .listen(3000);
 
     console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
