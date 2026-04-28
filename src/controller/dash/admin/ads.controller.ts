@@ -27,7 +27,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
             const main_match: Record<string, unknown> = {};
 
             if (query.clinicId && ObjectId.isValid(query.clinicId)) {
-                main_match.clinicId = new ObjectId(query.clinicId);
+                main_match.clinic_id = new ObjectId(query.clinicId);
             }
 
             if (query.status) main_match.status = query.status;
@@ -89,8 +89,8 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
             const ad = await adsService.create({
                 ...body,
-                clinicId: new ObjectId(body.clinicId),
-                endDate: body.endDate ? new Date(body.endDate) : null,
+                clinic_id: new ObjectId(body.clinicId),
+                end_date: body.endDate ? new Date(body.endDate) : null,
             });
 
             set.status = 201;
@@ -120,11 +120,11 @@ export const adsController = new Elysia({ prefix: '/ads' })
                     set.status = 400;
                     return { error: true, message: 'معرف العيادة غير صالح' };
                 }
-                payload.clinicId = new ObjectId(body.clinicId);
+                payload.clinic_id = new ObjectId(body.clinicId);
             }
 
             if (body.endDate !== undefined) {
-                payload.endDate = body.endDate ? new Date(body.endDate) : null;
+                payload.end_date = body.endDate ? new Date(body.endDate) : null;
             }
 
             const updated = await adsService.update(params.id, payload);

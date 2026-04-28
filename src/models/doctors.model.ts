@@ -10,22 +10,20 @@ export type DoctorDocument = mongoose.Document & IDoctor;
 
 const doctorSchema = new Schema(
     {
-        userId: {
+        user_id: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
-            unique: true,
-            index: true,
         },
 
-        fullName: {
+        full_name: {
             type: String,
             required: true,
             trim: true,
             maxlength: 120,
         },
 
-        displayName: {
+        display_name: {
             type: String,
             required: true,
             trim: true,
@@ -38,7 +36,7 @@ const doctorSchema = new Schema(
             default: null,
         },
 
-        profilePhoto: {
+        profile_photo: {
             type: String,
             default: null,
         },
@@ -54,9 +52,8 @@ const doctorSchema = new Schema(
             type: String,
             required: true,
             trim: true,
-            index: true,
         },
-        subSpecialties: {
+        sub_specialties: {
             type: [String],
             default: [],
         },
@@ -64,103 +61,102 @@ const doctorSchema = new Schema(
             type: [String],
             default: [],
         },
-        experienceYears: {
+        experience_years: {
             type: Number,
             min: 0,
             default: null,
         },
 
-        licenseNumber: {
+        license_number: {
             type: String,
             trim: true,
             default: null,
         },
 
-        licenseVerified: {
+        license_verified: {
             type: Boolean,
             default: false,
         },
 
-        verificationStatus: {
+        verification_status: {
             type: String,
             enum: Object.values(IDoctorVerificationStatusEnum),
             default: IDoctorVerificationStatusEnum.PENDING,
-            index: true,
         },
 
-        clinicIds: [
+        clinic_ids: [
             {
                 type: Schema.Types.ObjectId,
                 ref: 'Clinic',
             },
         ],
 
-        clinicLocation: {
+        clinic_location: {
             type: String,
             trim: true,
             default: null,
         },
 
-        mapLocation: {
+        map_location: {
             lat: { type: Number, default: null },
             lng: { type: Number, default: null },
         },
 
-        appointmentDuration: {
+        appointment_duration: {
             type: Number,
             required: true,
             default: 30,
             min: 5,
         },
 
-        slotInterval: {
+        slot_interval: {
             type: Number,
             required: true,
             default: 15,
             min: 5,
         },
 
-        bufferBefore: {
+        buffer_before: {
             type: Number,
             default: 0,
             min: 0,
         },
 
-        bufferAfter: {
+        buffer_after: {
             type: Number,
             default: 0,
             min: 0,
         },
 
-        acceptAutoBooking: {
+        accept_auto_booking: {
             type: Boolean,
             default: false,
         },
 
-        allowReschedule: {
+        allow_reschedule: {
             type: Boolean,
             default: true,
         },
 
-        bookingLeadTimeHours: {
+        booking_lead_time_hours: {
             type: Number,
             default: 1,
             min: 0,
         },
 
-        cancellationWindowHours: {
+        cancellation_window_hours: {
             type: Number,
             default: 24,
             min: 0,
         },
 
-        consultationFee: {
+        consultation_fee: {
             type: Number,
             min: 0,
             default: null,
         },
 
-        followUpFee: {
+        follow_up_fee: {
             type: Number,
             min: 0,
             default: null,
@@ -172,19 +168,19 @@ const doctorSchema = new Schema(
             default: 'IQD',
         },
 
-        assistantIds: [
+        assistant_ids: [
             {
                 type: Schema.Types.ObjectId,
                 ref: 'User',
             },
         ],
 
-        acceptingNewPatients: {
+        accepting_new_patients: {
             type: Boolean,
             default: true,
         },
 
-        isFeatured: {
+        is_featured: {
             type: Boolean,
             default: false,
         },
@@ -193,10 +189,9 @@ const doctorSchema = new Schema(
             type: String,
             enum: Object.values(IDoctorStatusEnum),
             default: IDoctorStatusEnum.DRAFT,
-            index: true,
         },
 
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,
@@ -210,8 +205,8 @@ const doctorSchema = new Schema(
 );
 
 doctorSchema.index({ specialty: 1, status: 1 });
-doctorSchema.index({ verificationStatus: 1, status: 1 });
-doctorSchema.index({ clinicIds: 1 });
+doctorSchema.index({ verification_status: 1, status: 1 });
+doctorSchema.index({ clinic_ids: 1 });
 
 export const Doctor = (models.Doctor as mongoose.Model<DoctorDocument>) || model<DoctorDocument>('Doctor', doctorSchema);
 export default Doctor;

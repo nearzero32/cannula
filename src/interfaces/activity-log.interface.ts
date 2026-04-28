@@ -22,20 +22,19 @@ export const IActivityLogSourceEnum = {
 export type IActivityLogSource = (typeof IActivityLogSourceEnum)[keyof typeof IActivityLogSourceEnum];
 
 export interface IActivityLog extends ITimestamps {
-    centerId: mongoose.Types.ObjectId | null;
-    userId: mongoose.Types.ObjectId;
-    userName: string;
-    userType: string;
+    user_id: mongoose.Types.ObjectId;
+    user_name: string;
+    user_type: string;
     method: string;
     endpoint: string;
     action: IActivityLogAction;
-    collectionName: string;
-    documentId: mongoose.Types.ObjectId | null;
-    oldData: unknown | null;
-    newData: unknown | null;
-    changedFields: string[];
-    requestBody: unknown;
-    responseStatus: number;
-    ipAddress: string;
+    collection_name: string;
+    document_id: mongoose.Types.ObjectId | null;
+    old_data: unknown | null;
+    new_data: unknown | null;
+    changed_fields: string[];
+    request_body: unknown;
+    response_status: number;
+    ip_address: string;
     source: IActivityLogSource;
 }

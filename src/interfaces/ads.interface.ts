@@ -13,7 +13,7 @@ export interface IAds extends ITimestamps {
     description: string | null;
     image: string;
     link: string | null;
-    clinicId: mongoose.Types.ObjectId;
+    clinic_id: mongoose.Types.ObjectId;
     status: IAdsStatus;
-    endDate: Date | null;
+    end_date: Date | null;
 }

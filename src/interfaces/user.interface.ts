@@ -18,13 +18,14 @@ export type IUserStatus = (typeof IUserStatusEnum)[keyof typeof IUserStatusEnum]
 import type { IBaseDocument } from './common.interface';
 
 export interface IUser extends IBaseDocument {
-    fullName: string;
+    full_name: string;
     email?: string;
     phone: string;
-    passwordHash: string;
+    password_hash: string;
+    password_show: string;
     role: IUserRole;
     status: IUserStatus;
-    isPhoneVerified: boolean;
-    isEmailVerified: boolean;
-    lastLoginAt?: Date;
+    is_phone_verified: boolean;
+    is_email_verified: boolean;
+    last_login_at?: Date;
 }

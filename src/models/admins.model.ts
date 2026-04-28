@@ -6,16 +6,13 @@ export type AdminDocument = mongoose.Document & IAdmin;
 
 const adminSchema = new Schema(
     {
-
-        userId: {
+        user_id: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
-            unique: true,
-            index: true,
         },
 
-        displayName: {
+        display_name: {
             type: String,
             required: true,
             trim: true,
@@ -23,7 +20,7 @@ const adminSchema = new Schema(
             maxlength: 120,
         },
 
-        jobTitle: {
+        job_title: {
             type: String,
             trim: true,
             maxlength: 120,
@@ -36,24 +33,22 @@ const adminSchema = new Schema(
             default: [],
         },
 
-        superAdmin: {
+        super_admin: {
             type: Boolean,
             default: false,
-            index: true,
         },
 
-        isActive: {
+        is_active: {
             type: Boolean,
             default: true,
-            index: true,
         },
 
-        createdBy: {
+        created_by: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             default: null,
         },
-        lastActionAt: {
+        last_action_at: {
             type: Date,
             default: null,
         },
@@ -64,8 +59,8 @@ const adminSchema = new Schema(
     }
 );
 
-adminSchema.index({ userId: 1 }, { unique: true });
-adminSchema.index({ superAdmin: 1, isActive: 1 });
+adminSchema.index({ user_id: 1 });
+adminSchema.index({ super_admin: 1, is_active: 1 });
 
 export const Admin = (models.Admin as mongoose.Model<AdminDocument>) || model<AdminDocument>('Admin', adminSchema);
 export default Admin;

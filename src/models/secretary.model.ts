@@ -10,27 +10,25 @@ export type SecretaryDocument = mongoose.Document & ISecretary;
 
 const secretarySchema = new Schema(
     {
-        userId: {
+        user_id: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
-            unique: true,
-            index: true,
         },
 
-        fullName: {
+        full_name: {
             type: String,
             required: true,
             trim: true,
             maxlength: 120,
         },
 
-        clinicId: {
+        clinic_id: {
             type: Schema.Types.ObjectId,
             ref: 'Clinic',
         },
 
-        doctorIds: [
+        doctor_ids: [
             {
                 type: Schema.Types.ObjectId,
                 ref: 'Doctor',
@@ -47,16 +45,15 @@ const secretarySchema = new Schema(
             type: String,
             enum: Object.values(ISecretaryStatusEnum),
             default: ISecretaryStatusEnum.ACTIVE,
-            index: true,
         },
 
-        createdBy: {
+        created_by: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             default: null,
         },
 
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,
@@ -70,8 +67,8 @@ const secretarySchema = new Schema(
 );
 
 secretarySchema.index({ status: 1 });
-secretarySchema.index({ clinicId: 1 });
-secretarySchema.index({ doctorIds: 1 });
+secretarySchema.index({ clinic_id: 1 });
+secretarySchema.index({ doctor_ids: 1 });
 
 export const Secretary =
     (models.Secretary as mongoose.Model<SecretaryDocument>) ||

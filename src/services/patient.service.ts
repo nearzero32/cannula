@@ -68,8 +68,8 @@ class PatientService {
         return await this.model.findById(id).exec();
     }
 
-    public async getByUserId(userId: string): Promise<PatientDocument | null> {
-        return await this.model.findOne({ userId }).exec();
+    public async getByUserId(user_id: string): Promise<PatientDocument | null> {
+        return await this.model.findOne({ user_id }).exec();
     }
 
     public async create(payload: Partial<IPatient>): Promise<PatientDocument> {

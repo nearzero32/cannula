@@ -1,0 +1,988 @@
+{
+  "info": {
+    "name": "Kanona API",
+    "_postman_id": "3fb27726-c4f4-4f55-8f36-5fa5f077a1d2",
+    "description": "Clean Postman collection for Kanona backend APIs.\n\nNotes:\n- Set `baseUrl` once (default: http://localhost:3000).\n- Run `Auth / Login` first to auto-save `accessToken` and `refreshToken`.\n- Protected dashboard endpoints use `Authorization: Bearer {{accessToken}}`.\n- Replace `*_id` placeholders with real Mongo ObjectIds from your database.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "clinic_id",
+      "value": "665000000000000000000001",
+      "type": "string"
+    },
+    {
+      "key": "specialty_id",
+      "value": "665000000000000000000002",
+      "type": "string"
+    },
+    {
+      "key": "ad_id",
+      "value": "665000000000000000000003",
+      "type": "string"
+    },
+    {
+      "key": "secretary_id",
+      "value": "665000000000000000000004",
+      "type": "string"
+    },
+    {
+      "key": "activity_log_id",
+      "value": "665000000000000000000005",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Dashboard authentication endpoints.",
+      "item": [
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"07700000000\",\n  \"password\": \"123456\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/dash/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["dash", "auth", "login"]
+            },
+            "description": "Login using phone and password. On success returns `accessToken` and `refreshToken`."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status is 200', function () {",
+                  "  pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "",
+                  "if (json?.data?.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "}",
+                  "if (json?.data?.refreshToken) {",
+                  "  pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/dash/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["dash", "auth", "refresh"]
+            },
+            "description": "Rotate access + refresh tokens."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "let json = {};",
+                  "try { json = pm.response.json(); } catch (e) {}",
+                  "",
+                  "if (json?.data?.accessToken) {",
+                  "  pm.collectionVariables.set('accessToken', json.data.accessToken);",
+                  "}",
+                  "if (json?.data?.refreshToken) {",
+                  "  pm.collectionVariables.set('refreshToken', json.data.refreshToken);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/dash/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["dash", "auth", "logout"]
+            },
+            "description": "Invalidate the active access session."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Dashboard / Admin",
+      "description": "Protected admin APIs.",
+      "item": [
+        {
+          "name": "Clinics",
+          "item": [
+            {
+              "name": "List Clinics",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/clinics?page=1&limit=10&status=active&search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "clinics"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "active"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                },
+                "description": "Paginated clinics list with optional status/search filters."
+              }
+            },
+            {
+              "name": "Get Clinic By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/clinics/{{clinic_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "clinics", "{{clinic_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Create Clinic",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Kanona Center\",\n  \"address\": \"Baghdad - Karrada\",\n  \"description\": \"Main branch\",\n  \"icon\": null,\n  \"map_location\": {\n    \"lat\": 33.3152,\n    \"lng\": 44.3661\n  },\n  \"working_days\": [\n    {\n      \"day\": 1,\n      \"enabled\": true,\n      \"from\": \"09:00\",\n      \"to\": \"17:00\"\n    }\n  ],\n  \"status\": \"active\",\n  \"notes_internal\": null\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/clinics",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "clinics"]
+                }
+              }
+            },
+            {
+              "name": "Update Clinic",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Kanona Center - Updated\",\n  \"icon\": \"https://example.com/clinic.png\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/clinics/{{clinic_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "clinics", "{{clinic_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Update Clinic Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"inactive\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/clinics/{{clinic_id}}/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": [
+                    "dash",
+                    "admin",
+                    "clinics",
+                    "{{clinic_id}}",
+                    "status"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Specialties",
+          "item": [
+            {
+              "name": "List Specialties",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/specialties?page=1&limit=10&status=active&search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "specialties"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "active"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Specialty By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/specialties/{{specialty_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "specialties", "{{specialty_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Create Specialty",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Cardiology\",\n  \"description\": \"Heart specialists\",\n  \"icon\": null,\n  \"sort_order\": 1,\n  \"status\": \"active\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/specialties",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "specialties"]
+                }
+              }
+            },
+            {
+              "name": "Update Specialty",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"description\": \"Cardiology and vascular medicine\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/specialties/{{specialty_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "specialties", "{{specialty_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Update Specialty Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"inactive\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/specialties/{{specialty_id}}/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": [
+                    "dash",
+                    "admin",
+                    "specialties",
+                    "{{specialty_id}}",
+                    "status"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ads",
+          "item": [
+            {
+              "name": "List Ads",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/ads?page=1&limit=10&clinic_id=&status=active&search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "ads"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "clinic_id",
+                      "value": ""
+                    },
+                    {
+                      "key": "status",
+                      "value": "active"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Ad By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/ads/{{ad_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "ads", "{{ad_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Create Ad",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Summer Offer\",\n  \"description\": \"20% discount\",\n  \"image\": \"https://example.com/ad.png\",\n  \"link\": \"https://example.com\",\n  \"clinic_id\": \"{{clinic_id}}\",\n  \"end_date\": \"2026-12-31T23:59:59.000Z\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/ads",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "ads"]
+                }
+              }
+            },
+            {
+              "name": "Update Ad",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"title\": \"Summer Offer - Updated\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/ads/{{ad_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "ads", "{{ad_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Update Ad Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"inactive\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/ads/{{ad_id}}/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "ads", "{{ad_id}}", "status"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "About Us",
+          "item": [
+            {
+              "name": "Get About Us",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/about-us",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "about-us"]
+                }
+              }
+            },
+            {
+              "name": "Upsert About Us",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Kanona\",\n  \"logo\": \"https://example.com/logo.png\",\n  \"description\": \"Healthcare platform\",\n  \"address\": \"Baghdad\",\n  \"phone\": \"+9647700000000\",\n  \"website\": \"https://kanona.com\",\n  \"facebook\": null,\n  \"instagram\": null\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/about-us",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "about-us"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activity Logs",
+          "item": [
+            {
+              "name": "List Activity Logs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/activity-logs?page=1&limit=20&search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "admin", "activity-logs"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Activity Log By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/admin/activity-logs/{{activity_log_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": [
+                    "dash",
+                    "admin",
+                    "activity-logs",
+                    "{{activity_log_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Dashboard / Doctor",
+      "description": "Protected doctor APIs.",
+      "item": [
+        {
+          "name": "Profile",
+          "item": [
+            {
+              "name": "Get Doctor Profile",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/profile",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "profile"]
+                }
+              }
+            },
+            {
+              "name": "Update Doctor Profile",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"display_name\": \"Dr. Ahmed\",\n  \"bio\": \"Specialist in cardiology\",\n  \"languages\": [\"ar\", \"en\"],\n  \"appointment_duration\": 30,\n  \"slot_interval\": 15,\n  \"accept_auto_booking\": true\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/profile",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "profile"]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Secretaries",
+          "item": [
+            {
+              "name": "List Secretaries",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/secretaries?page=1&limit=10&status=active&search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "secretaries"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "10"
+                    },
+                    {
+                      "key": "status",
+                      "value": "active"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Secretary By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/secretaries/{{secretary_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "secretaries", "{{secretary_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Create Secretary",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"user_id\": \"665000000000000000000011\",\n  \"full_name\": \"Sara Ali\",\n  \"clinic_id\": \"{{clinic_id}}\",\n  \"permissions\": [\n    \"view_schedule\",\n    \"create_appointment\",\n    \"edit_appointment\"\n  ],\n  \"notes_internal\": null\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/secretaries",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "secretaries"]
+                }
+              }
+            },
+            {
+              "name": "Update Secretary",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"full_name\": \"Sara Ali Updated\",\n  \"notes_internal\": \"Available morning shift\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/secretaries/{{secretary_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "secretaries", "{{secretary_id}}"]
+                }
+              }
+            },
+            {
+              "name": "Update Secretary Status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  },
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"inactive\"\n}"
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/secretaries/{{secretary_id}}/status",
+                  "host": ["{{baseUrl}}"],
+                  "path": [
+                    "dash",
+                    "doctor",
+                    "secretaries",
+                    "{{secretary_id}}",
+                    "status"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "name": "Activity Logs",
+          "item": [
+            {
+              "name": "List Doctor Activity Logs",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/activity-logs?page=1&limit=20&search=",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["dash", "doctor", "activity-logs"],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "limit",
+                      "value": "20"
+                    },
+                    {
+                      "key": "search",
+                      "value": ""
+                    }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get Doctor Activity Log By ID",
+              "request": {
+                "method": "GET",
+                "header": [
+                  {
+                    "key": "Authorization",
+                    "value": "Bearer {{accessToken}}"
+                  }
+                ],
+                "url": {
+                  "raw": "{{baseUrl}}/dash/doctor/activity-logs/{{activity_log_id}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": [
+                    "dash",
+                    "doctor",
+                    "activity-logs",
+                    "{{activity_log_id}}"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Mobile / Public",
+      "description": "Public APIs used by mobile clients.",
+      "item": [
+        {
+          "name": "Get Mobile About Us",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mobile/about-us",
+              "host": ["{{baseUrl}}"],
+              "path": ["mobile", "about-us"]
+            }
+          }
+        },
+        {
+          "name": "List Mobile Ads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mobile/ads?page=1&limit=10&clinic_id=",
+              "host": ["{{baseUrl}}"],
+              "path": ["mobile", "ads"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "clinic_id",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Mobile Ad By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/mobile/ads/{{ad_id}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["mobile", "ads", "{{ad_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

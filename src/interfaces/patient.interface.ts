@@ -30,17 +30,17 @@ export const IPatientStatusEnum = {
 export type IPatientStatus = (typeof IPatientStatusEnum)[keyof typeof IPatientStatusEnum];
 
 export interface IPatient extends IBaseDocument, IWithNotesInternal {
-    userId: mongoose.Types.ObjectId;
-    fullName: string;
+    user_id: mongoose.Types.ObjectId;
+    full_name: string;
     gender?: IPatientGender | null;
-    dateOfBirth?: Date | null;
+    date_of_birth?: Date | null;
     phone?: string | null;
     address?: string | null;
-    profilePhoto?: string | null;
-    bloodGroup?: IPatientBloodGroup | null;
+    profile_photo?: string | null;
+    blood_group?: IPatientBloodGroup | null;
     allergies: string[];
-    chronicConditions: string[];
-    emergencyContactName?: string | null;
-    emergencyContactPhone?: string | null;
+    chronic_conditions: string[];
+    emergency_contact_name?: string | null;
+    emergency_contact_phone?: string | null;
     status: IPatientStatus;
 }

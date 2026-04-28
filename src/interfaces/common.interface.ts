@@ -10,9 +10,9 @@ export interface IBaseDocument extends ITimestamps {
 }
 
 export interface IWithNotesInternal {
-    notesInternal?: string | null;
+    notes_internal?: string | null;
 }
 
 export interface IWithCreatedBy {
-    createdBy?: mongoose.Types.ObjectId | null;
+    created_by?: mongoose.Types.ObjectId | null;
 }

@@ -95,10 +95,15 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         '/',
         async ({ body, phrase, set }) => {
             const clinic = await clinicService.create({
-                ...body,
+                name: body.name,
+                address: body.address,
+                description: body.description,
+                icon: body.icon,
+                map_location: body.mapLocation,
+                working_days: body.workingDays ?? [],
                 status: body.status ?? IClinicStatusEnum.ACTIVE,
-                workingDays: body.workingDays ?? [],
-                createdBy: new ObjectId(phrase._id),
+                notes_internal: body.notesInternal,
+                created_by: new ObjectId(phrase._id),
             });
 
             set.status = 201;
@@ -121,7 +126,17 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
                 return { error: true, message: 'العيادة غير موجودة' };
             }
 
-            const updated = await clinicService.update(params.id, body);
+            const payload: Record<string, unknown> = {};
+            if (body.name !== undefined) payload.name = body.name;
+            if (body.address !== undefined) payload.address = body.address;
+            if (body.description !== undefined) payload.description = body.description;
+            if (body.icon !== undefined) payload.icon = body.icon;
+            if (body.mapLocation !== undefined) payload.map_location = body.mapLocation;
+            if (body.workingDays !== undefined) payload.working_days = body.workingDays;
+            if (body.status !== undefined) payload.status = body.status;
+            if (body.notesInternal !== undefined) payload.notes_internal = body.notesInternal;
+
+            const updated = await clinicService.update(params.id, payload);
             return { error: false, message: 'تم تحديث العيادة بنجاح', data: updated };
         },
         {

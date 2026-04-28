@@ -71,14 +71,14 @@ class UserService {
     // passwordHash has select:false — querying by it still works; it's just excluded from output
     public async findByCredentials({
         phone,
-        passwordHash,
+        password_hash,
         roles,
     }: {
         phone: string;
-        passwordHash: string;
+        password_hash: string;
         roles: string[];
     }): Promise<UserDocument | null> {
-        return await this.model.findOne({ phone, passwordHash, role: { $in: roles } }).exec();
+        return await this.model.findOne({ phone, password_hash, role: { $in: roles } }).exec();
     }
 
     public async create(payload: Partial<IUser>): Promise<UserDocument> {

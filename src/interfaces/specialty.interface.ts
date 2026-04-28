@@ -13,5 +13,5 @@ export interface ISpecialty extends IBaseDocument, IWithCreatedBy {
     description?: string | null;
     icon?: string | null;
     status: ISpecialtyStatus;
-    sortOrder: number;
+    sort_order: number;
 }

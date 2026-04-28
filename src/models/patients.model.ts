@@ -6,15 +6,13 @@ export type PatientDocument = mongoose.Document & IPatient;
 
 const patientSchema = new Schema(
     {
-        userId: {
+        user_id: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
-            unique: true,
-            index: true,
         },
 
-        fullName: {
+        full_name: {
             type: String,
             required: true,
             trim: true,
@@ -27,7 +25,7 @@ const patientSchema = new Schema(
             default: null,
         },
 
-        dateOfBirth: {
+        date_of_birth: {
             type: Date,
             default: null,
         },
@@ -45,12 +43,12 @@ const patientSchema = new Schema(
             default: null,
         },
 
-        profilePhoto: {
+        profile_photo: {
             type: String,
             default: null,
         },
 
-        bloodGroup: {
+        blood_group: {
             type: String,
             enum: Object.values(IPatientBloodGroupEnum),
             default: null,
@@ -60,18 +58,18 @@ const patientSchema = new Schema(
             type: [String],
             default: [],
         },
-        chronicConditions: {
+        chronic_conditions: {
             type: [String],
             default: [],
         },
 
-        emergencyContactName: {
+        emergency_contact_name: {
             type: String,
             trim: true,
             maxlength: 120,
             default: null,
         },
-        emergencyContactPhone: {
+        emergency_contact_phone: {
             type: String,
             trim: true,
             default: null,
@@ -81,10 +79,9 @@ const patientSchema = new Schema(
             type: String,
             enum: Object.values(IPatientStatusEnum),
             default: IPatientStatusEnum.ACTIVE,
-            index: true,
         },
 
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,
@@ -97,7 +94,7 @@ const patientSchema = new Schema(
     }
 );
 
-patientSchema.index({ fullName: 1 });
+patientSchema.index({ full_name: 1 });
 patientSchema.index({ status: 1 });
 
 export const Patient = (models.Patient as mongoose.Model<PatientDocument>) || model<PatientDocument>('Patient', patientSchema);

@@ -10,9 +10,7 @@ const specialtySchema = new Schema(
       type: String,
       required: true,
       trim: true,
-      unique: true,
       maxlength: 120,
-      index: true,
     },
 
     description: {
@@ -31,15 +29,14 @@ const specialtySchema = new Schema(
       type: String,
       enum: Object.values(ISpecialtyStatusEnum),
       default: ISpecialtyStatusEnum.ACTIVE,
-      index: true,
     },
 
-    sortOrder: {
+    sort_order: {
       type: Number,
       default: 0,
     },
 
-    createdBy: {
+    created_by: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       default: null,
@@ -51,8 +48,8 @@ const specialtySchema = new Schema(
   }
 );
 
-specialtySchema.index({ name: 1 }, { unique: true });
-specialtySchema.index({ status: 1, sortOrder: 1 });
+specialtySchema.index({ name: 1 });
+specialtySchema.index({ status: 1, sort_order: 1 });
 
 export const specialties =
   (models.Specialty as mongoose.Model<SpecialtyDocument>) || model<SpecialtyDocument>('specialties', specialtySchema);

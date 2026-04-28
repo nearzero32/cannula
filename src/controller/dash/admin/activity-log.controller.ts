@@ -20,16 +20,16 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
             const main_match: Record<string, unknown> = {};
 
             if (query.centerId && ObjectId.isValid(query.centerId)) {
-                main_match.centerId = new ObjectId(query.centerId);
+                main_match.center_id = new ObjectId(query.centerId);
             }
 
             if (query.userId && ObjectId.isValid(query.userId)) {
-                main_match.userId = new ObjectId(query.userId);
+                main_match.user_id = new ObjectId(query.userId);
             }
 
             if (query.action) main_match.action = query.action;
             if (query.source) main_match.source = query.source;
-            if (query.collectionName) main_match.collectionName = query.collectionName;
+            if (query.collectionName) main_match.collection_name = query.collectionName;
 
             if (query.dateFrom || query.dateTo) {
                 const createdAt: Record<string, Date> = {};
@@ -40,9 +40,9 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
 
             if (query.search) {
                 main_match.$or = [
-                    { userName: { $regex: query.search, $options: 'i' } },
+                    { user_name: { $regex: query.search, $options: 'i' } },
                     { endpoint: { $regex: query.search, $options: 'i' } },
-                    { collectionName: { $regex: query.search, $options: 'i' } },
+                    { collection_name: { $regex: query.search, $options: 'i' } },
                 ];
             }
 

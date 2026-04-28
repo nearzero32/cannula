@@ -10,18 +10,18 @@ const adsSchema = new Schema<AdsDocument>(
         description: { type: String, default: null },
         image: { type: String, required: true },
         link: { type: String, default: null },
-        clinicId: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true },
+        clinic_id: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true },
         status: {
             type: String,
             enum: Object.values(IAdsStatusEnum),
             default: IAdsStatusEnum.ACTIVE,
         },
-        endDate: { type: Date, default: null },
+        end_date: { type: Date, default: null },
     },
     { timestamps: true, versionKey: false }
 );
 
-adsSchema.index({ clinicId: 1, status: 1, createdAt: -1 });
+adsSchema.index({ clinic_id: 1, status: 1, createdAt: -1 });
 
 export const Ads =
     (models.Ads as mongoose.Model<AdsDocument>) ||

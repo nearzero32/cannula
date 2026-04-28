@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 
 const logStream = fs.createWriteStream(path.resolve('logs.txt'), { flags: 'a' });
+const reqStartMap = new WeakMap<Request, number>();
 
 function writeMorganLine(request: Request, status: number, responseTimeMs: number): void {
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? '-';
@@ -18,12 +19,16 @@ function writeMorganLine(request: Request, status: number, responseTimeMs: numbe
 }
 
 export const ActivityLoggerPlugin = new Elysia({ name: 'activity-logger-plugin' })
-    .derive({ as: 'local' }, () => ({ _reqStart: Date.now() }))
-    .onAfterHandle({ as: 'local' }, ({ request, set, _reqStart }) => {
-        const status = typeof set.status === 'number' ? set.status : 200;
-        writeMorganLine(request, status, Date.now() - _reqStart);
+    .onRequest(({ request }) => {
+        reqStartMap.set(request, Date.now());
     })
-    .onError({ as: 'local' }, ({ request, set, _reqStart }) => {
+    .onAfterHandle({ as: 'local' }, ({ request, set }) => {
+        const reqStart = reqStartMap.get(request) ?? Date.now();
+        const status = typeof set.status === 'number' ? set.status : 200;
+        writeMorganLine(request, status, Date.now() - reqStart);
+    })
+    .onError({ as: 'local' }, ({ request, set }) => {
+        const reqStart = reqStartMap.get(request) ?? Date.now();
         const status = typeof set.status === 'number' ? set.status : 500;
-        writeMorganLine(request, status, Date.now() - _reqStart);
+        writeMorganLine(request, status, Date.now() - reqStart);
     });

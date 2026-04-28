@@ -1,4 +1,3 @@
-import type mongoose from 'mongoose';
 import type { IBaseDocument, IWithNotesInternal, IWithCreatedBy } from './common.interface';
 
 export const IClinicStatusEnum = {
@@ -25,7 +24,8 @@ export interface IClinic extends IBaseDocument, IWithNotesInternal, IWithCreated
     name: string;
     description?: string | null;
     address: string;
-    mapLocation?: IClinicMapLocation | null;
-    workingDays: IClinicWorkingDay[];
+    icon?: string | null;
+    map_location?: IClinicMapLocation | null;
+    working_days: IClinicWorkingDay[];
     status: IClinicStatus;
 }

@@ -6,10 +6,9 @@ export type ActivityLogDocument = mongoose.Document & IActivityLog;
 
 const activityLogSchema = new Schema<ActivityLogDocument>(
     {
-        centerId: { type: Schema.Types.ObjectId, ref: 'Clinic', default: null },
-        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        userName: { type: String, default: 'unknown' },
-        userType: { type: String, default: '' },
+        user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        user_name: { type: String, default: 'unknown' },
+        user_type: { type: String, default: '' },
         method: { type: String, required: true },
         endpoint: { type: String, required: true },
         action: {
@@ -17,14 +16,14 @@ const activityLogSchema = new Schema<ActivityLogDocument>(
             enum: Object.values(IActivityLogActionEnum),
             required: true,
         },
-        collectionName: { type: String, default: '' },
-        documentId: { type: Schema.Types.ObjectId, default: null },
-        oldData: { type: Schema.Types.Mixed, default: null },
-        newData: { type: Schema.Types.Mixed, default: null },
-        changedFields: [{ type: String }],
-        requestBody: { type: Schema.Types.Mixed, default: {} },
-        responseStatus: { type: Number, default: 200 },
-        ipAddress: { type: String, default: '' },
+        collection_name: { type: String, default: '' },
+        document_id: { type: Schema.Types.ObjectId, default: null },
+        old_data: { type: Schema.Types.Mixed, default: null },
+        new_data: { type: Schema.Types.Mixed, default: null },
+        changed_fields: [{ type: String }],
+        request_body: { type: Schema.Types.Mixed, default: {} },
+        response_status: { type: Number, default: 200 },
+        ip_address: { type: String, default: '' },
         source: {
             type: String,
             enum: Object.values(IActivityLogSourceEnum),
@@ -34,10 +33,10 @@ const activityLogSchema = new Schema<ActivityLogDocument>(
     { timestamps: true, versionKey: false }
 );
 
-activityLogSchema.index({ centerId: 1, source: 1, createdAt: -1 });
-activityLogSchema.index({ centerId: 1, source: 1, userId: 1, createdAt: -1 });
-activityLogSchema.index({ centerId: 1, collectionName: 1, createdAt: -1 });
-activityLogSchema.index({ documentId: 1 });
+activityLogSchema.index({ source: 1, createdAt: -1 });
+activityLogSchema.index({ source: 1, user_id: 1, createdAt: -1 });
+activityLogSchema.index({ collection_name: 1, createdAt: -1 });
+activityLogSchema.index({ document_id: 1 });
 activityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 }); // 90-day TTL
 
 export const ActivityLog =

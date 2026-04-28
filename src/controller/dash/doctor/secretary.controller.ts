@@ -24,7 +24,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
             const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
 
             const main_match: Record<string, unknown> = {
-                doctorIds: new ObjectId(phrase._id),
+                doctor_ids: new ObjectId(phrase._id),
             };
 
             if (query.status) main_match.status = query.status;
@@ -68,7 +68,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 return { error: true, message: 'السكرتير غير موجود' };
             }
 
-            const belongsToDoctor = secretary.doctorIds.some((id) => id.toString() === phrase._id);
+            const belongsToDoctor = secretary.doctor_ids.some((id) => id.toString() === phrase._id);
             if (!belongsToDoctor) {
                 set.status = 403;
                 return { error: true, message: 'غير مصرح لك بعرض هذا السكرتير' };
@@ -99,13 +99,13 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
             }
 
             const secretary = await secretaryService.create({
-                userId: new ObjectId(body.userId),
-                fullName: body.fullName,
-                clinicId: body.clinicId ? new ObjectId(body.clinicId) : undefined,
-                doctorIds: [new ObjectId(phrase._id)],
+                user_id: new ObjectId(body.userId),
+                full_name: body.fullName,
+                clinic_id: body.clinicId ? new ObjectId(body.clinicId) : undefined,
+                doctor_ids: [new ObjectId(phrase._id)],
                 permissions: body.permissions,
-                notesInternal: body.notesInternal,
-                createdBy: new ObjectId(phrase._id),
+                notes_internal: body.notesInternal,
+                created_by: new ObjectId(phrase._id),
             });
 
             set.status = 201;
@@ -128,7 +128,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 return { error: true, message: 'السكرتير غير موجود' };
             }
 
-            const belongsToDoctor = secretary.doctorIds.some((id) => id.toString() === phrase._id);
+            const belongsToDoctor = secretary.doctor_ids.some((id) => id.toString() === phrase._id);
             if (!belongsToDoctor) {
                 set.status = 403;
                 return { error: true, message: 'غير مصرح لك بتعديل هذا السكرتير' };
@@ -140,7 +140,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                     set.status = 400;
                     return { error: true, message: 'معرف العيادة غير صالح' };
                 }
-                payload.clinicId = body.clinicId ? new ObjectId(body.clinicId) : null;
+                payload.clinic_id = body.clinicId ? new ObjectId(body.clinicId) : null;
             }
 
             const updated = await secretaryService.update(params.id, payload);
@@ -166,7 +166,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 return { error: true, message: 'السكرتير غير موجود' };
             }
 
-            const belongsToDoctor = secretary.doctorIds.some((id) => id.toString() === phrase._id);
+            const belongsToDoctor = secretary.doctor_ids.some((id) => id.toString() === phrase._id);
             if (!belongsToDoctor) {
                 set.status = 403;
                 return { error: true, message: 'غير مصرح لك بتعديل هذا السكرتير' };

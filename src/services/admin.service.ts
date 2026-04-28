@@ -68,8 +68,8 @@ class AdminService {
         return await this.model.findById(id).exec();
     }
 
-    public async getByUserId(userId: string): Promise<AdminDocument | null> {
-        return await this.model.findOne({ userId }).exec();
+    public async getByUserId(user_id: string): Promise<AdminDocument | null> {
+        return await this.model.findOne({ user_id }).exec();
     }
 
     public async create(payload: Partial<IAdmin>): Promise<AdminDocument> {

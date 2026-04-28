@@ -15,11 +15,11 @@ export const mobileAdsController = new Elysia({ prefix: '/ads' })
 
             const main_match: Record<string, unknown> = {
                 status: IAdsStatusEnum.ACTIVE,
-                $or: [{ endDate: null }, { endDate: { $gte: new Date() } }],
+                $or: [{ end_date: null }, { end_date: { $gte: new Date() } }],
             };
 
             if (query.clinicId && ObjectId.isValid(query.clinicId)) {
-                main_match.clinicId = new ObjectId(query.clinicId);
+                main_match.clinic_id = new ObjectId(query.clinicId);
             }
 
             const { data, count } = await adsService.getPaginated({ main_match, page, limit });

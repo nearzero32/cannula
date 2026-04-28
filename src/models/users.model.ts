@@ -6,7 +6,7 @@ export type UserDocument = mongoose.Document & IUser;
 
 const userSchema = new Schema(
     {
-        fullName: {
+        full_name: {
             type: String,
             required: true,
             trim: true,
@@ -19,47 +19,48 @@ const userSchema = new Schema(
             trim: true,
             lowercase: true,
             sparse: true,
-            unique: true,
         },
 
         phone: {
             type: String,
             required: true,
             trim: true,
-            unique: true,
         },
 
-        passwordHash: {
+        password_hash: {
             type: String,
             required: true,
             select: false,
+        },
+        password_show: {
+            type: String,
+            required: true,
+            trim: true,
         },
 
         role: {
             type: String,
             enum: Object.values(IUserRoleEnum),
             required: true,
-            index: true,
         },
 
         status: {
             type: String,
             enum: Object.values(IUserStatusEnum),
             default: IUserStatusEnum.PENDING,
-            index: true,
         },
 
-        isPhoneVerified: {
+        is_phone_verified: {
             type: Boolean,
             default: false,
         },
 
-        isEmailVerified: {
+        is_email_verified: {
             type: Boolean,
             default: false,
         },
 
-        lastLoginAt: {
+        last_login_at: {
             type: Date,
             default: null,
         },
@@ -70,8 +71,6 @@ const userSchema = new Schema(
     }
 );
 
-userSchema.index({ phone: 1 }, { unique: true });
-userSchema.index({ email: 1 }, { unique: true, sparse: true });
 userSchema.index({ role: 1, status: 1 });
 
 export const User = (models.User as mongoose.Model<UserDocument>) || model<UserDocument>('User', userSchema);

@@ -18,12 +18,12 @@ export const IAdminPermissionEnum = {
 export type IAdminPermission = (typeof IAdminPermissionEnum)[keyof typeof IAdminPermissionEnum];
 
 export interface IAdmin extends IBaseDocument {
-    userId: mongoose.Types.ObjectId;
-    displayName: string;
-    jobTitle?: string | null;
+    user_id: mongoose.Types.ObjectId;
+    display_name: string;
+    job_title?: string | null;
     permissions: IAdminPermission[];
-    superAdmin: boolean;
-    isActive: boolean;
-    createdBy?: mongoose.Types.ObjectId | null;
-    lastActionAt?: Date | null;
+    super_admin: boolean;
+    is_active: boolean;
+    created_by?: mongoose.Types.ObjectId | null;
+    last_action_at?: Date | null;
 }

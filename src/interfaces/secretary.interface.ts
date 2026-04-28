@@ -34,14 +34,14 @@ export const ISecretaryDefaultPermissions: ISecretaryPermission[] = [
 
 export interface ISecretary {
     _id: string;
-    userId: mongoose.Types.ObjectId;
-    fullName: string;
-    clinicId?: mongoose.Types.ObjectId;
-    doctorIds: mongoose.Types.ObjectId[];
+    user_id: mongoose.Types.ObjectId;
+    full_name: string;
+    clinic_id?: mongoose.Types.ObjectId;
+    doctor_ids: mongoose.Types.ObjectId[];
     permissions: ISecretaryPermission[];
     status: ISecretaryStatus;
-    createdBy?: mongoose.Types.ObjectId | null;
-    notesInternal?: string | null;
+    created_by?: mongoose.Types.ObjectId | null;
+    notes_internal?: string | null;
     createdAt: Date;
     updatedAt: Date;
 }

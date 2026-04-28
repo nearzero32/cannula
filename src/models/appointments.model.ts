@@ -6,55 +6,48 @@ export type AppointmentDocument = mongoose.Document & IAppointment;
 
 const appointmentSchema = new Schema(
     {
-        appointmentNumber: {
+        appointment_number: {
             type: String,
             required: true,
-            unique: true,
             trim: true,
-            index: true,
         },
 
-        patientId: {
+        patient_id: {
             type: Schema.Types.ObjectId,
             ref: 'Patient',
             required: true,
-            index: true,
         },
 
-        doctorId: {
+        doctor_id: {
             type: Schema.Types.ObjectId,
             ref: 'Doctor',
             required: true,
-            index: true,
         },
 
-        clinicId: {
+        clinic_id: {
             type: Schema.Types.ObjectId,
             ref: 'Clinic',
             required: true,
-            index: true,
         },
 
-        specialtyId: {
+        specialty_id: {
             type: Schema.Types.ObjectId,
             ref: 'Specialty',
             default: null,
-            index: true,
         },
 
         date: {
             type: Date,
             required: true,
-            index: true,
         },
 
-        startTime: {
+        start_time: {
             type: String,
             required: true,
             trim: true,
         },
 
-        endTime: {
+        end_time: {
             type: String,
             required: true,
             trim: true,
@@ -64,16 +57,15 @@ const appointmentSchema = new Schema(
             type: String,
             enum: Object.values(IAppointmentStatusEnum),
             default: IAppointmentStatusEnum.PENDING,
-            index: true,
         },
 
-        bookedBy: {
+        booked_by: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             default: null,
         },
 
-        bookingSource: {
+        booking_source: {
             type: String,
             enum: Object.values(IAppointmentBookingSourceEnum),
             default: IAppointmentBookingSourceEnum.APP,
@@ -86,21 +78,21 @@ const appointmentSchema = new Schema(
             default: null,
         },
 
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,
             default: null,
         },
 
-        cancelReason: {
+        cancel_reason: {
             type: String,
             trim: true,
             maxlength: 1000,
             default: null,
         },
 
-        rescheduledFrom: {
+        rescheduled_from: {
             type: Schema.Types.ObjectId,
             ref: 'Appointment',
             default: null,
@@ -112,9 +104,9 @@ const appointmentSchema = new Schema(
     }
 );
 
-appointmentSchema.index({ doctorId: 1, date: 1, startTime: 1 });
-appointmentSchema.index({ patientId: 1, date: 1 });
-appointmentSchema.index({ clinicId: 1, date: 1 });
+appointmentSchema.index({ doctor_id: 1, date: 1, start_time: 1 });
+appointmentSchema.index({ patient_id: 1, date: 1 });
+appointmentSchema.index({ clinic_id: 1, date: 1 });
 appointmentSchema.index({ status: 1, date: 1 });
 
 export const Appointment =

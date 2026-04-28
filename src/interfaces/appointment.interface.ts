@@ -21,18 +21,18 @@ export type IAppointmentBookingSource =
     (typeof IAppointmentBookingSourceEnum)[keyof typeof IAppointmentBookingSourceEnum];
 
 export interface IAppointment extends IBaseDocument, IWithNotesInternal {
-    appointmentNumber: string;
-    patientId: mongoose.Types.ObjectId;
-    doctorId: mongoose.Types.ObjectId;
-    clinicId: mongoose.Types.ObjectId;
-    specialtyId?: mongoose.Types.ObjectId | null;
+    appointment_number: string;
+    patient_id: mongoose.Types.ObjectId;
+    doctor_id: mongoose.Types.ObjectId;
+    clinic_id: mongoose.Types.ObjectId;
+    specialty_id?: mongoose.Types.ObjectId | null;
     date: Date;
-    startTime: string;
-    endTime: string;
+    start_time: string;
+    end_time: string;
     status: IAppointmentStatus;
-    bookedBy?: mongoose.Types.ObjectId | null;
-    bookingSource: IAppointmentBookingSource;
+    booked_by?: mongoose.Types.ObjectId | null;
+    booking_source: IAppointmentBookingSource;
     reason?: string | null;
-    cancelReason?: string | null;
-    rescheduledFrom?: mongoose.Types.ObjectId | null;
+    cancel_reason?: string | null;
+    rescheduled_from?: mongoose.Types.ObjectId | null;
 }

@@ -11,7 +11,6 @@ const clinicSchema = new Schema(
             required: true,
             trim: true,
             maxlength: 150,
-            index: true,
         },
 
         description: {
@@ -33,12 +32,12 @@ const clinicSchema = new Schema(
             default: null,
         },
 
-        mapLocation: {
+        map_location: {
             lat: { type: Number, default: null },
             lng: { type: Number, default: null },
         },
 
-        workingDays: [
+        working_days: [
             {
                 day: {
                     type: Number,
@@ -65,16 +64,15 @@ const clinicSchema = new Schema(
             type: String,
             enum: Object.values(IClinicStatusEnum),
             default: IClinicStatusEnum.ACTIVE,
-            index: true,
         },
 
-        createdBy: {
+        created_by: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             default: null,
         },
 
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,

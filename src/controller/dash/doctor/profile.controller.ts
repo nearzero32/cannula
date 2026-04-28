@@ -58,7 +58,30 @@ export const doctorProfileController = new Elysia({ prefix: '/profile' })
                 return { error: true, message: 'الملف الشخصي غير موجود' };
             }
 
-            const updated = await doctorService.update((doctor._id as string).toString(), body);
+            const payload: Record<string, unknown> = {};
+            if (body.displayName !== undefined) payload.display_name = body.displayName;
+            if (body.gender !== undefined) payload.gender = body.gender;
+            if (body.profilePhoto !== undefined) payload.profile_photo = body.profilePhoto;
+            if (body.bio !== undefined) payload.bio = body.bio;
+            if (body.languages !== undefined) payload.languages = body.languages;
+            if (body.subSpecialties !== undefined) payload.sub_specialties = body.subSpecialties;
+            if (body.experienceYears !== undefined) payload.experience_years = body.experienceYears;
+            if (body.clinicLocation !== undefined) payload.clinic_location = body.clinicLocation;
+            if (body.mapLocation !== undefined) payload.map_location = body.mapLocation;
+            if (body.appointmentDuration !== undefined) payload.appointment_duration = body.appointmentDuration;
+            if (body.slotInterval !== undefined) payload.slot_interval = body.slotInterval;
+            if (body.bufferBefore !== undefined) payload.buffer_before = body.bufferBefore;
+            if (body.bufferAfter !== undefined) payload.buffer_after = body.bufferAfter;
+            if (body.acceptAutoBooking !== undefined) payload.accept_auto_booking = body.acceptAutoBooking;
+            if (body.allowReschedule !== undefined) payload.allow_reschedule = body.allowReschedule;
+            if (body.bookingLeadTimeHours !== undefined) payload.booking_lead_time_hours = body.bookingLeadTimeHours;
+            if (body.cancellationWindowHours !== undefined) payload.cancellation_window_hours = body.cancellationWindowHours;
+            if (body.consultationFee !== undefined) payload.consultation_fee = body.consultationFee;
+            if (body.followUpFee !== undefined) payload.follow_up_fee = body.followUpFee;
+            if (body.currency !== undefined) payload.currency = body.currency;
+            if (body.acceptingNewPatients !== undefined) payload.accepting_new_patients = body.acceptingNewPatients;
+
+            const updated = await doctorService.update((doctor._id as string).toString(), payload);
             return { error: false, message: 'تم تحديث الملف الشخصي بنجاح', data: updated };
         },
         { body: profileBodySchema }

@@ -68,10 +68,10 @@ class AppointmentService {
         return await this.model.findById(id).exec();
     }
 
-    // Enforces the unique compound constraint: doctorId + date + startTime
-    public async isSlotTaken(doctorId: string, date: Date, startTime: string): Promise<boolean> {
+    // Enforces slot uniqueness by doctor_id + date + start_time
+    public async isSlotTaken(doctor_id: string, date: Date, start_time: string): Promise<boolean> {
         const existing = await this.model
-            .findOne({ doctorId, date, startTime, status: { $nin: ['cancelled'] } })
+            .findOne({ doctor_id, date, start_time, status: { $nin: ['cancelled'] } })
             .exec();
         return existing !== null;
     }

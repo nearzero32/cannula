@@ -36,7 +36,7 @@ export const authController = new Elysia({ prefix: '/auth' })
         async ({ body, set }) => {
             const user = await userService.findByCredentials({
                 phone: body.phone,
-                passwordHash: generateSHA512(body.password),
+                password_hash: generateSHA512(body.password),
                 roles: DASHBOARD_ROLES,
             });
 
@@ -67,7 +67,7 @@ export const authController = new Elysia({ prefix: '/auth' })
                     refreshToken,
                     user: {
                         _id: userId,
-                        fullName: user.fullName,
+                        full_name: user.full_name,
                         phone: user.phone,
                         role: user.role,
                         status: user.status,

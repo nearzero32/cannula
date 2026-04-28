@@ -76,10 +76,12 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
         '/',
         async ({ body, phrase, set }) => {
             const specialty = await specialtyService.create({
-                ...body,
+                name: body.name,
+                description: body.description,
+                icon: body.icon,
                 status: body.status ?? ISpecialtyStatusEnum.ACTIVE,
-                sortOrder: body.sortOrder ?? 0,
-                createdBy: new ObjectId(phrase._id),
+                sort_order: body.sortOrder ?? 0,
+                created_by: new ObjectId(phrase._id),
             });
 
             set.status = 201;
@@ -102,7 +104,14 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
                 return { error: true, message: 'التخصص غير موجود' };
             }
 
-            const updated = await specialtyService.update(params.id, body);
+            const payload: Record<string, unknown> = {};
+            if (body.name !== undefined) payload.name = body.name;
+            if (body.description !== undefined) payload.description = body.description;
+            if (body.icon !== undefined) payload.icon = body.icon;
+            if (body.sortOrder !== undefined) payload.sort_order = body.sortOrder;
+            if (body.status !== undefined) payload.status = body.status;
+
+            const updated = await specialtyService.update(params.id, payload);
             return { error: false, message: 'تم تحديث التخصص بنجاح', data: updated };
         },
         {

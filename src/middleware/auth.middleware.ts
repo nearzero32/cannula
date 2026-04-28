@@ -14,6 +14,7 @@ export const AuthPlugin = new Elysia({ name: 'auth-plugin' }).derive({ as: 'glob
     }
 
     const bearer = verifyAccessToken(auth) as TokenPayload | null;
+
     if (!bearer) {
         return status(401, { error: true, message: 'Invalid token' });
     }

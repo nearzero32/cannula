@@ -3,7 +3,7 @@ import type { IAboutUs } from '../interfaces/about-us.interface';
 
 export type AboutUsDocument = mongoose.Document & IAboutUs;
 
-const aboutUsSchema = new Schema<AboutUsDocument>(
+const about_us_schema = new Schema<AboutUsDocument>(
     {
         name: { type: String, required: true },
         logo: { type: String, required: true },
@@ -19,6 +19,6 @@ const aboutUsSchema = new Schema<AboutUsDocument>(
 
 export const AboutUs =
     (models.AboutUs as mongoose.Model<AboutUsDocument>) ||
-    model<AboutUsDocument>('AboutUs', aboutUsSchema);
+    model<AboutUsDocument>('AboutUs', about_us_schema);
 
 export default AboutUs;

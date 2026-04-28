@@ -16,12 +16,12 @@ export const doctorActivityLogController = new Elysia({ prefix: '/activity-logs'
             const limit = Math.min(100, Math.max(1, Number(query.limit) || 20));
 
             const main_match: Record<string, unknown> = {
-                userId: new ObjectId(phrase._id),
+                user_id: new ObjectId(phrase._id),
             };
 
             if (query.action) main_match.action = query.action;
             if (query.source) main_match.source = query.source;
-            if (query.collectionName) main_match.collectionName = query.collectionName;
+            if (query.collectionName) main_match.collection_name = query.collectionName;
 
             if (query.dateFrom || query.dateTo) {
                 const createdAt: Record<string, Date> = {};
@@ -33,7 +33,7 @@ export const doctorActivityLogController = new Elysia({ prefix: '/activity-logs'
             if (query.search) {
                 main_match.$or = [
                     { endpoint: { $regex: query.search, $options: 'i' } },
-                    { collectionName: { $regex: query.search, $options: 'i' } },
+                    { collection_name: { $regex: query.search, $options: 'i' } },
                 ];
             }
 
@@ -75,7 +75,7 @@ export const doctorActivityLogController = new Elysia({ prefix: '/activity-logs'
                 return { error: true, message: 'سجل النشاط غير موجود' };
             }
 
-            if (log.userId.toString() !== phrase._id) {
+            if (log.user_id.toString() !== phrase._id) {
                 set.status = 403;
                 return { error: true, message: 'غير مصرح لك بعرض هذا السجل' };
             }
