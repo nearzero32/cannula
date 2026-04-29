@@ -81,7 +81,13 @@ export const doctorProfileController = new Elysia({ prefix: '/profile' })
             if (body.currency !== undefined) payload.currency = body.currency;
             if (body.acceptingNewPatients !== undefined) payload.accepting_new_patients = body.acceptingNewPatients;
 
-            const updated = await doctorService.update((doctor._id as string).toString(), payload);
+            const updated = await doctorService.update((doctor._id as string).toString(), payload, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/doctor/profile',
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث الملف الشخصي بنجاح', data: updated };
         },
         { body: profileBodySchema }

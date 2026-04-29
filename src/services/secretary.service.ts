@@ -1,9 +1,12 @@
 import Secretary, { SecretaryDocument } from '../models/secretary.model';
 import type { ISecretary } from '../interfaces/secretary.interface';
 import type { PipelineStage } from 'mongoose';
+import ActivityLogService from './activity-log.service';
+import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 
 class SecretaryService {
     private model = Secretary;
+    private activityLog = ActivityLogService;
 
     public async getPaginated({
         main_match,
@@ -72,16 +75,75 @@ class SecretaryService {
         return await this.model.findOne({ user_id }).exec();
     }
 
-    public async create(payload: Partial<ISecretary>): Promise<SecretaryDocument> {
-        return await this.model.create(payload);
+    public async create(payload: Partial<ISecretary>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<SecretaryDocument> {
+        const doc = await this.model.create(payload);
+        try {
+            await this.activityLog.logActivity({
+                user_id: meta?.user_id,
+                user_name: meta?.user_name,
+                user_type: meta?.user_type,
+                method: 'POST',
+                endpoint: meta?.endpoint || '/secretaries',
+                action: IActivityLogActionEnum.CREATE,
+                collection_name: 'secretaries',
+                document_id: (doc._id as any).toString(),
+                new_data: doc.toObject(),
+                request_body: payload,
+                source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+            });
+        } catch {}
+        return doc;
     }
 
-    public async update(id: string, payload: Partial<ISecretary>): Promise<SecretaryDocument | null> {
-        return await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+    public async update(id: string, payload: Partial<ISecretary>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<SecretaryDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        const doc = await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+        if (doc && oldDoc) {
+            try {
+                const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/secretaries/${id}`,
+                    action: IActivityLogActionEnum.UPDATE,
+                    collection_name: 'secretaries',
+                    document_id: id,
+                    old_data: oldDoc.toObject(),
+                    new_data: doc.toObject(),
+                    changed_fields,
+                    request_body: payload,
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+        return doc;
     }
 
-    public async updateStatus(id: string, status: ISecretary['status']): Promise<SecretaryDocument | null> {
-        return await this.model.findByIdAndUpdate(id, { status }, { new: true }).exec();
+    public async updateStatus(id: string, status: ISecretary['status'], meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<SecretaryDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        const doc = await this.model.findByIdAndUpdate(id, { status }, { new: true }).exec();
+        if (doc && oldDoc) {
+            try {
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/secretaries/${id}/status`,
+                    action: IActivityLogActionEnum.UPDATE,
+                    collection_name: 'secretaries',
+                    document_id: id,
+                    old_data: { status: oldDoc.status },
+                    new_data: { status },
+                    changed_fields: ['status'],
+                    request_body: { status },
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+        return doc;
     }
 }
 

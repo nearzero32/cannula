@@ -5,6 +5,8 @@ import { activityLogController } from './activity-log.controller';
 import { aboutUsController } from './about-us.controller';
 import { adsController } from './ads.controller';
 import { specialtiesController } from './specialties.controller';
+import { patientsController } from './patients.controller';
+import { appointmentsController } from './appointments.controller';
 
 export const adminController = new Elysia({ prefix: '/admin' })
     .use(AuthPlugin)
@@ -12,4 +14,6 @@ export const adminController = new Elysia({ prefix: '/admin' })
     .use(activityLogController)
     .use(aboutUsController)
     .use(adsController)
-    .use(specialtiesController);
+    .use(specialtiesController)
+    .use(patientsController)
+    .use(appointmentsController);

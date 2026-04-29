@@ -6,11 +6,34 @@ export type AdsDocument = mongoose.Document & IAds;
 
 const adsSchema = new Schema<AdsDocument>(
     {
-        title: { type: String, default: null },
-        description: { type: String, default: null },
-        image: { type: String, required: true },
-        link: { type: String, default: null },
-        clinic_id: { type: Schema.Types.ObjectId, ref: 'Clinic', required: true },
+        title: {
+            type: String,
+            default: null
+        },
+        description: {
+            type: String,
+            default: null
+        },
+        image: {
+            type: String,
+            required: true
+        },
+        link: {
+            type: String,
+            default: null
+        },
+        doctor_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'User',
+            required: false,
+            default: null
+        },
+        clinic_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'Clinic',
+            required: false,
+            default: null
+        },
         status: {
             type: String,
             enum: Object.values(IAdsStatusEnum),

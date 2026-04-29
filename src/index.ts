@@ -4,6 +4,7 @@ import RedisClient from './databases/redis';
 import { loadMongoConfigFromEnv } from './databases/config';
 import { dashboardController } from './controller/dash/index';
 import { mobileController } from './controller/mobile/index';
+import { ActivityLogPlugin } from './middleware/activity-log.middleware';
 import { ensureSuperAdminExists } from './migrations/ensure-super-admin.migration';
 
 async function bootstrap() {
@@ -16,6 +17,7 @@ async function bootstrap() {
     await RedisClient.getInstance().connect();
 
     const app = new Elysia()
+        .use(ActivityLogPlugin)
         .use(dashboardController)
         .use(mobileController)
         .listen(3000);

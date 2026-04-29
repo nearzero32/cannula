@@ -11,8 +11,9 @@ const adsBodySchema = t.Object({
     description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
     image: t.String({ minLength: 1 }),
     link: t.Optional(t.Nullable(t.String())),
-    clinicId: t.String({ minLength: 1 }),
-    endDate: t.Optional(t.Nullable(t.String())),
+    clinic_id: t.Optional(t.Nullable(t.String())),
+    doctor_id: t.Optional(t.Nullable(t.String())),
+    end_date: t.Optional(t.Nullable(t.String())),
 });
 
 export const adsController = new Elysia({ prefix: '/ads' })
@@ -26,8 +27,12 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
             const main_match: Record<string, unknown> = {};
 
-            if (query.clinicId && ObjectId.isValid(query.clinicId)) {
-                main_match.clinic_id = new ObjectId(query.clinicId);
+            if (query.clinic_id && ObjectId.isValid(query.clinic_id)) {
+                main_match.clinic_id = new ObjectId(query.clinic_id);
+            }
+
+            if (query.doctor_id && ObjectId.isValid(query.doctor_id)) {
+                main_match.doctor_id = new ObjectId(query.doctor_id);
             }
 
             if (query.status) main_match.status = query.status;
@@ -53,7 +58,8 @@ export const adsController = new Elysia({ prefix: '/ads' })
             query: t.Object({
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
-                clinicId: t.Optional(t.String()),
+                clinic_id: t.Optional(t.String()),
+                doctor_id: t.Optional(t.String()),
                 status: t.Optional(t.Enum(IAdsStatusEnum)),
                 search: t.Optional(t.String()),
             }),
@@ -81,16 +87,32 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
     .post(
         '/',
-        async ({ body, set }) => {
-            if (!ObjectId.isValid(body.clinicId)) {
+        async ({ body, phrase, set }) => {
+
+            if (body.clinic_id && !ObjectId.isValid(body.clinic_id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف العيادة غير صالح' };
             }
 
+            if (body.doctor_id && !ObjectId.isValid(body.doctor_id)) {
+                set.status = 400;
+                return { error: true, message: 'معرف الطبيب غير صالح' };
+            }
+
             const ad = await adsService.create({
-                ...body,
-                clinic_id: new ObjectId(body.clinicId),
-                end_date: body.endDate ? new Date(body.endDate) : null,
+                title: body.title,
+                description: body.description,
+                image: body.image,
+                link: body.link,
+                clinic_id: body.clinic_id ? new ObjectId(body.clinic_id) : null,
+                doctor_id: body.doctor_id ? new ObjectId(body.doctor_id) : null,
+                end_date: body.end_date ? new Date(body.end_date) : null,
+            }, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/ads',
+                source: 'dashboard',
             });
 
             set.status = 201;
@@ -99,9 +121,9 @@ export const adsController = new Elysia({ prefix: '/ads' })
         { body: adsBodySchema }
     )
 
-    .patch(
+    .put(
         '/:id',
-        async ({ params, body, set }) => {
+        async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف الإعلان غير صالح' };
@@ -115,19 +137,33 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
             const payload: Record<string, unknown> = { ...body };
 
-            if (body.clinicId) {
-                if (!ObjectId.isValid(body.clinicId)) {
+            if (body.clinic_id !== undefined) {
+                if (body.clinic_id && !ObjectId.isValid(body.clinic_id)) {
                     set.status = 400;
                     return { error: true, message: 'معرف العيادة غير صالح' };
                 }
-                payload.clinic_id = new ObjectId(body.clinicId);
+                payload.clinic_id = body.clinic_id ? new ObjectId(body.clinic_id) : null;
             }
 
-            if (body.endDate !== undefined) {
-                payload.end_date = body.endDate ? new Date(body.endDate) : null;
+            if (body.doctor_id !== undefined) {
+                if (body.doctor_id && !ObjectId.isValid(body.doctor_id)) {
+                    set.status = 400;
+                    return { error: true, message: 'معرف الطبيب غير صالح' };
+                }
+                payload.doctor_id = body.doctor_id ? new ObjectId(body.doctor_id) : null;
             }
 
-            const updated = await adsService.update(params.id, payload);
+            if (body.end_date !== undefined) {
+                payload.end_date = body.end_date ? new Date(body.end_date) : null;
+            }
+
+            const updated = await adsService.update(params.id, payload, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/ads/' + params.id,
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث الإعلان بنجاح', data: updated };
         },
         {
@@ -138,7 +174,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
     .patch(
         '/:id/status',
-        async ({ params, body, set }) => {
+        async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف الإعلان غير صالح' };
@@ -150,7 +186,13 @@ export const adsController = new Elysia({ prefix: '/ads' })
                 return { error: true, message: 'الإعلان غير موجود' };
             }
 
-            const updated = await adsService.updateStatus(params.id, body.status);
+            const updated = await adsService.updateStatus(params.id, body.status, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/ads/' + params.id + '/status',
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث حالة الإعلان بنجاح', data: updated };
         },
         {

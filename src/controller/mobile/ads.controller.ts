@@ -18,8 +18,12 @@ export const mobileAdsController = new Elysia({ prefix: '/ads' })
                 $or: [{ end_date: null }, { end_date: { $gte: new Date() } }],
             };
 
-            if (query.clinicId && ObjectId.isValid(query.clinicId)) {
-                main_match.clinic_id = new ObjectId(query.clinicId);
+            if (query.clinic_id && ObjectId.isValid(query.clinic_id)) {
+                main_match.clinic_id = new ObjectId(query.clinic_id);
+            }
+
+            if (query.doctor_id && ObjectId.isValid(query.doctor_id)) {
+                main_match.doctor_id = new ObjectId(query.doctor_id);
             }
 
             const { data, count } = await adsService.getPaginated({ main_match, page, limit });
@@ -36,7 +40,8 @@ export const mobileAdsController = new Elysia({ prefix: '/ads' })
             query: t.Object({
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
-                clinicId: t.Optional(t.String()),
+                clinic_id: t.Optional(t.String()),
+                doctor_id: t.Optional(t.String()),
             }),
         }
     )

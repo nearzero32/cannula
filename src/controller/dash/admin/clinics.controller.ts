@@ -102,8 +102,13 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
                 map_location: body.mapLocation,
                 working_days: body.workingDays ?? [],
                 status: body.status ?? IClinicStatusEnum.ACTIVE,
-                notes_internal: body.notesInternal,
                 created_by: new ObjectId(phrase._id),
+            }, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/clinics',
+                source: 'dashboard',
             });
 
             set.status = 201;
@@ -112,9 +117,9 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         { body: clinicBodySchema }
     )
 
-    .patch(
+    .put(
         '/:id',
-        async ({ params, body, set }) => {
+        async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف العيادة غير صالح' };
@@ -136,7 +141,13 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             if (body.status !== undefined) payload.status = body.status;
             if (body.notesInternal !== undefined) payload.notes_internal = body.notesInternal;
 
-            const updated = await clinicService.update(params.id, payload);
+            const updated = await clinicService.update(params.id, payload, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/clinics/' + params.id,
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث العيادة بنجاح', data: updated };
         },
         {
@@ -147,7 +158,7 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
 
     .patch(
         '/:id/status',
-        async ({ params, body, set }) => {
+        async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف العيادة غير صالح' };
@@ -159,7 +170,13 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
                 return { error: true, message: 'العيادة غير موجودة' };
             }
 
-            const updated = await clinicService.update(params.id, { status: body.status });
+            const updated = await clinicService.update(params.id, { status: body.status }, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/clinics/' + params.id + '/status',
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث حالة العيادة بنجاح', data: updated };
         },
         {

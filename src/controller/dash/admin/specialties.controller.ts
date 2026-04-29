@@ -82,6 +82,12 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
                 status: body.status ?? ISpecialtyStatusEnum.ACTIVE,
                 sort_order: body.sortOrder ?? 0,
                 created_by: new ObjectId(phrase._id),
+            }, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/specialties',
+                source: 'dashboard',
             });
 
             set.status = 201;
@@ -92,7 +98,7 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
 
     .patch(
         '/:id',
-        async ({ params, body, set }) => {
+        async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف التخصص غير صالح' };
@@ -111,7 +117,13 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
             if (body.sortOrder !== undefined) payload.sort_order = body.sortOrder;
             if (body.status !== undefined) payload.status = body.status;
 
-            const updated = await specialtyService.update(params.id, payload);
+            const updated = await specialtyService.update(params.id, payload, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/specialties/' + params.id,
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث التخصص بنجاح', data: updated };
         },
         {
@@ -122,7 +134,7 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
 
     .patch(
         '/:id/status',
-        async ({ params, body, set }) => {
+        async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف التخصص غير صالح' };
@@ -134,7 +146,13 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
                 return { error: true, message: 'التخصص غير موجود' };
             }
 
-            const updated = await specialtyService.updateStatus(params.id, body.status);
+            const updated = await specialtyService.updateStatus(params.id, body.status, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/specialties/' + params.id + '/status',
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث حالة التخصص بنجاح', data: updated };
         },
         {

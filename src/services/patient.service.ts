@@ -1,9 +1,12 @@
 import Patient, { PatientDocument } from '../models/patients.model';
 import type { IPatient } from '../interfaces/patient.interface';
 import type { PipelineStage } from 'mongoose';
+import ActivityLogService from './activity-log.service';
+import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 
 class PatientService {
     private model = Patient;
+    private activityLog = ActivityLogService;
 
     public async getPaginated({
         main_match,
@@ -72,12 +75,50 @@ class PatientService {
         return await this.model.findOne({ user_id }).exec();
     }
 
-    public async create(payload: Partial<IPatient>): Promise<PatientDocument> {
-        return await this.model.create(payload);
+    public async create(payload: Partial<IPatient>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<PatientDocument> {
+        const doc = await this.model.create(payload);
+        try {
+            await this.activityLog.logActivity({
+                user_id: meta?.user_id,
+                user_name: meta?.user_name,
+                user_type: meta?.user_type,
+                method: 'POST',
+                endpoint: meta?.endpoint || '/patients',
+                action: IActivityLogActionEnum.CREATE,
+                collection_name: 'patients',
+                document_id: (doc._id as any).toString(),
+                new_data: doc.toObject(),
+                request_body: payload,
+                source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+            });
+        } catch {}
+        return doc;
     }
 
-    public async update(id: string, payload: Partial<IPatient>): Promise<PatientDocument | null> {
-        return await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+    public async update(id: string, payload: Partial<IPatient>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<PatientDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        const doc = await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+        if (doc && oldDoc) {
+            try {
+                const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/patients/${id}`,
+                    action: IActivityLogActionEnum.UPDATE,
+                    collection_name: 'patients',
+                    document_id: id,
+                    old_data: oldDoc.toObject(),
+                    new_data: doc.toObject(),
+                    changed_fields,
+                    request_body: payload,
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+        return doc;
     }
 
 }

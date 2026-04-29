@@ -29,8 +29,14 @@ export const aboutUsController = new Elysia({ prefix: '/about-us' })
 
     .patch(
         '/',
-        async ({ body }) => {
-            const data = await aboutUsService.upsert(body);
+        async ({ body, phrase }) => {
+            const data = await aboutUsService.upsert(body, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/about-us',
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث بيانات من نحن بنجاح', data };
         },
         { body: aboutUsBodySchema }

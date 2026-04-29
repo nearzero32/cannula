@@ -106,6 +106,12 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 permissions: body.permissions,
                 notes_internal: body.notesInternal,
                 created_by: new ObjectId(phrase._id),
+            }, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/doctor/secretaries',
+                source: 'dashboard',
             });
 
             set.status = 201;
@@ -143,7 +149,13 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 payload.clinic_id = body.clinicId ? new ObjectId(body.clinicId) : null;
             }
 
-            const updated = await secretaryService.update(params.id, payload);
+            const updated = await secretaryService.update(params.id, payload, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/doctor/secretaries/' + params.id,
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث السكرتير بنجاح', data: updated };
         },
         {
@@ -172,7 +184,13 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 return { error: true, message: 'غير مصرح لك بتعديل هذا السكرتير' };
             }
 
-            const updated = await secretaryService.updateStatus(params.id, body.status);
+            const updated = await secretaryService.updateStatus(params.id, body.status, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/doctor/secretaries/' + params.id + '/status',
+                source: 'dashboard',
+            });
             return { error: false, message: 'تم تحديث حالة السكرتير بنجاح', data: updated };
         },
         {

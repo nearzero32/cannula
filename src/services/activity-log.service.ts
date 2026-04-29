@@ -52,6 +52,58 @@ class ActivityLogService {
     public async create(payload: Partial<IActivityLog>): Promise<ActivityLogDocument> {
         return await this.model.create(payload);
     }
+
+    public async logActivity({
+        user_id,
+        user_name,
+        user_type,
+        method,
+        endpoint,
+        action,
+        collection_name,
+        document_id,
+        old_data = null,
+        new_data = null,
+        changed_fields = [],
+        request_body = {},
+        response_status = 200,
+        ip_address = '',
+        source,
+    }: {
+        user_id?: string | mongoose.Types.ObjectId;
+        user_name?: string;
+        user_type?: string;
+        method: string;
+        endpoint: string;
+        action: string;
+        collection_name: string;
+        document_id?: string | mongoose.Types.ObjectId | null;
+        old_data?: unknown;
+        new_data?: unknown;
+        changed_fields?: string[];
+        request_body?: unknown;
+        response_status?: number;
+        ip_address?: string;
+        source: string;
+    }): Promise<ActivityLogDocument> {
+        return await this.model.create({
+            user_id: user_id ? new mongoose.Types.ObjectId(user_id) : undefined,
+            user_name: user_name || 'unknown',
+            user_type: user_type || '',
+            method,
+            endpoint,
+            action,
+            collection_name,
+            document_id: document_id ? new mongoose.Types.ObjectId(document_id) : null,
+            old_data,
+            new_data,
+            changed_fields,
+            request_body,
+            response_status,
+            ip_address: ip_address || '',
+            source,
+        });
+    }
 }
 
 export default new ActivityLogService();

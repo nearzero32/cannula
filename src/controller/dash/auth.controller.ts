@@ -4,7 +4,9 @@ import { generateSHA512 } from '../../constants/hashing';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../constants/jwt';
 import { AuthPlugin, storeAccessSession, revokeAccessSession } from '../../middleware/auth.middleware';
 import userService from '../../services/user.service';
+import ActivityLogService from '../../services/activity-log.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
+import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import RedisClient from '../../databases/redis';
 
 const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR];
@@ -58,6 +60,21 @@ export const authController = new Elysia({ prefix: '/auth' })
                 storeAccessSession(userId, accessToken, ACCESS_TTL),
                 storeRefreshSession(userId, refreshToken),
             ]);
+
+            try {
+                await ActivityLogService.logActivity({
+                    user_id: userId,
+                    user_name: user.role + '_' + userId,
+                    user_type: user.role,
+                    method: 'POST',
+                    endpoint: '/dash/auth/login',
+                    action: IActivityLogActionEnum.OTHER,
+                    collection_name: 'users',
+                    document_id: userId,
+                    request_body: { phone: body.phone },
+                    source: IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
 
             return {
                 error: false,
@@ -132,6 +149,22 @@ export const authController = new Elysia({ prefix: '/auth' })
             const raw = headers.authorization ?? '';
             const token = raw.trim().toLowerCase().startsWith('bearer ') ? raw.trim().slice(7).trim() : raw.trim();
             await revokeAccessSession(phrase._id, token);
+
+            try {
+                await ActivityLogService.logActivity({
+                    user_id: phrase._id,
+                    user_name: phrase.role + '_' + phrase._id,
+                    user_type: phrase.role,
+                    method: 'POST',
+                    endpoint: '/dash/auth/logout',
+                    action: IActivityLogActionEnum.OTHER,
+                    collection_name: 'users',
+                    document_id: phrase._id,
+                    request_body: {},
+                    source: IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+
             return { error: false, message: 'تم تسجيل الخروج بنجاح' };
         })
     );

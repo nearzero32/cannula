@@ -1,9 +1,12 @@
 import Appointment, { AppointmentDocument } from '../models/appointments.model';
 import type { IAppointment } from '../interfaces/appointment.interface';
 import type { PipelineStage } from 'mongoose';
+import ActivityLogService from './activity-log.service';
+import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 
 class AppointmentService {
     private model = Appointment;
+    private activityLog = ActivityLogService;
 
     public async getPaginated({
         main_match,
@@ -76,12 +79,50 @@ class AppointmentService {
         return existing !== null;
     }
 
-    public async create(payload: Partial<IAppointment>): Promise<AppointmentDocument> {
-        return await this.model.create(payload);
+    public async create(payload: Partial<IAppointment>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AppointmentDocument> {
+        const doc = await this.model.create(payload);
+        try {
+            await this.activityLog.logActivity({
+                user_id: meta?.user_id,
+                user_name: meta?.user_name,
+                user_type: meta?.user_type,
+                method: 'POST',
+                endpoint: meta?.endpoint || '/appointments',
+                action: IActivityLogActionEnum.CREATE,
+                collection_name: 'appointments',
+                document_id: (doc._id as any).toString(),
+                new_data: doc.toObject(),
+                request_body: payload,
+                source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+            });
+        } catch {}
+        return doc;
     }
 
-    public async update(id: string, payload: Partial<IAppointment>): Promise<AppointmentDocument | null> {
-        return await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+    public async update(id: string, payload: Partial<IAppointment>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AppointmentDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        const doc = await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+        if (doc && oldDoc) {
+            try {
+                const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/appointments/${id}`,
+                    action: IActivityLogActionEnum.UPDATE,
+                    collection_name: 'appointments',
+                    document_id: id,
+                    old_data: oldDoc.toObject(),
+                    new_data: doc.toObject(),
+                    changed_fields,
+                    request_body: payload,
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+        return doc;
     }
 
 }
