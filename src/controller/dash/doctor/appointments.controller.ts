@@ -2,9 +2,9 @@ import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import appointmentService from '../../../services/appointment.service';
+import doctorService from '../../../services/doctor.service';
 import {
     IAppointmentStatusEnum,
-    IAppointmentBookingSourceEnum,
     IAppointmentPaymentStatusEnum,
     IAppointmentCancelledByModelEnum,
 } from '../../../interfaces/appointment.interface';
@@ -19,20 +19,25 @@ const buildMeta = (phrase: any, endpoint: string) => ({
     source: 'dashboard',
 });
 
-export const appointmentsController = new Elysia({ prefix: '/appointments' })
+export const doctorAppointmentsController = new Elysia({ prefix: '/appointments' })
     .use(AuthPlugin)
 
-    // List appointments with filters
+    // List the doctor's own appointments
     .get(
         '/',
-        async ({ query }) => {
+        async ({ query, phrase, set }) => {
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
+            }
+
             const page = Math.max(1, Number(query.page) || 1);
             const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
 
-            const main_match: Record<string, unknown> = {};
-
-            if (query.doctor_id && ObjectId.isValid(query.doctor_id))
-                main_match.doctor_id = new ObjectId(query.doctor_id);
+            const main_match: Record<string, unknown> = {
+                doctor_id: new ObjectId((doctor._id as any).toString()),
+            };
 
             if (query.patient_id && ObjectId.isValid(query.patient_id))
                 main_match.patient_id = new ObjectId(query.patient_id);
@@ -41,6 +46,7 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 main_match.clinic_id = new ObjectId(query.clinic_id);
 
             if (query.status) main_match.status = query.status;
+
             if (query.payment_status) main_match.payment_status = query.payment_status;
 
             if (query.dateFrom || query.dateTo) {
@@ -54,7 +60,6 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 main_match.$or = [
                     { appointment_number: { $regex: query.search, $options: 'i' } },
                     { reason: { $regex: query.search, $options: 'i' } },
-                    { cancel_reason: { $regex: query.search, $options: 'i' } },
                 ];
             }
 
@@ -83,7 +88,6 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
             query: t.Object({
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
-                doctor_id: t.Optional(t.String()),
                 patient_id: t.Optional(t.String()),
                 clinic_id: t.Optional(t.String()),
                 status: t.Optional(t.Enum(IAppointmentStatusEnum)),
@@ -95,127 +99,35 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
         }
     )
 
-    // Get appointment by ID
+    // Get a single appointment (must belong to this doctor)
     .get(
         '/:id',
-        async ({ params, set }) => {
+        async ({ params, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف الموعد غير صالح' };
+            }
+
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
             }
 
             const appointment = await appointmentService.getById(params.id);
             if (!appointment) {
                 set.status = 404;
                 return { error: true, message: 'الموعد غير موجود' };
+            }
+
+            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
+                set.status = 403;
+                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
             }
 
             return { error: false, message: 'تم جلب الموعد بنجاح', data: appointment };
         },
         { params: t.Object({ id: t.String() }) }
-    )
-
-    // Create appointment (admin booking)
-    .post(
-        '/',
-        async ({ body, phrase, set }) => {
-            if (!ObjectId.isValid(body.patient_id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف المريض غير صالح' };
-            }
-            if (!ObjectId.isValid(body.doctor_id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الطبيب غير صالح' };
-            }
-            if (!ObjectId.isValid(body.clinic_id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف العيادة غير صالح' };
-            }
-            if (body.specialty_id && !ObjectId.isValid(body.specialty_id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف التخصص غير صالح' };
-            }
-
-            const appointmentDate = new Date(body.date);
-            const slotTaken = await appointmentService.isSlotTaken(
-                body.doctor_id,
-                appointmentDate,
-                body.start_time
-            );
-            if (slotTaken) {
-                set.status = 409;
-                return { error: true, message: 'هذا الموعد محجوز بالفعل' };
-            }
-
-            const appointment = await appointmentService.create(
-                {
-                    patient_id: new ObjectId(body.patient_id) as any,
-                    doctor_id: new ObjectId(body.doctor_id) as any,
-                    clinic_id: new ObjectId(body.clinic_id) as any,
-                    specialty_id: body.specialty_id
-                        ? (new ObjectId(body.specialty_id) as any)
-                        : null,
-                    date: appointmentDate,
-                    start_time: body.start_time,
-                    end_time: body.end_time,
-                    reason: body.reason ?? null,
-                    notes_internal: body.notes_internal ?? null,
-                    booking_source:
-                        body.booking_source ?? IAppointmentBookingSourceEnum.ADMIN_PANEL,
-                    booked_by: new ObjectId(phrase._id) as any,
-                    appointment_fee: body.appointment_fee ?? 0,
-                },
-                buildMeta(phrase, '/dash/admin/appointments')
-            );
-
-            set.status = 201;
-            return { error: false, message: 'تم إنشاء الموعد بنجاح', data: appointment };
-        },
-        {
-            body: t.Object({
-                patient_id: t.String(),
-                doctor_id: t.String(),
-                clinic_id: t.String(),
-                specialty_id: t.Optional(t.Nullable(t.String())),
-                date: t.String(),
-                start_time: t.String({ minLength: 1 }),
-                end_time: t.String({ minLength: 1 }),
-                reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-                notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-                booking_source: t.Optional(t.Enum(IAppointmentBookingSourceEnum)),
-                appointment_fee: t.Optional(t.Number({ minimum: 0 })),
-            }),
-        }
-    )
-
-    // Update internal notes
-    .patch(
-        '/:id/notes',
-        async ({ params, body, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            const updated = await appointmentService.update(
-                params.id,
-                { notes_internal: body.notes_internal ?? null },
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/notes`)
-            );
-            return { error: false, message: 'تم تحديث الملاحظات بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            body: t.Object({
-                notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-            }),
-        }
     )
 
     // Cancel appointment
@@ -227,10 +139,21 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 return { error: true, message: 'معرف الموعد غير صالح' };
             }
 
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
+            }
+
             const appointment = await appointmentService.getById(params.id);
             if (!appointment) {
                 set.status = 404;
                 return { error: true, message: 'الموعد غير موجود' };
+            }
+
+            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
+                set.status = 403;
+                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
             }
 
             const nonCancellable = [
@@ -247,10 +170,10 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 params.id,
                 {
                     cancel_reason: body.cancel_reason ?? null,
-                    cancelled_by: phrase._id,
-                    cancelled_by_model: IAppointmentCancelledByModelEnum.USER,
+                    cancelled_by: (doctor._id as any).toString(),
+                    cancelled_by_model: IAppointmentCancelledByModelEnum.DOCTOR,
                 },
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/cancel`)
+                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/cancel`)
             );
             return { error: false, message: 'تم إلغاء الموعد بنجاح', data: updated };
         },
@@ -271,10 +194,21 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 return { error: true, message: 'معرف الموعد غير صالح' };
             }
 
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
+            }
+
             const appointment = await appointmentService.getById(params.id);
             if (!appointment) {
                 set.status = 404;
                 return { error: true, message: 'الموعد غير موجود' };
+            }
+
+            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
+                set.status = 403;
+                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
             }
 
             const allowedStatuses = [
@@ -288,7 +222,7 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
 
             const updated = await appointmentService.checkIn(
                 params.id,
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/check-in`)
+                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/check-in`)
             );
             return { error: false, message: 'تم تسجيل وصول المريض بنجاح', data: updated };
         },
@@ -304,10 +238,21 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 return { error: true, message: 'معرف الموعد غير صالح' };
             }
 
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
+            }
+
             const appointment = await appointmentService.getById(params.id);
             if (!appointment) {
                 set.status = 404;
                 return { error: true, message: 'الموعد غير موجود' };
+            }
+
+            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
+                set.status = 403;
+                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
             }
 
             const allowedStatuses = [
@@ -322,7 +267,7 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
 
             const updated = await appointmentService.complete(
                 params.id,
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/complete`)
+                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/complete`)
             );
             return { error: false, message: 'تم إنهاء الموعد بنجاح', data: updated };
         },
@@ -338,10 +283,21 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 return { error: true, message: 'معرف الموعد غير صالح' };
             }
 
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
+            }
+
             const appointment = await appointmentService.getById(params.id);
             if (!appointment) {
                 set.status = 404;
                 return { error: true, message: 'الموعد غير موجود' };
+            }
+
+            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
+                set.status = 403;
+                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
             }
 
             const allowedStatuses = [
@@ -355,20 +311,26 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
 
             const updated = await appointmentService.noShow(
                 params.id,
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/no-show`)
+                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/no-show`)
             );
             return { error: false, message: 'تم تسجيل غياب المريض بنجاح', data: updated };
         },
         { params: t.Object({ id: t.String() }) }
     )
 
-    // Update payment status
+    // Update internal notes
     .patch(
-        '/:id/payment',
+        '/:id/notes',
         async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف الموعد غير صالح' };
+            }
+
+            const doctor = await doctorService.getByUserId(phrase._id);
+            if (!doctor) {
+                set.status = 404;
+                return { error: true, message: 'الملف الشخصي غير موجود' };
             }
 
             const appointment = await appointmentService.getById(params.id);
@@ -377,49 +339,22 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 return { error: true, message: 'الموعد غير موجود' };
             }
 
-            const payload: Record<string, unknown> = { payment_status: body.payment_status };
-            if (body.appointment_fee !== undefined) payload.appointment_fee = body.appointment_fee;
+            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
+                set.status = 403;
+                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
+            }
 
             const updated = await appointmentService.update(
                 params.id,
-                payload as any,
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/payment`)
+                { notes_internal: body.notes_internal ?? null },
+                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/notes`)
             );
-            return { error: false, message: 'تم تحديث حالة الدفع بنجاح', data: updated };
+            return { error: false, message: 'تم تحديث الملاحظات بنجاح', data: updated };
         },
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({
-                payment_status: t.Enum(IAppointmentPaymentStatusEnum),
-                appointment_fee: t.Optional(t.Number({ minimum: 0 })),
+                notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
             }),
-        }
-    )
-
-    // Generic status override (admin only)
-    .patch(
-        '/:id/status',
-        async ({ params, body, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            const updated = await appointmentService.update(
-                params.id,
-                { status: body.status },
-                buildMeta(phrase, `/dash/admin/appointments/${params.id}/status`)
-            );
-            return { error: false, message: 'تم تحديث حالة الموعد بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            body: t.Object({ status: t.Enum(IAppointmentStatusEnum) }),
         }
     );

@@ -57,5 +57,13 @@ export interface IAppointment extends IBaseDocument, IWithNotesInternal {
     booking_source: IAppointmentBookingSource;
     reason?: string | null;
     cancel_reason?: string | null;
+    cancelled_by?: mongoose.Types.ObjectId | null;
+    cancelled_by_model?: IAppointmentCancelledByModel | null;
+    cancelled_at?: Date | null;
     rescheduled_from?: mongoose.Types.ObjectId | null;
+    rescheduled_to?: mongoose.Types.ObjectId | null;
+    payment_status: IAppointmentPaymentStatus;
+    checked_in_at?: Date | null;
+    completed_at?: Date | null;
+    appointment_fee: number;
 }

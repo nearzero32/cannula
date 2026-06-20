@@ -1,8 +1,17 @@
 import Appointment, { AppointmentDocument } from '../models/appointments.model';
 import type { IAppointment } from '../interfaces/appointment.interface';
+import { IAppointmentStatusEnum, IAppointmentCancelledByModelEnum } from '../interfaces/appointment.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+
+type Meta = {
+    user_id?: string;
+    user_name?: string;
+    user_type?: string;
+    endpoint?: string;
+    source?: string;
+};
 
 class AppointmentService {
     private model = Appointment;
@@ -30,7 +39,7 @@ class AppointmentService {
             {
                 $facet: {
                     data: [
-                        { $sort: { date: -1, createdAt: -1 } },
+                        { $sort: { date: -1, start_time: 1, createdAt: -1 } },
                         { $skip: skip },
                         { $limit: safeLimit },
                         ...additional_pipeline,
@@ -71,16 +80,43 @@ class AppointmentService {
         return await this.model.findById(id).exec();
     }
 
-    // Enforces slot uniqueness by doctor_id + date + start_time
-    public async isSlotTaken(doctor_id: string, date: Date, start_time: string): Promise<boolean> {
-        const existing = await this.model
-            .findOne({ doctor_id, date, start_time, status: { $nin: ['cancelled'] } })
-            .exec();
+    public async isSlotTaken(
+        doctor_id: string,
+        date: Date,
+        start_time: string,
+        exclude_id?: string
+    ): Promise<boolean> {
+        const query: Record<string, unknown> = {
+            doctor_id,
+            date,
+            start_time,
+            status: {
+                $nin: [
+                    IAppointmentStatusEnum.CANCELLED,
+                    IAppointmentStatusEnum.NO_SHOW,
+                    IAppointmentStatusEnum.RESCHEDULED,
+                ],
+            },
+        };
+        if (exclude_id) query._id = { $ne: exclude_id };
+        const existing = await this.model.findOne(query).exec();
         return existing !== null;
     }
 
-    public async create(payload: Partial<IAppointment>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AppointmentDocument> {
-        const doc = await this.model.create(payload);
+    private async generateAppointmentNumber(): Promise<string> {
+        const year = new Date().getFullYear();
+        const count = await this.model.countDocuments({}).exec();
+        const padded = String(count + 1).padStart(6, '0');
+        return `APP-${year}-${padded}`;
+    }
+
+    public async create(payload: Partial<IAppointment>, meta?: Meta): Promise<AppointmentDocument> {
+        const finalPayload = {
+            ...payload,
+            appointment_number:
+                payload.appointment_number ?? (await this.generateAppointmentNumber()),
+        };
+        const doc = await this.model.create(finalPayload);
         try {
             await this.activityLog.logActivity({
                 user_id: meta?.user_id,
@@ -99,12 +135,22 @@ class AppointmentService {
         return doc;
     }
 
-    public async update(id: string, payload: Partial<IAppointment>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AppointmentDocument | null> {
+    public async update(
+        id: string,
+        payload: Partial<IAppointment>,
+        meta?: Meta
+    ): Promise<AppointmentDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
-        const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        const doc = await this.model
+            .findByIdAndUpdate(id, payload, { returnDocument: 'after' })
+            .exec();
         if (doc && oldDoc) {
             try {
-                const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
+                const changed_fields = Object.keys(payload).filter(
+                    k =>
+                        JSON.stringify((oldDoc as any)[k]) !==
+                        JSON.stringify((doc as any)[k])
+                );
                 await this.activityLog.logActivity({
                     user_id: meta?.user_id,
                     user_name: meta?.user_name,
@@ -125,6 +171,51 @@ class AppointmentService {
         return doc;
     }
 
+    public async cancel(
+        id: string,
+        {
+            cancel_reason,
+            cancelled_by,
+            cancelled_by_model,
+        }: {
+            cancel_reason?: string | null;
+            cancelled_by: string;
+            cancelled_by_model: (typeof IAppointmentCancelledByModelEnum)[keyof typeof IAppointmentCancelledByModelEnum];
+        },
+        meta?: Meta
+    ): Promise<AppointmentDocument | null> {
+        return this.update(
+            id,
+            {
+                status: IAppointmentStatusEnum.CANCELLED,
+                cancel_reason: cancel_reason ?? null,
+                cancelled_by: cancelled_by as any,
+                cancelled_by_model,
+                cancelled_at: new Date() as any,
+            },
+            meta
+        );
+    }
+
+    public async checkIn(id: string, meta?: Meta): Promise<AppointmentDocument | null> {
+        return this.update(
+            id,
+            { status: IAppointmentStatusEnum.CHECKED_IN, checked_in_at: new Date() as any },
+            meta
+        );
+    }
+
+    public async complete(id: string, meta?: Meta): Promise<AppointmentDocument | null> {
+        return this.update(
+            id,
+            { status: IAppointmentStatusEnum.COMPLETED, completed_at: new Date() as any },
+            meta
+        );
+    }
+
+    public async noShow(id: string, meta?: Meta): Promise<AppointmentDocument | null> {
+        return this.update(id, { status: IAppointmentStatusEnum.NO_SHOW }, meta);
+    }
 }
 
 export default new AppointmentService();
