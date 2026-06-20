@@ -6,6 +6,18 @@ import { IAdsStatusEnum } from '../../../interfaces/ads.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
+function withIsEnded(ad: unknown) {
+    const obj =
+        ad && typeof ad === 'object' && 'toObject' in ad && typeof (ad as { toObject: () => Record<string, unknown> }).toObject === 'function'
+            ? (ad as { toObject: () => Record<string, unknown> }).toObject()
+            : { ...(ad as Record<string, unknown>) };
+
+    const end_date = obj.end_date as Date | string | null | undefined;
+    const is_ended = end_date != null && new Date(end_date) < new Date();
+
+    return { ...obj, is_ended };
+}
+
 const adsBodySchema = t.Object({
     title: t.Optional(t.Nullable(t.String({ maxLength: 200 }))),
     description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
@@ -37,12 +49,26 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
             if (query.status) main_match.status = query.status;
 
-            if (query.search) {
-                main_match.$or = [
-                    { title: { $regex: query.search, $options: 'i' } },
-                    { description: { $regex: query.search, $options: 'i' } },
-                ];
+            const andConditions: Record<string, unknown>[] = [];
+
+            if (query.is_ended === 'true') {
+                andConditions.push({ end_date: { $ne: null, $lt: new Date() } });
+            } else if (query.is_ended === 'false') {
+                andConditions.push({
+                    $or: [{ end_date: null }, { end_date: { $gte: new Date() } }],
+                });
             }
+
+            if (query.search) {
+                andConditions.push({
+                    $or: [
+                        { title: { $regex: query.search, $options: 'i' } },
+                        { description: { $regex: query.search, $options: 'i' } },
+                    ],
+                });
+            }
+
+            if (andConditions.length) main_match.$and = andConditions;
 
             const { data, count } = await adsService.getPaginated({ main_match, page, limit });
             const totalPages = Math.ceil(count / limit);
@@ -50,7 +76,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
             return {
                 error: false,
                 message: 'تم جلب الإعلانات بنجاح',
-                data,
+                data: data.map(withIsEnded),
                 pagination: { page, limit, total: count, pages: totalPages, hasNext: page < totalPages, hasPrev: page > 1 },
             };
         },
@@ -61,6 +87,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
                 clinic_id: t.Optional(t.String()),
                 doctor_id: t.Optional(t.String()),
                 status: t.Optional(t.Enum(IAdsStatusEnum)),
+                is_ended: t.Optional(t.Union([t.Literal('true'), t.Literal('false')])),
                 search: t.Optional(t.String()),
             }),
         }
@@ -80,7 +107,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
                 return { error: true, message: 'الإعلان غير موجود' };
             }
 
-            return { error: false, message: 'تم جلب الإعلان بنجاح', data: ad };
+            return { error: false, message: 'تم جلب الإعلان بنجاح', data: withIsEnded(ad) };
         },
         { params: t.Object({ id: t.String() }) }
     )
@@ -116,7 +143,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
             });
 
             set.status = 201;
-            return { error: false, message: 'تم إنشاء الإعلان بنجاح', data: ad };
+            return { error: false, message: 'تم إنشاء الإعلان بنجاح', data: withIsEnded(ad) };
         },
         { body: adsBodySchema }
     )
@@ -164,7 +191,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
                 endpoint: '/dash/ads/' + params.id,
                 source: 'dashboard',
             });
-            return { error: false, message: 'تم تحديث الإعلان بنجاح', data: updated };
+            return { error: false, message: 'تم تحديث الإعلان بنجاح', data: withIsEnded(updated) };
         },
         {
             params: t.Object({ id: t.String() }),
@@ -193,7 +220,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
                 endpoint: '/dash/ads/' + params.id + '/status',
                 source: 'dashboard',
             });
-            return { error: false, message: 'تم تحديث حالة الإعلان بنجاح', data: updated };
+            return { error: false, message: 'تم تحديث حالة الإعلان بنجاح', data: withIsEnded(updated) };
         },
         {
             params: t.Object({ id: t.String() }),
