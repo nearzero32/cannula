@@ -97,7 +97,7 @@ class AdminService {
 
     public async update(id: string, payload: Partial<IAdmin>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AdminDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
-        const doc = await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+        const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

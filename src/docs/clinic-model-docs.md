@@ -42,12 +42,12 @@ const clinicSchema = new Schema(
       default: null,
     },
 
-    mapLocation: {
+    map_location: {
       lat: { type: Number, default: null },
       lng: { type: Number, default: null },
     },
 
-    workingDays: [
+    working_days: [
       {
         day: {
           type: Number,
@@ -77,13 +77,13 @@ const clinicSchema = new Schema(
       index: true,
     },
 
-    createdBy: {
+    created_by: {
       type: Schema.Types.ObjectId,
       ref: "User",
       default: null,
     },
 
-    notesInternal: {
+    notes_internal: {
       type: String,
       trim: true,
       maxlength: 2000,
@@ -110,16 +110,16 @@ export const Clinic = models.Clinic || model("Clinic", clinicSchema);
 | `description`         | `String`   |       No | A short explanation or overview of the clinic. It is optional, trimmed, and can be up to 2000 characters.                                        |
 | `address`             | `String`   |      Yes | The readable clinic address used in UI and appointment details. It is required, trimmed, and limited to 300 characters.[cite:110]                |
 | `icon`                | `String`   |       No | Optional clinic icon/logo URL or path. This field is not required and defaults to `null`.                                                        |
-| `mapLocation.lat`     | `Number`   |       No | Latitude value used for map display and geographic location.                                                                                     |
-| `mapLocation.lng`     | `Number`   |       No | Longitude value used for map display and geographic location.                                                                                    |
-| `workingDays`         | `Array`    |       No | An array that stores the clinic’s general weekly schedule. This supports operational hours separate from doctor-specific availability.[cite:107] |
-| `workingDays.day`     | `Number`   |      Yes | Day number from `0` to `6`, usually representing the days of the week in application logic.                                                      |
-| `workingDays.enabled` | `Boolean`  |       No | Indicates whether the clinic is open on that day. Default is `true`.                                                                             |
-| `workingDays.from`    | `String`   |       No | Start time for that working day, such as `09:00`.                                                                                                |
-| `workingDays.to`      | `String`   |       No | End time for that working day, such as `17:00`.                                                                                                  |
+| `map_location.lat`     | `Number`   |       No | Latitude value used for map display and geographic location.                                                                                     |
+| `map_location.lng`     | `Number`   |       No | Longitude value used for map display and geographic location.                                                                                    |
+| `working_days`         | `Array`    |       No | An array that stores the clinic’s general weekly schedule. This supports operational hours separate from doctor-specific availability.[cite:107] |
+| `working_days.day`     | `Number`   |      Yes | Day number from `0` to `6`, usually representing the days of the week in application logic.                                                      |
+| `working_days.enabled` | `Boolean`  |       No | Indicates whether the clinic is open on that day. Default is `true`.                                                                             |
+| `working_days.from`    | `String`   |       No | Start time for that working day, such as `09:00`.                                                                                                |
+| `working_days.to`      | `String`   |       No | End time for that working day, such as `17:00`.                                                                                                  |
 | `status`              | `String`   |      Yes | Operational state of the clinic. Allowed values are `active`, `inactive`, and `suspended`, with `active` as the default.                         |
-| `createdBy`           | `ObjectId` |       No | Reference to the `User` who created the clinic record, usually an admin account.                                                                 |
-| `notesInternal`       | `String`   |       No | Internal notes for admins only. This field should not be exposed to doctors or patients.                                                         |
+| `created_by`           | `ObjectId` |       No | Reference to the `User` who created the clinic record, usually an admin account.                                                                 |
+| `notes_internal`       | `String`   |       No | Internal notes for admins only. This field should not be exposed to doctors or patients.                                                         |
 | `createdAt`           | `Date`     |     Auto | Automatically generated creation timestamp because `timestamps: true` is enabled.                                                                |
 | `updatedAt`           | `Date`     |     Auto | Automatically generated update timestamp because `timestamps: true` is enabled.                                                                  |
 
@@ -131,11 +131,11 @@ The clinic identity in this schema is mainly represented by `name`, with optiona
 
 ### Location
 
-The clinic location is represented by `address` and `mapLocation`. This gives both a human-readable address and optional coordinates for maps or location-aware features.[cite:110]
+The clinic location is represented by `address` and `map_location`. This gives both a human-readable address and optional coordinates for maps or location-aware features.[cite:110]
 
 ### Working Schedule
 
-The `workingDays` array stores the general weekly schedule of the clinic itself. This should be treated as clinic-level working hours only, not the doctor’s actual appointment availability, because doctor schedules often vary independently from clinic opening hours.[cite:107]
+The `working_days` array stores the general weekly schedule of the clinic itself. This should be treated as clinic-level working hours only, not the doctor’s actual appointment availability, because doctor schedules often vary independently from clinic opening hours.[cite:107]
 
 ### Operational State
 
@@ -147,7 +147,7 @@ The `status` field controls whether the clinic is usable in the system. A typica
 
 ### Internal Metadata
 
-The `createdBy` field helps track which admin created the clinic record, while `notesInternal` is useful for admin-only comments. This supports operational control without exposing internal notes to end users. Administrative tracking is a common requirement in systems that manage healthcare entities centrally.[cite:106][cite:107]
+The `created_by` field helps track which admin created the clinic record, while `notes_internal` is useful for admin-only comments. This supports operational control without exposing internal notes to end users. Administrative tracking is a common requirement in systems that manage healthcare entities centrally.[cite:106][cite:107]
 
 ## Indexes
 
@@ -166,7 +166,7 @@ There is one important issue in the current code: the schema includes an index o
 
 Two valid options exist:
 
-1. Remove this index if the application only needs `address` and `mapLocation` for now.
+1. Remove this index if the application only needs `address` and `map_location` for now.
 2. Add `city` and `governorate` fields if the system will filter clinics by city or governorate later.
 
 ## Recommended Clean Version
@@ -185,7 +185,7 @@ That version better matches the actual fields currently present in the schema.
 - Keep this model for clinic-level information only.
 - Do not store doctor profiles inside the clinic document.
 - Do not store appointments inside the clinic document.
-- Use doctor records to reference clinic IDs, or use appointment records with `clinicId` references.
+- Use doctor records to reference clinic IDs, or use appointment records with `clinic_id` references.
 - Keep doctor availability separate from clinic working days, because they represent different business rules.[cite:107][cite:110]
 
 ## Summary of Scope

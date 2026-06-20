@@ -16,38 +16,38 @@ To keep this model focused, fast-changing data (for example: generated slots, ap
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `userId` | `ObjectId` | Yes | Links this doctor profile to the base `User` account (one user, one doctor profile). |
-| `fullName` | `String` | Yes | Official/internal full name. |
-| `displayName` | `String` | Yes | Public-facing name shown to patients. |
+| `user_id` | `ObjectId` | Yes | Links this doctor profile to the base `User` account (one user, one doctor profile). |
+| `full_name` | `String` | Yes | Official/internal full name. |
+| `display_name` | `String` | Yes | Public-facing name shown to patients. |
 | `gender` | `String` | No | Optional display/filter value (`male` or `female`). |
-| `profilePhoto` | `String` | No | Profile image URL or file path. |
+| `profile_photo` | `String` | No | Profile image URL or file path. |
 | `bio` | `String` | No | Short professional intro and focus areas. |
 | `specialty` | `String` | Yes | Primary specialty used for search and filtering. |
-| `subSpecialties` | `String[]` | No | Secondary specialty tags. |
+| `sub_specialties` | `String[]` | No | Secondary specialty tags. |
 | `languages` | `String[]` | No | Spoken languages for patient matching. |
-| `experienceYears` | `Number` | No | Years of professional experience. |
-| `licenseNumber` | `String` | No | Medical license or registration number. |
-| `licenseVerified` | `Boolean` | Yes | License verification flag. |
-| `verificationStatus` | `String` | Yes | Verification state: `pending`, `verified`, `rejected`. |
-| `clinicIds` | `ObjectId[]` | No | Related clinics where the doctor works. |
+| `experience_years` | `Number` | No | Years of professional experience. |
+| `license_number` | `String` | No | Medical license or registration number. |
+| `license_verified` | `Boolean` | Yes | License verification flag. |
+| `verification_status` | `String` | Yes | Verification state: `pending`, `verified`, `rejected`. |
+| `clinic_ids` | `ObjectId[]` | No | Related clinics where the doctor works. |
 | `clinicLocation` | `String` | No | Human-readable location/city. |
-| `mapLocation` | `{ lat, lng }` | No | Coordinates for map/location features. |
-| `appointmentDuration` | `Number` | Yes | Default appointment duration in minutes. |
-| `slotInterval` | `Number` | Yes | Slot split interval in minutes. |
-| `bufferBefore` | `Number` | No | Extra minutes before each appointment. |
-| `bufferAfter` | `Number` | No | Extra minutes after each appointment. |
-| `acceptAutoBooking` | `Boolean` | Yes | If true, bookings are auto-accepted. |
-| `allowReschedule` | `Boolean` | Yes | If true, patients can reschedule appointments. |
-| `bookingLeadTimeHours` | `Number` | No | Minimum hours required before booking. |
-| `cancellationWindowHours` | `Number` | No | Minimum hours required before cancellation. |
-| `consultationFee` | `Number` | No | Standard consultation price. |
-| `followUpFee` | `Number` | No | Follow-up/review appointment price. |
+| `map_location` | `{ lat, lng }` | No | Coordinates for map/location features. |
+| `appointment_duration` | `Number` | Yes | Default appointment duration in minutes. |
+| `slot_interval` | `Number` | Yes | Slot split interval in minutes. |
+| `buffer_before` | `Number` | No | Extra minutes before each appointment. |
+| `buffer_after` | `Number` | No | Extra minutes after each appointment. |
+| `accept_auto_booking` | `Boolean` | Yes | If true, bookings are auto-accepted. |
+| `allow_reschedule` | `Boolean` | Yes | If true, patients can reschedule appointments. |
+| `booking_lead_time_hours` | `Number` | No | Minimum hours required before booking. |
+| `cancellation_window_hours` | `Number` | No | Minimum hours required before cancellation. |
+| `consultation_fee` | `Number` | No | Standard consultation price. |
+| `follow_up_fee` | `Number` | No | Follow-up/review appointment price. |
 | `currency` | `String` | No | Currency code (default: `IQD`). |
-| `assistantIds` | `ObjectId[]` | No | Linked assistants/reception users. |
-| `acceptingNewPatients` | `Boolean` | No | Whether the doctor currently accepts new patients. |
-| `isFeatured` | `Boolean` | No | Admin highlight flag for listings. |
+| `assistant_ids` | `ObjectId[]` | No | Linked assistants/reception users. |
+| `accepting_new_patients` | `Boolean` | No | Whether the doctor currently accepts new patients. |
+| `is_featured` | `Boolean` | No | Admin highlight flag for listings. |
 | `status` | `String` | Yes | Profile state: `draft`, `active`, `inactive`, `suspended`. |
-| `notesInternal` | `String` | No | Internal admin notes (not visible to patients). |
+| `notes_internal` | `String` | No | Internal admin notes (not visible to patients). |
 | `createdAt` | `Date` | Auto | Auto-set at create time. |
 | `updatedAt` | `Date` | Auto | Auto-updated on changes. |
 
@@ -58,7 +58,7 @@ import mongoose, { Schema, model, models } from 'mongoose';
 
 const doctorSchema = new Schema(
     {
-        userId: {
+        user_id: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             required: true,
@@ -66,13 +66,13 @@ const doctorSchema = new Schema(
             index: true,
         },
 
-        fullName: {
+        full_name: {
             type: String,
             required: true,
             trim: true,
             maxlength: 120,
         },
-        displayName: {
+        display_name: {
             type: String,
             required: true,
             trim: true,
@@ -83,7 +83,7 @@ const doctorSchema = new Schema(
             enum: ['male', 'female'],
             default: null,
         },
-        profilePhoto: {
+        profile_photo: {
             type: String,
             default: null,
         },
@@ -100,7 +100,7 @@ const doctorSchema = new Schema(
             trim: true,
             index: true,
         },
-        subSpecialties: {
+        sub_specialties: {
             type: [String],
             default: [],
         },
@@ -108,29 +108,29 @@ const doctorSchema = new Schema(
             type: [String],
             default: [],
         },
-        experienceYears: {
+        experience_years: {
             type: Number,
             min: 0,
             default: null,
         },
 
-        licenseNumber: {
+        license_number: {
             type: String,
             trim: true,
             default: null,
         },
-        licenseVerified: {
+        license_verified: {
             type: Boolean,
             default: false,
         },
-        verificationStatus: {
+        verification_status: {
             type: String,
             enum: ['pending', 'verified', 'rejected'],
             default: 'pending',
             index: true,
         },
 
-        clinicIds: [
+        clinic_ids: [
             {
                 type: Schema.Types.ObjectId,
                 ref: 'Clinic',
@@ -141,59 +141,59 @@ const doctorSchema = new Schema(
             trim: true,
             default: null,
         },
-        mapLocation: {
+        map_location: {
             lat: { type: Number, default: null },
             lng: { type: Number, default: null },
         },
 
-        appointmentDuration: {
+        appointment_duration: {
             type: Number,
             required: true,
             default: 30,
             min: 5,
         },
-        slotInterval: {
+        slot_interval: {
             type: Number,
             required: true,
             default: 15,
             min: 5,
         },
-        bufferBefore: {
+        buffer_before: {
             type: Number,
             default: 0,
             min: 0,
         },
-        bufferAfter: {
+        buffer_after: {
             type: Number,
             default: 0,
             min: 0,
         },
 
-        acceptAutoBooking: {
+        accept_auto_booking: {
             type: Boolean,
             default: false,
         },
-        allowReschedule: {
+        allow_reschedule: {
             type: Boolean,
             default: true,
         },
-        bookingLeadTimeHours: {
+        booking_lead_time_hours: {
             type: Number,
             default: 1,
             min: 0,
         },
-        cancellationWindowHours: {
+        cancellation_window_hours: {
             type: Number,
             default: 24,
             min: 0,
         },
 
-        consultationFee: {
+        consultation_fee: {
             type: Number,
             min: 0,
             default: null,
         },
-        followUpFee: {
+        follow_up_fee: {
             type: Number,
             min: 0,
             default: null,
@@ -204,17 +204,17 @@ const doctorSchema = new Schema(
             default: 'IQD',
         },
 
-        assistantIds: [
+        assistant_ids: [
             {
                 type: Schema.Types.ObjectId,
                 ref: 'User',
             },
         ],
-        acceptingNewPatients: {
+        accepting_new_patients: {
             type: Boolean,
             default: true,
         },
-        isFeatured: {
+        is_featured: {
             type: Boolean,
             default: false,
         },
@@ -226,7 +226,7 @@ const doctorSchema = new Schema(
             index: true,
         },
 
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,
@@ -240,8 +240,8 @@ const doctorSchema = new Schema(
 );
 
 doctorSchema.index({ specialty: 1, status: 1 });
-doctorSchema.index({ verificationStatus: 1, status: 1 });
-doctorSchema.index({ clinicIds: 1 });
+doctorSchema.index({ verification_status: 1, status: 1 });
+doctorSchema.index({ clinic_ids: 1 });
 
 export const Doctor = models.Doctor || model('Doctor', doctorSchema);
 ```

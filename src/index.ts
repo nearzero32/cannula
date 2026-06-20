@@ -20,6 +20,15 @@ async function bootstrap() {
         .use(ActivityLogPlugin)
         .use(dashboardController)
         .use(mobileController)
+        .onError(({ code, set }) => {
+            if (code === 'NOT_FOUND') {
+                set.status = 404;
+                return {
+                    error: true,
+                    message: 'المسار غير موجود',
+                };
+            }
+        })
         .listen(3000);
 
     console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);

@@ -7,11 +7,11 @@ import { ISecretaryPermissionEnum, ISecretaryStatusEnum } from '../../../interfa
 const ObjectId = mongoose.Types.ObjectId;
 
 const secretaryBodySchema = t.Object({
-    userId: t.String({ minLength: 1 }),
-    fullName: t.String({ minLength: 1, maxLength: 120 }),
-    clinicId: t.Optional(t.Nullable(t.String())),
+    user_id: t.String({ minLength: 1 }),
+    full_name: t.String({ minLength: 1, maxLength: 120 }),
+    clinic_id: t.Optional(t.Nullable(t.String())),
     permissions: t.Optional(t.Array(t.Enum(ISecretaryPermissionEnum))),
-    notesInternal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+    notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
 
 export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
@@ -30,7 +30,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
             if (query.status) main_match.status = query.status;
             if (query.search) {
                 main_match.$or = [
-                    { fullName: { $regex: query.search, $options: 'i' } },
+                    { full_name: { $regex: query.search, $options: 'i' } },
                 ];
             }
 
@@ -82,29 +82,29 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
     .post(
         '/',
         async ({ body, phrase, set }) => {
-            if (!ObjectId.isValid(body.userId)) {
+            if (!ObjectId.isValid(body.user_id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف المستخدم غير صالح' };
             }
 
-            if (body.clinicId && !ObjectId.isValid(body.clinicId)) {
+            if (body.clinic_id && !ObjectId.isValid(body.clinic_id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف العيادة غير صالح' };
             }
 
-            const existing = await secretaryService.getByUserId(body.userId);
+            const existing = await secretaryService.getByUserId(body.user_id);
             if (existing) {
                 set.status = 409;
                 return { error: true, message: 'هذا المستخدم مسجل كسكرتير مسبقاً' };
             }
 
             const secretary = await secretaryService.create({
-                user_id: new ObjectId(body.userId),
-                full_name: body.fullName,
-                clinic_id: body.clinicId ? new ObjectId(body.clinicId) : undefined,
+                user_id: new ObjectId(body.user_id),
+                full_name: body.full_name,
+                clinic_id: body.clinic_id ? new ObjectId(body.clinic_id) : undefined,
                 doctor_ids: [new ObjectId(phrase._id)],
                 permissions: body.permissions,
-                notes_internal: body.notesInternal,
+                notes_internal: body.notes_internal,
                 created_by: new ObjectId(phrase._id),
             }, {
                 user_id: phrase._id,
@@ -141,12 +141,12 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
             }
 
             const payload: Record<string, unknown> = { ...body };
-            if (body.clinicId !== undefined) {
-                if (body.clinicId && !ObjectId.isValid(body.clinicId)) {
+            if (body.clinic_id !== undefined) {
+                if (body.clinic_id && !ObjectId.isValid(body.clinic_id)) {
                     set.status = 400;
                     return { error: true, message: 'معرف العيادة غير صالح' };
                 }
-                payload.clinic_id = body.clinicId ? new ObjectId(body.clinicId) : null;
+                payload.clinic_id = body.clinic_id ? new ObjectId(body.clinic_id) : null;
             }
 
             const updated = await secretaryService.update(params.id, payload, {

@@ -59,12 +59,13 @@ export const ActivityLogPlugin = new Elysia({ name: 'activity-log-plugin' })
                 path,
                 method,
                 ip,
-                startTime: Date.now(),
+                start_time: Date.now(),
             },
         };
     })
-    .onAfterResponse({ as: 'global' }, async ({ _activityMeta, phrase, request, body, response, set, error }) => {
+    .onAfterResponse({ as: 'global' }, async (ctx) => {
         try {
+            const { _activityMeta, request, body, response, set } = ctx;
             if (!_activityMeta) return;
 
             const url = new URL(request.url);
@@ -79,6 +80,7 @@ export const ActivityLogPlugin = new Elysia({ name: 'activity-log-plugin' })
             let user_id = null;
             let user_name = 'anonymous';
             let user_type = '';
+            const phrase = (ctx as { phrase?: { _id?: string; role?: IUserRole } }).phrase;
 
             if (phrase?._id) {
                 user_id = phrase._id;

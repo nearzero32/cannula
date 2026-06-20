@@ -4,15 +4,15 @@ import doctorService from '../../../services/doctor.service';
 import { IDoctorGenderEnum } from '../../../interfaces/doctor.interface';
 
 const profileBodySchema = t.Object({
-    displayName: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
+    display_name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
     gender: t.Optional(t.Nullable(t.Enum(IDoctorGenderEnum))),
-    profilePhoto: t.Optional(t.Nullable(t.String())),
+    profile_photo: t.Optional(t.Nullable(t.String())),
     bio: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
     languages: t.Optional(t.Array(t.String())),
-    subSpecialties: t.Optional(t.Array(t.String())),
-    experienceYears: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
+    sub_specialties: t.Optional(t.Array(t.String())),
+    experience_years: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     clinicLocation: t.Optional(t.Nullable(t.String({ maxLength: 300 }))),
-    mapLocation: t.Optional(
+    map_location: t.Optional(
         t.Nullable(
             t.Object({
                 lat: t.Optional(t.Nullable(t.Number())),
@@ -20,18 +20,18 @@ const profileBodySchema = t.Object({
             })
         )
     ),
-    appointmentDuration: t.Optional(t.Number({ minimum: 5 })),
-    slotInterval: t.Optional(t.Number({ minimum: 5 })),
-    bufferBefore: t.Optional(t.Number({ minimum: 0 })),
-    bufferAfter: t.Optional(t.Number({ minimum: 0 })),
-    acceptAutoBooking: t.Optional(t.Boolean()),
-    allowReschedule: t.Optional(t.Boolean()),
-    bookingLeadTimeHours: t.Optional(t.Number({ minimum: 0 })),
-    cancellationWindowHours: t.Optional(t.Number({ minimum: 0 })),
-    consultationFee: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
-    followUpFee: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
+    appointment_duration: t.Optional(t.Number({ minimum: 5 })),
+    slot_interval: t.Optional(t.Number({ minimum: 5 })),
+    buffer_before: t.Optional(t.Number({ minimum: 0 })),
+    buffer_after: t.Optional(t.Number({ minimum: 0 })),
+    accept_auto_booking: t.Optional(t.Boolean()),
+    allow_reschedule: t.Optional(t.Boolean()),
+    booking_lead_time_hours: t.Optional(t.Number({ minimum: 0 })),
+    cancellation_window_hours: t.Optional(t.Number({ minimum: 0 })),
+    consultation_fee: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
+    follow_up_fee: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     currency: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
-    acceptingNewPatients: t.Optional(t.Boolean()),
+    accepting_new_patients: t.Optional(t.Boolean()),
 });
 
 export const doctorProfileController = new Elysia({ prefix: '/profile' })
@@ -59,27 +59,27 @@ export const doctorProfileController = new Elysia({ prefix: '/profile' })
             }
 
             const payload: Record<string, unknown> = {};
-            if (body.displayName !== undefined) payload.display_name = body.displayName;
+            if (body.display_name !== undefined) payload.display_name = body.display_name;
             if (body.gender !== undefined) payload.gender = body.gender;
-            if (body.profilePhoto !== undefined) payload.profile_photo = body.profilePhoto;
+            if (body.profile_photo !== undefined) payload.profile_photo = body.profile_photo;
             if (body.bio !== undefined) payload.bio = body.bio;
             if (body.languages !== undefined) payload.languages = body.languages;
-            if (body.subSpecialties !== undefined) payload.sub_specialties = body.subSpecialties;
-            if (body.experienceYears !== undefined) payload.experience_years = body.experienceYears;
+            if (body.sub_specialties !== undefined) payload.sub_specialties = body.sub_specialties;
+            if (body.experience_years !== undefined) payload.experience_years = body.experience_years;
             if (body.clinicLocation !== undefined) payload.clinic_location = body.clinicLocation;
-            if (body.mapLocation !== undefined) payload.map_location = body.mapLocation;
-            if (body.appointmentDuration !== undefined) payload.appointment_duration = body.appointmentDuration;
-            if (body.slotInterval !== undefined) payload.slot_interval = body.slotInterval;
-            if (body.bufferBefore !== undefined) payload.buffer_before = body.bufferBefore;
-            if (body.bufferAfter !== undefined) payload.buffer_after = body.bufferAfter;
-            if (body.acceptAutoBooking !== undefined) payload.accept_auto_booking = body.acceptAutoBooking;
-            if (body.allowReschedule !== undefined) payload.allow_reschedule = body.allowReschedule;
-            if (body.bookingLeadTimeHours !== undefined) payload.booking_lead_time_hours = body.bookingLeadTimeHours;
-            if (body.cancellationWindowHours !== undefined) payload.cancellation_window_hours = body.cancellationWindowHours;
-            if (body.consultationFee !== undefined) payload.consultation_fee = body.consultationFee;
-            if (body.followUpFee !== undefined) payload.follow_up_fee = body.followUpFee;
+            if (body.map_location !== undefined) payload.map_location = body.map_location;
+            if (body.appointment_duration !== undefined) payload.appointment_duration = body.appointment_duration;
+            if (body.slot_interval !== undefined) payload.slot_interval = body.slot_interval;
+            if (body.buffer_before !== undefined) payload.buffer_before = body.buffer_before;
+            if (body.buffer_after !== undefined) payload.buffer_after = body.buffer_after;
+            if (body.accept_auto_booking !== undefined) payload.accept_auto_booking = body.accept_auto_booking;
+            if (body.allow_reschedule !== undefined) payload.allow_reschedule = body.allow_reschedule;
+            if (body.booking_lead_time_hours !== undefined) payload.booking_lead_time_hours = body.booking_lead_time_hours;
+            if (body.cancellation_window_hours !== undefined) payload.cancellation_window_hours = body.cancellation_window_hours;
+            if (body.consultation_fee !== undefined) payload.consultation_fee = body.consultation_fee;
+            if (body.follow_up_fee !== undefined) payload.follow_up_fee = body.follow_up_fee;
             if (body.currency !== undefined) payload.currency = body.currency;
-            if (body.acceptingNewPatients !== undefined) payload.accepting_new_patients = body.acceptingNewPatients;
+            if (body.accepting_new_patients !== undefined) payload.accepting_new_patients = body.accepting_new_patients;
 
             const updated = await doctorService.update((doctor._id as string).toString(), payload, {
                 user_id: phrase._id,

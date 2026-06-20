@@ -93,7 +93,7 @@ class SpecialtyService {
 
     public async update(id: string, payload: Partial<ISpecialty>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<SpecialtyDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
-        const doc = await this.model.findByIdAndUpdate(id, payload, { new: true }).exec();
+        const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
@@ -119,7 +119,7 @@ class SpecialtyService {
 
     public async updateStatus(id: string, status: ISpecialty['status'], meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<SpecialtyDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
-        const doc = await this.model.findByIdAndUpdate(id, { status }, { new: true }).exec();
+        const doc = await this.model.findByIdAndUpdate(id, { status }, { returnDocument: 'after' }).exec();
         if (doc && oldDoc) {
             try {
                 await this.activityLog.logActivity({

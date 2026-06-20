@@ -7,14 +7,14 @@ import { IPatientStatusEnum, IPatientGenderEnum, IPatientBloodGroupEnum } from '
 const ObjectId = mongoose.Types.ObjectId;
 
 const patientBodySchema = t.Object({
-    userId: t.String({ minLength: 1 }),
-    fullName: t.String({ minLength: 1, maxLength: 120 }),
+    user_id: t.String({ minLength: 1 }),
+    full_name: t.String({ minLength: 1, maxLength: 120 }),
     gender: t.Optional(t.Nullable(t.Enum(IPatientGenderEnum))),
-    dateOfBirth: t.Optional(t.Nullable(t.String())),
+    date_of_birth: t.Optional(t.Nullable(t.String())),
     phone: t.Optional(t.Nullable(t.String({ maxLength: 30 }))),
     address: t.Optional(t.Nullable(t.String({ maxLength: 300 }))),
-    profilePhoto: t.Optional(t.Nullable(t.String())),
-    bloodGroup: t.Optional(t.Nullable(t.Enum(IPatientBloodGroupEnum))),
+    profile_photo: t.Optional(t.Nullable(t.String())),
+    blood_group: t.Optional(t.Nullable(t.Enum(IPatientBloodGroupEnum))),
 });
 
 export const patientsController = new Elysia({ prefix: '/patients' })
@@ -78,26 +78,26 @@ export const patientsController = new Elysia({ prefix: '/patients' })
     .post(
         '/',
         async ({ body, phrase, set }) => {
-            if (!ObjectId.isValid(body.userId)) {
+            if (!ObjectId.isValid(body.user_id)) {
                 set.status = 400;
                 return { error: true, message: 'معرف المستخدم غير صالح' };
             }
 
-            const existing = await patientService.getByUserId(body.userId);
+            const existing = await patientService.getByUserId(body.user_id);
             if (existing) {
                 set.status = 409;
                 return { error: true, message: 'هذا المستخدم مسجل كمريض مسبقاً' };
             }
 
             const patient = await patientService.create({
-                user_id: new ObjectId(body.userId),
-                full_name: body.fullName,
+                user_id: new ObjectId(body.user_id),
+                full_name: body.full_name,
                 gender: body.gender,
-                date_of_birth: body.dateOfBirth ? new Date(body.dateOfBirth) : null,
+                date_of_birth: body.date_of_birth ? new Date(body.date_of_birth) : null,
                 phone: body.phone,
                 address: body.address,
-                profile_photo: body.profilePhoto,
-                blood_group: body.bloodGroup,
+                profile_photo: body.profile_photo,
+                blood_group: body.blood_group,
             }, {
                 user_id: phrase._id,
                 user_name: phrase.role + '_' + phrase._id,

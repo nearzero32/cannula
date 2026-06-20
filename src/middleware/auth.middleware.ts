@@ -29,26 +29,26 @@ export const AuthPlugin = new Elysia({ name: 'auth-plugin' }).derive({ as: 'glob
     return { phrase: { _id: bearer._id, role: bearer.role } };
 });
 
-export async function storeAccessSession(userId: string, token: string, ttl = ACCESS_SESSION_TTL): Promise<void> {
-    const key = buildAccessKey(userId, token);
+export async function storeAccessSession(user_id: string, token: string, ttl = ACCESS_SESSION_TTL): Promise<void> {
+    const key = buildAccessKey(user_id, token);
     await RedisClient.getInstance().set(key, '1', ttl);
 }
 
-export async function revokeAccessSession(userId: string, token: string): Promise<void> {
-    const key = buildAccessKey(userId, token);
+export async function revokeAccessSession(user_id: string, token: string): Promise<void> {
+    const key = buildAccessKey(user_id, token);
     await RedisClient.getInstance().del(key);
 }
 
-async function isSessionActive(userId: string, token: string): Promise<boolean> {
+async function isSessionActive(user_id: string, token: string): Promise<boolean> {
     try {
-        const result = await RedisClient.getInstance().get(buildAccessKey(userId, token));
+        const result = await RedisClient.getInstance().get(buildAccessKey(user_id, token));
         return result === '1';
     } catch {
         return false;
     }
 }
 
-function buildAccessKey(userId: string, token: string): string {
+function buildAccessKey(user_id: string, token: string): string {
     const hash = crypto.createHash('sha256').update(token).digest('hex');
-    return `access:${userId}:${hash}`;
+    return `access:${user_id}:${hash}`;
 }

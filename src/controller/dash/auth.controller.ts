@@ -13,21 +13,21 @@ const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR];
 const ACCESS_TTL = 60 * 15;       // 15 minutes
 const REFRESH_TTL = 60 * 60 * 24 * 7; // 7 days
 
-function buildRefreshKey(userId: string, token: string): string {
+function buildRefreshKey(user_id: string, token: string): string {
     const hash = crypto.createHash('sha256').update(token).digest('hex');
-    return `refresh:${userId}:${hash}`;
+    return `refresh:${user_id}:${hash}`;
 }
 
-async function storeRefreshSession(userId: string, token: string): Promise<void> {
-    await RedisClient.getInstance().set(buildRefreshKey(userId, token), '1', REFRESH_TTL);
+async function storeRefreshSession(user_id: string, token: string): Promise<void> {
+    await RedisClient.getInstance().set(buildRefreshKey(user_id, token), '1', REFRESH_TTL);
 }
 
-async function revokeRefreshSession(userId: string, token: string): Promise<void> {
-    await RedisClient.getInstance().del(buildRefreshKey(userId, token));
+async function revokeRefreshSession(user_id: string, token: string): Promise<void> {
+    await RedisClient.getInstance().del(buildRefreshKey(user_id, token));
 }
 
-async function isRefreshSessionValid(userId: string, token: string): Promise<boolean> {
-    const result = await RedisClient.getInstance().get(buildRefreshKey(userId, token));
+async function isRefreshSessionValid(user_id: string, token: string): Promise<boolean> {
+    const result = await RedisClient.getInstance().get(buildRefreshKey(user_id, token));
     return result === '1';
 }
 
@@ -52,25 +52,25 @@ export const authController = new Elysia({ prefix: '/auth' })
                 return { error: true, message: 'الحساب غير مفعّل' };
             }
 
-            const userId = (user._id as any).toString();
-            const accessToken = signAccessToken({ _id: userId, role: user.role });
-            const refreshToken = signRefreshToken({ _id: userId });
+            const user_id = (user._id as any).toString();
+            const accessToken = signAccessToken({ _id: user_id, role: user.role });
+            const refreshToken = signRefreshToken({ _id: user_id });
 
             await Promise.all([
-                storeAccessSession(userId, accessToken, ACCESS_TTL),
-                storeRefreshSession(userId, refreshToken),
+                storeAccessSession(user_id, accessToken, ACCESS_TTL),
+                storeRefreshSession(user_id, refreshToken),
             ]);
 
             try {
                 await ActivityLogService.logActivity({
-                    user_id: userId,
-                    user_name: user.role + '_' + userId,
+                    user_id: user_id,
+                    user_name: user.role + '_' + user_id,
                     user_type: user.role,
                     method: 'POST',
                     endpoint: '/dash/auth/login',
                     action: IActivityLogActionEnum.OTHER,
                     collection_name: 'users',
-                    document_id: userId,
+                    document_id: user_id,
                     request_body: { phone: body.phone },
                     source: IActivityLogSourceEnum.DASHBOARD,
                 });
@@ -83,7 +83,7 @@ export const authController = new Elysia({ prefix: '/auth' })
                     accessToken,
                     refreshToken,
                     user: {
-                        _id: userId,
+                        _id: user_id,
                         full_name: user.full_name,
                         phone: user.phone,
                         role: user.role,

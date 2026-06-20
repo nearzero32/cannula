@@ -79,15 +79,15 @@ Purpose: base authentication and identity layer.
 ```ts
 type User = {
     _id: string;
-    fullName: string;
+    full_name: string;
     email?: string;
     phone: string;
     passwordHash: string;
     role: 'admin' | 'doctor' | 'patient';
     status: 'pending' | 'active' | 'inactive' | 'suspended';
-    isPhoneVerified: boolean;
-    isEmailVerified: boolean;
-    lastLoginAt?: Date;
+    is_phone_verified: boolean;
+    is_email_verified: boolean;
+    last_login_at?: Date;
     createdAt: Date;
     updatedAt: Date;
 };
@@ -106,14 +106,14 @@ Purpose: administrative identity and permissions.
 ```ts
 type Admin = {
     _id: string;
-    userId: string;
-    displayName: string;
-    jobTitle?: string;
+    user_id: string;
+    display_name: string;
+    job_title?: string;
     permissions: string[];
     superAdmin: boolean;
-    isActive: boolean;
-    createdBy?: string;
-    lastActionAt?: Date;
+    is_active: boolean;
+    created_by?: string;
+    last_action_at?: Date;
     createdAt: Date;
     updatedAt: Date;
 };
@@ -138,26 +138,26 @@ Purpose: patient profile data separate from login.
 ```ts
 type Patient = {
     _id: string;
-    userId: string;
-    fullName: string;
+    user_id: string;
+    full_name: string;
     gender?: 'male' | 'female';
-    dateOfBirth?: Date;
+    date_of_birth?: Date;
     phone?: string;
     address?: string;
-    profilePhoto?: string;
-    bloodGroup?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
+    profile_photo?: string;
+    blood_group?: 'A+' | 'A-' | 'B+' | 'B-' | 'AB+' | 'AB-' | 'O+' | 'O-';
     allergies?: string[];
-    chronicConditions?: string[];
-    emergencyContactName?: string;
-    emergencyContactPhone?: string;
+    chronic_conditions?: string[];
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
     status: 'active' | 'inactive' | 'blocked';
-    notesInternal?: string;
+    notes_internal?: string;
     createdAt: Date;
     updatedAt: Date;
 };
 ```
 
-MVP recommendation: start with core fields (`userId`, `fullName`, `gender`, `dateOfBirth`, `phone`, `status`) and add richer medical profile fields as needed.
+MVP recommendation: start with core fields (`user_id`, `full_name`, `gender`, `date_of_birth`, `phone`, `status`) and add richer medical profile fields as needed.
 
 ### Doctors
 
@@ -166,38 +166,38 @@ Purpose: doctor professional profile and booking defaults.
 ```ts
 type Doctor = {
     _id: string;
-    userId: string;
-    fullName: string;
-    displayName: string;
+    user_id: string;
+    full_name: string;
+    display_name: string;
     gender?: 'male' | 'female';
-    profilePhoto?: string;
+    profile_photo?: string;
     bio?: string;
-    specialtyId?: string;
-    subSpecialties?: string[];
+    specialty_id?: string;
+    sub_specialties?: string[];
     languages?: string[];
-    experienceYears?: number;
-    licenseNumber?: string;
-    licenseVerified: boolean;
-    verificationStatus: 'pending' | 'verified' | 'rejected';
-    clinicIds?: string[];
+    experience_years?: number;
+    license_number?: string;
+    license_verified: boolean;
+    verification_status: 'pending' | 'verified' | 'rejected';
+    clinic_ids?: string[];
     clinicLocation?: string;
-    mapLocation?: { lat: number; lng: number };
-    appointmentDuration: number;
-    slotInterval: number;
-    bufferBefore?: number;
-    bufferAfter?: number;
-    acceptAutoBooking: boolean;
-    allowReschedule: boolean;
-    bookingLeadTimeHours?: number;
-    cancellationWindowHours?: number;
-    consultationFee?: number;
-    followUpFee?: number;
+    map_location?: { lat: number; lng: number };
+    appointment_duration: number;
+    slot_interval: number;
+    buffer_before?: number;
+    buffer_after?: number;
+    accept_auto_booking: boolean;
+    allow_reschedule: boolean;
+    booking_lead_time_hours?: number;
+    cancellation_window_hours?: number;
+    consultation_fee?: number;
+    follow_up_fee?: number;
     currency?: string;
-    assistantIds?: string[];
-    acceptingNewPatients?: boolean;
-    isFeatured?: boolean;
+    assistant_ids?: string[];
+    accepting_new_patients?: boolean;
+    is_featured?: boolean;
     status: 'draft' | 'active' | 'inactive' | 'suspended';
-    notesInternal?: string;
+    notes_internal?: string;
     createdAt: Date;
     updatedAt: Date;
 };
@@ -216,11 +216,11 @@ type Clinic = {
     description?: string;
     address: string;
     icon?: string;
-    mapLocation?: { lat?: number; lng?: number };
-    workingDays?: { day: number; enabled: boolean; from?: string; to?: string }[];
+    map_location?: { lat?: number; lng?: number };
+    working_days?: { day: number; enabled: boolean; from?: string; to?: string }[];
     status: 'active' | 'inactive' | 'suspended';
-    createdBy?: string;
-    notesInternal?: string;
+    created_by?: string;
+    notes_internal?: string;
     createdAt: Date;
     updatedAt: Date;
 };
@@ -243,7 +243,7 @@ type Specialty = {
     icon?: string;
     status: 'active' | 'inactive';
     sortOrder?: number;
-    createdBy?: string;
+    created_by?: string;
     createdAt: Date;
     updatedAt: Date;
 };
@@ -258,21 +258,21 @@ Purpose: booking transaction linking patient, doctor, clinic, and time.
 ```ts
 type Appointment = {
     _id: string;
-    appointmentNumber: string;
-    patientId: string;
-    doctorId: string;
-    clinicId: string;
-    specialtyId?: string;
+    appointment_number: string;
+    patient_id: string;
+    doctor_id: string;
+    clinic_id: string;
+    specialty_id?: string;
     date: Date;
-    startTime: string;
-    endTime: string;
+    start_time: string;
+    end_time: string;
     status: 'pending' | 'confirmed' | 'cancelled' | 'completed' | 'no_show';
-    bookedBy?: string;
-    bookingSource?: 'app' | 'admin_panel' | 'phone';
+    booked_by?: string;
+    booking_source?: 'app' | 'admin_panel' | 'phone';
     reason?: string;
-    notesInternal?: string;
-    cancelReason?: string;
-    rescheduledFrom?: string;
+    notes_internal?: string;
+    cancel_reason?: string;
+    rescheduled_from?: string;
     createdAt: Date;
     updatedAt: Date;
 };
@@ -288,7 +288,7 @@ Recommended status flow:
 
 Important anti-double-booking rule:
 
-- add a unique compound constraint on `doctorId + date + startTime`
+- add a unique compound constraint on `doctor_id + date + start_time`
 
 ## Relationships
 

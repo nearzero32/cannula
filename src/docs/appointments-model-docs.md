@@ -6,7 +6,7 @@ The `Appointment` model stores booking records between patients and doctors at a
 
 It is used to:
 
-- track appointment identity (`appointmentNumber`)
+- track appointment identity (`appointment_number`)
 - connect patient, doctor, clinic, and optional specialty
 - manage lifecycle status (`pending`, `confirmed`, etc.)
 - support operational data (booking source, internal notes, cancellation, reschedule)
@@ -22,32 +22,32 @@ export type AppointmentDocument = mongoose.Document & IAppointment;
 
 const appointmentSchema = new Schema(
     {
-        appointmentNumber: {
+        appointment_number: {
             type: String,
             required: true,
             unique: true,
             trim: true,
             index: true,
         },
-        patientId: {
+        patient_id: {
             type: Schema.Types.ObjectId,
             ref: 'Patient',
             required: true,
             index: true,
         },
-        doctorId: {
+        doctor_id: {
             type: Schema.Types.ObjectId,
             ref: 'Doctor',
             required: true,
             index: true,
         },
-        clinicId: {
+        clinic_id: {
             type: Schema.Types.ObjectId,
             ref: 'Clinic',
             required: true,
             index: true,
         },
-        specialtyId: {
+        specialty_id: {
             type: Schema.Types.ObjectId,
             ref: 'Specialty',
             default: null,
@@ -58,12 +58,12 @@ const appointmentSchema = new Schema(
             required: true,
             index: true,
         },
-        startTime: {
+        start_time: {
             type: String,
             required: true,
             trim: true,
         },
-        endTime: {
+        end_time: {
             type: String,
             required: true,
             trim: true,
@@ -74,12 +74,12 @@ const appointmentSchema = new Schema(
             default: IAppointmentStatusEnum.PENDING,
             index: true,
         },
-        bookedBy: {
+        booked_by: {
             type: Schema.Types.ObjectId,
             ref: 'User',
             default: null,
         },
-        bookingSource: {
+        booking_source: {
             type: String,
             enum: Object.values(IAppointmentBookingSourceEnum),
             default: IAppointmentBookingSourceEnum.APP,
@@ -90,19 +90,19 @@ const appointmentSchema = new Schema(
             maxlength: 1000,
             default: null,
         },
-        notesInternal: {
+        notes_internal: {
             type: String,
             trim: true,
             maxlength: 2000,
             default: null,
         },
-        cancelReason: {
+        cancel_reason: {
             type: String,
             trim: true,
             maxlength: 1000,
             default: null,
         },
-        rescheduledFrom: {
+        rescheduled_from: {
             type: Schema.Types.ObjectId,
             ref: 'Appointment',
             default: null,
@@ -114,9 +114,9 @@ const appointmentSchema = new Schema(
     }
 );
 
-appointmentSchema.index({ doctorId: 1, date: 1, startTime: 1 });
-appointmentSchema.index({ patientId: 1, date: 1 });
-appointmentSchema.index({ clinicId: 1, date: 1 });
+appointmentSchema.index({ doctor_id: 1, date: 1, start_time: 1 });
+appointmentSchema.index({ patient_id: 1, date: 1 });
+appointmentSchema.index({ clinic_id: 1, date: 1 });
 appointmentSchema.index({ status: 1, date: 1 });
 
 export const Appointment =
@@ -129,21 +129,21 @@ export default Appointment;
 
 | Field | Type | Required | Description |
 | --- | --- | --- | --- |
-| `appointmentNumber` | `String` | Yes | Unique booking identifier, trimmed and indexed. |
-| `patientId` | `ObjectId` | Yes | Reference to patient record (`Patient`). |
-| `doctorId` | `ObjectId` | Yes | Reference to doctor profile (`Doctor`). |
-| `clinicId` | `ObjectId` | Yes | Reference to clinic (`Clinic`). |
-| `specialtyId` | `ObjectId` | No | Optional reference to specialty (`Specialty`). |
+| `appointment_number` | `String` | Yes | Unique booking identifier, trimmed and indexed. |
+| `patient_id` | `ObjectId` | Yes | Reference to patient record (`Patient`). |
+| `doctor_id` | `ObjectId` | Yes | Reference to doctor profile (`Doctor`). |
+| `clinic_id` | `ObjectId` | Yes | Reference to clinic (`Clinic`). |
+| `specialty_id` | `ObjectId` | No | Optional reference to specialty (`Specialty`). |
 | `date` | `Date` | Yes | Appointment date (indexed). |
-| `startTime` | `String` | Yes | Start time string for the slot. |
-| `endTime` | `String` | Yes | End time string for the slot. |
+| `start_time` | `String` | Yes | Start time string for the slot. |
+| `end_time` | `String` | Yes | End time string for the slot. |
 | `status` | `String` | Yes | Lifecycle state. Default: `pending`. |
-| `bookedBy` | `ObjectId` | No | Optional `User` who created booking (for admin-assisted bookings). |
-| `bookingSource` | `String` | Yes | Booking origin. Default: `app`. |
+| `booked_by` | `ObjectId` | No | Optional `User` who created booking (for admin-assisted bookings). |
+| `booking_source` | `String` | Yes | Booking origin. Default: `app`. |
 | `reason` | `String` | No | Optional patient complaint or booking reason. |
-| `notesInternal` | `String` | No | Internal staff/admin notes (not for patient display). |
-| `cancelReason` | `String` | No | Optional cancellation reason. |
-| `rescheduledFrom` | `ObjectId` | No | Optional previous appointment reference if rescheduled. |
+| `notes_internal` | `String` | No | Internal staff/admin notes (not for patient display). |
+| `cancel_reason` | `String` | No | Optional cancellation reason. |
+| `rescheduled_from` | `ObjectId` | No | Optional previous appointment reference if rescheduled. |
 | `createdAt` | `Date` | Auto | Auto-generated create timestamp. |
 | `updatedAt` | `Date` | Auto | Auto-generated update timestamp. |
 
@@ -157,13 +157,13 @@ Values are centralized in `src/interfaces/appointment.interface.ts`.
 ## Indexes
 
 ```ts
-appointmentSchema.index({ doctorId: 1, date: 1, startTime: 1 });
-appointmentSchema.index({ patientId: 1, date: 1 });
-appointmentSchema.index({ clinicId: 1, date: 1 });
+appointmentSchema.index({ doctor_id: 1, date: 1, start_time: 1 });
+appointmentSchema.index({ patient_id: 1, date: 1 });
+appointmentSchema.index({ clinic_id: 1, date: 1 });
 appointmentSchema.index({ status: 1, date: 1 });
 ```
 
-- `doctorId + date + startTime` supports doctor schedule queries.
-- `patientId + date` supports patient history/upcoming lookups.
-- `clinicId + date` supports clinic-level daily schedule views.
+- `doctor_id + date + start_time` supports doctor schedule queries.
+- `patient_id + date` supports patient history/upcoming lookups.
+- `clinic_id + date` supports clinic-level daily schedule views.
 - `status + date` supports operational filtering by state.

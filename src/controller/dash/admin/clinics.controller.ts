@@ -11,7 +11,7 @@ const clinicBodySchema = t.Object({
     address: t.String({ minLength: 1, maxLength: 300 }),
     description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
     icon: t.Optional(t.Nullable(t.String())),
-    mapLocation: t.Optional(
+    map_location: t.Optional(
         t.Nullable(
             t.Object({
                 lat: t.Optional(t.Nullable(t.Number())),
@@ -19,7 +19,7 @@ const clinicBodySchema = t.Object({
             })
         )
     ),
-    workingDays: t.Optional(
+    working_days: t.Optional(
         t.Array(
             t.Object({
                 day: t.Integer({ minimum: 0, maximum: 6 }),
@@ -30,7 +30,7 @@ const clinicBodySchema = t.Object({
         )
     ),
     status: t.Optional(t.Enum(IClinicStatusEnum)),
-    notesInternal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+    notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
 
 export const clinicsController = new Elysia({ prefix: '/clinics' })
@@ -99,8 +99,8 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
                 address: body.address,
                 description: body.description,
                 icon: body.icon,
-                map_location: body.mapLocation,
-                working_days: body.workingDays ?? [],
+                map_location: body.map_location,
+                working_days: body.working_days ?? [],
                 status: body.status ?? IClinicStatusEnum.ACTIVE,
                 created_by: new ObjectId(phrase._id),
             }, {
@@ -136,10 +136,10 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             if (body.address !== undefined) payload.address = body.address;
             if (body.description !== undefined) payload.description = body.description;
             if (body.icon !== undefined) payload.icon = body.icon;
-            if (body.mapLocation !== undefined) payload.map_location = body.mapLocation;
-            if (body.workingDays !== undefined) payload.working_days = body.workingDays;
+            if (body.map_location !== undefined) payload.map_location = body.map_location;
+            if (body.working_days !== undefined) payload.working_days = body.working_days;
             if (body.status !== undefined) payload.status = body.status;
-            if (body.notesInternal !== undefined) payload.notes_internal = body.notesInternal;
+            if (body.notes_internal !== undefined) payload.notes_internal = body.notes_internal;
 
             const updated = await clinicService.update(params.id, payload, {
                 user_id: phrase._id,

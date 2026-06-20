@@ -55,7 +55,7 @@ const specialtySchema = new Schema(
       default: 0,
     },
 
-    createdBy: {
+    created_by: {
       type: Schema.Types.ObjectId,
       ref: 'User',
       default: null,
@@ -84,7 +84,7 @@ export default specialties;
 | `icon` | `String` | No | Optional icon/logo URL or path. Defaults to `null`. |
 | `status` | `String` | Yes | Operational status. Enum values: `active`, `inactive`. Default: `active`. |
 | `sortOrder` | `Number` | No | Numeric ordering priority for UI display. Default: `0`. |
-| `createdBy` | `ObjectId` | No | Reference to the `User` who created the specialty. |
+| `created_by` | `ObjectId` | No | Reference to the `User` who created the specialty. |
 | `createdAt` | `Date` | Auto | Auto-generated when document is created (`timestamps: true`). |
 | `updatedAt` | `Date` | Auto | Auto-updated on changes (`timestamps: true`). |
 

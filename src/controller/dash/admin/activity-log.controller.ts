@@ -23,8 +23,8 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
                 main_match.center_id = new ObjectId(query.centerId);
             }
 
-            if (query.userId && ObjectId.isValid(query.userId)) {
-                main_match.user_id = new ObjectId(query.userId);
+            if (query.user_id && ObjectId.isValid(query.user_id)) {
+                main_match.user_id = new ObjectId(query.user_id);
             }
 
             if (query.action) main_match.action = query.action;
@@ -61,7 +61,7 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
                 centerId: t.Optional(t.String()),
-                userId: t.Optional(t.String()),
+                user_id: t.Optional(t.String()),
                 action: t.Optional(t.Enum(IActivityLogActionEnum)),
                 source: t.Optional(t.Enum(IActivityLogSourceEnum)),
                 collectionName: t.Optional(t.String()),
