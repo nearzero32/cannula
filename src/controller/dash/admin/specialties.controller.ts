@@ -96,7 +96,7 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
         { body: specialtyBodySchema }
     )
 
-    .patch(
+    .put(
         '/:id',
         async ({ params, body, phrase, set }) => {
             if (!ObjectId.isValid(params.id)) {
@@ -115,7 +115,6 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
             if (body.description !== undefined) payload.description = body.description;
             if (body.icon !== undefined) payload.icon = body.icon;
             if (body.sortOrder !== undefined) payload.sort_order = body.sortOrder;
-            if (body.status !== undefined) payload.status = body.status;
 
             const updated = await specialtyService.update(params.id, payload, {
                 user_id: phrase._id,

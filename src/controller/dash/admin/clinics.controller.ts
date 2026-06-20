@@ -138,7 +138,6 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             if (body.icon !== undefined) payload.icon = body.icon;
             if (body.map_location !== undefined) payload.map_location = body.map_location;
             if (body.working_days !== undefined) payload.working_days = body.working_days;
-            if (body.status !== undefined) payload.status = body.status;
             if (body.notes_internal !== undefined) payload.notes_internal = body.notes_internal;
 
             const updated = await clinicService.update(params.id, payload, {
