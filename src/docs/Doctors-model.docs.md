@@ -30,7 +30,6 @@ To keep this model focused, fast-changing data (for example: generated slots, ap
 | `license_verified` | `Boolean` | Yes | License verification flag. |
 | `verification_status` | `String` | Yes | Verification state: `pending`, `verified`, `rejected`. |
 | `clinic_ids` | `ObjectId[]` | No | Related clinics where the doctor works. |
-| `clinicLocation` | `String` | No | Human-readable location/city. |
 | `map_location` | `{ lat, lng }` | No | Coordinates for map/location features. |
 | `appointment_duration` | `Number` | Yes | Default appointment duration in minutes. |
 | `slot_interval` | `Number` | Yes | Slot split interval in minutes. |
@@ -136,11 +135,6 @@ const doctorSchema = new Schema(
                 ref: 'Clinic',
             },
         ],
-        clinicLocation: {
-            type: String,
-            trim: true,
-            default: null,
-        },
         map_location: {
             lat: { type: Number, default: null },
             lng: { type: Number, default: null },

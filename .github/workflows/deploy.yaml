@@ -1,0 +1,40 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    # Self-hosted runner on the prod box. SSH-22 is firewalled from the public
+    # internet, so GitHub-hosted runners can't reach the box. The self-hosted
+    # runner IS the box — deploy runs directly, no SSH action needed.
+    runs-on: self-hosted
+
+    steps:
+      - name: Deploy
+        run: |
+          set -e
+
+          # Systemd runner service has a minimal PATH; make Bun and PM2 resolvable.
+          export PATH=/home/deploy/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+          cd /opt/cannula/api
+
+          # Hard-sync to origin/main — immune to any local divergence on the box.
+          git fetch origin main
+          git reset --hard origin/main
+
+          # Install / reconcile dependencies.
+          bun install --frozen-lockfile
+
+          # Restart all workers so env vars and module imports reload cleanly.
+          sudo /usr/local/bin/pm2 restart cannula --update-env
+
+          sleep 3
+
+          pgrep -f 'cannula' > /dev/null \
+            || (echo "PM2 restart failed: no cannula processes found" && exit 1)
+
+          echo "Deployment completed successfully!"

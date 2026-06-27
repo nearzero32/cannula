@@ -105,7 +105,7 @@ const doctorSchema = new Schema(
             default: IDoctorVerificationStatusEnum.PENDING,
         },
 
-        // ── Location & clinics ───────────────────────────────────────────────────
+        // ── clinics ───────────────────────────────────────────────────
 
         /** Clinics where this doctor practises (many-to-many). */
         clinic_ids: [
@@ -114,13 +114,6 @@ const doctorSchema = new Schema(
                 ref: 'Clinic',
             },
         ],
-
-        /** Human-readable location/city label (separate from clinic address). */
-        clinic_location: {
-            type: String,
-            trim: true,
-            default: null,
-        },
 
         map_location: {
             lat: { type: Number, default: null },

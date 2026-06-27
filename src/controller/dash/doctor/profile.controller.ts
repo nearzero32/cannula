@@ -11,7 +11,6 @@ const profileBodySchema = t.Object({
     languages: t.Optional(t.Array(t.String())),
     sub_specialties: t.Optional(t.Array(t.String())),
     experience_years: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
-    clinicLocation: t.Optional(t.Nullable(t.String({ maxLength: 300 }))),
     map_location: t.Optional(
         t.Nullable(
             t.Object({
@@ -66,7 +65,6 @@ export const doctorProfileController = new Elysia({ prefix: '/profile' })
             if (body.languages !== undefined) payload.languages = body.languages;
             if (body.sub_specialties !== undefined) payload.sub_specialties = body.sub_specialties;
             if (body.experience_years !== undefined) payload.experience_years = body.experience_years;
-            if (body.clinicLocation !== undefined) payload.clinic_location = body.clinicLocation;
             if (body.map_location !== undefined) payload.map_location = body.map_location;
             if (body.appointment_duration !== undefined) payload.appointment_duration = body.appointment_duration;
             if (body.slot_interval !== undefined) payload.slot_interval = body.slot_interval;

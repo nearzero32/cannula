@@ -222,9 +222,8 @@ type Doctor = {
   license_number?: string;
   license_verified: boolean;
   verification_status: "pending" | "verified" | "rejected";
-  clinic_ids?: string[];
-  clinic_location?: string;
-  map_location?: { lat: number; lng: number };
+    clinic_ids?: string[];
+    map_location?: { lat: number; lng: number };
   appointment_duration: number;
   slot_interval: number;
   buffer_before?: number;

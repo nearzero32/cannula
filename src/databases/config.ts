@@ -4,12 +4,28 @@ import { IRedisConfig } from '../interfaces/redisConfig';
 /**
  * Load MongoDB configuration from environment variables
  */
-export function loadMongoConfigFromEnv(): IMongoDBConfig {
-    const uri = process.env.MONGODB_URI;
+function buildMongoUri(baseUri: string): string {
+    const user = process.env.MONGODB_USER;
+    const password = process.env.MONGODB_PASSWORD;
 
-    if (!uri) {
+    if (!user || !password || baseUri.includes('@')) {
+        return baseUri;
+    }
+
+    const encodedUser = encodeURIComponent(user);
+    const encodedPassword = encodeURIComponent(password);
+
+    return baseUri.replace(/^mongodb:\/\//, `mongodb://${encodedUser}:${encodedPassword}@`);
+}
+
+export function loadMongoConfigFromEnv(): IMongoDBConfig {
+    const baseUri = process.env.MONGODB_URI;
+
+    if (!baseUri) {
         throw new Error('MONGODB_URI environment variable is required');
     }
+
+    const uri = buildMongoUri(baseUri);
 
     return {
         uri,

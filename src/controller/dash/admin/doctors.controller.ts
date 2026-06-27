@@ -23,7 +23,6 @@ const doctorBodySchema = t.Object({
     experience_years: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     license_number: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
     clinic_ids: t.Optional(t.Array(t.String())),
-    clinic_location: t.Optional(t.Nullable(t.String({ maxLength: 300 }))),
     map_location: t.Optional(
         t.Nullable(
             t.Object({
@@ -65,7 +64,6 @@ const doctorUpdateSchema = t.Partial(
         license_verified: t.Boolean(),
         verification_status: t.Enum(IDoctorVerificationStatusEnum),
         clinic_ids: t.Array(t.String()),
-        clinic_location: t.Nullable(t.String({ maxLength: 300 })),
         map_location: t.Nullable(
             t.Object({
                 lat: t.Nullable(t.Number()),
@@ -196,7 +194,6 @@ export const doctorsController = new Elysia({ prefix: '/doctors' })
                     experience_years: body.experience_years,
                     license_number: body.license_number,
                     clinic_ids: body.clinic_ids?.map((id) => new ObjectId(id)) ?? [],
-                    clinic_location: body.clinic_location,
                     map_location: body.map_location,
                     appointment_duration: body.appointment_duration ?? 30,
                     slot_interval: body.slot_interval ?? 15,
@@ -268,7 +265,6 @@ export const doctorsController = new Elysia({ prefix: '/doctors' })
             if (body.license_verified !== undefined) payload.license_verified = body.license_verified;
             if (body.verification_status !== undefined) payload.verification_status = body.verification_status;
             if (body.clinic_ids !== undefined) payload.clinic_ids = body.clinic_ids.map((id) => new ObjectId(id));
-            if (body.clinic_location !== undefined) payload.clinic_location = body.clinic_location;
             if (body.map_location !== undefined) payload.map_location = body.map_location;
             if (body.appointment_duration !== undefined) payload.appointment_duration = body.appointment_duration;
             if (body.slot_interval !== undefined) payload.slot_interval = body.slot_interval;

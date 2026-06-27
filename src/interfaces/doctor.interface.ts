@@ -46,7 +46,6 @@ export interface IDoctor extends IBaseDocument, IWithNotesInternal {
     license_verified: boolean;
     verification_status: IDoctorVerificationStatus;
     clinic_ids: mongoose.Types.ObjectId[];
-    clinic_location?: string | null;
     map_location?: IDoctorMapLocation | null;
     appointment_duration: number;
     slot_interval: number;

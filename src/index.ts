@@ -18,7 +18,9 @@ async function bootstrap() {
     // Connect Redis
     await RedisClient.getInstance().connect();
 
-    const app = new Elysia()
+    const app = new Elysia({
+        prefix: '/api',
+    })
         .use(cors({
             origin: process.env.ALLOWED_ORIGINS
                 ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
