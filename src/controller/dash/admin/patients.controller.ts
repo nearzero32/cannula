@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import patientService from '../../../services/patient.service';
 import { IPatientStatusEnum, IPatientGenderEnum, IPatientBloodGroupEnum } from '../../../interfaces/patient.interface';
 
@@ -18,7 +18,7 @@ const patientBodySchema = t.Object({
 });
 
 export const patientsController = new Elysia({ prefix: '/patients' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',

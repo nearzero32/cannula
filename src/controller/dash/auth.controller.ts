@@ -145,7 +145,7 @@ export const authController = new Elysia({ prefix: '/auth' })
     )
 
     .group('', (app) =>
-        app.use(AuthPlugin).post('/logout', async ({ phrase, headers }) => {
+        app.use(AuthPlugin()).post('/logout', async ({ phrase, headers }) => {
             const raw = headers.authorization ?? '';
             const token = raw.trim().toLowerCase().startsWith('bearer ') ? raw.trim().slice(7).trim() : raw.trim();
             await revokeAccessSession(phrase._id, token);

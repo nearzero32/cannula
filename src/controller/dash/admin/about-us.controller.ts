@@ -14,7 +14,7 @@ const aboutUsBodySchema = t.Object({
 });
 
 export const aboutUsController = new Elysia({ prefix: '/about-us' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get('/', async ({ set }) => {
         const data = await aboutUsService.get();

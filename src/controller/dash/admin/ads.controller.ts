@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import adsService from '../../../services/ads.service';
 import { IAdsStatusEnum } from '../../../interfaces/ads.interface';
 
@@ -29,7 +29,7 @@ const adsBodySchema = t.Object({
 });
 
 export const adsController = new Elysia({ prefix: '/ads' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',

@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import secretaryService from '../../../services/secretary.service';
 import { ISecretaryPermissionEnum, ISecretaryStatusEnum } from '../../../interfaces/secretary.interface';
 
@@ -15,7 +15,7 @@ const secretaryBodySchema = t.Object({
 });
 
 export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',

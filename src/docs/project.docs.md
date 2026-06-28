@@ -507,6 +507,8 @@ Base URL: `http://localhost:3000`
 
 ### Dashboard Auth — `/dash/auth`
 
+Full authentication, token, and refresh-token documentation: [`auth.docs.md`](./auth.docs.md).
+
 | Method | Path       | Auth | Description          |
 | ------ | ---------- | ---- | -------------------- |
 | POST   | `/login`   | No   | Admin/doctor login   |

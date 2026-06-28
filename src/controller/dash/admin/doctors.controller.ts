@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import doctorService from '../../../services/doctor.service';
 import {
     IDoctorGenderEnum,
@@ -89,7 +89,7 @@ const doctorUpdateSchema = t.Partial(
 );
 
 export const doctorsController = new Elysia({ prefix: '/doctors' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',

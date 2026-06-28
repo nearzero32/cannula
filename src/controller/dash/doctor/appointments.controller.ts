@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import appointmentService from '../../../services/appointment.service';
 import doctorService from '../../../services/doctor.service';
 import {
@@ -20,7 +20,7 @@ const buildMeta = (phrase: any, endpoint: string) => ({
 });
 
 export const doctorAppointmentsController = new Elysia({ prefix: '/appointments' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     // List the doctor's own appointments
     .get(

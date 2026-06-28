@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import specialtyService from '../../../services/specialty.service';
 import { ISpecialtyStatusEnum } from '../../../interfaces/specialty.interface';
 
@@ -15,7 +15,7 @@ const specialtyBodySchema = t.Object({
 });
 
 export const specialtiesController = new Elysia({ prefix: '/specialties' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',

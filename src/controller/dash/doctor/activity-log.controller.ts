@@ -1,13 +1,13 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import activityLogService from '../../../services/activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
 export const doctorActivityLogController = new Elysia({ prefix: '/activity-logs' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',

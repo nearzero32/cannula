@@ -1,6 +1,6 @@
 import Elysia, { t } from 'elysia';
-import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
+import mongoose from 'mongoose';
 import notificationService from '../../../services/notification.service';
 import {
     INotificationTypeEnum,
@@ -12,7 +12,7 @@ import {
 const ObjectId = mongoose.Types.ObjectId;
 
 export const notificationsController = new Elysia({ prefix: '/notifications' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     // List all notifications with filters
     .get(

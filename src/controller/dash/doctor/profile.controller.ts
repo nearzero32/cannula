@@ -34,7 +34,7 @@ const profileBodySchema = t.Object({
 });
 
 export const doctorProfileController = new Elysia({ prefix: '/profile' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get('/', async ({ phrase, set }) => {
         const doctor = await doctorService.getByUserId(phrase._id);

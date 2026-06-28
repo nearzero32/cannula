@@ -1,6 +1,6 @@
 import ActivityLog, { ActivityLogDocument } from '../models/activity-log.model';
 import type { IActivityLog } from '../interfaces/activity-log.interface';
-import type { PipelineStage } from 'mongoose';
+import mongoose, { type PipelineStage } from 'mongoose';
 
 class ActivityLogService {
     private model = ActivityLog;

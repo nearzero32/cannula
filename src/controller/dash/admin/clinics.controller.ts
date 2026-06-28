@@ -34,7 +34,7 @@ const clinicBodySchema = t.Object({
 });
 
 export const clinicsController = new Elysia({ prefix: '/clinics' })
-    .use(AuthPlugin)
+    .use(AuthPlugin())
 
     .get(
         '/',
