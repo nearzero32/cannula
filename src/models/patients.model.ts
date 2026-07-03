@@ -58,21 +58,10 @@ const patientSchema = new Schema(
             type: [String],
             default: [],
         },
-        chronic_conditions: {
+
+        chronic_condition_ids: {
             type: [String],
             default: [],
-        },
-
-        emergency_contact_name: {
-            type: String,
-            trim: true,
-            maxlength: 120,
-            default: null,
-        },
-        emergency_contact_phone: {
-            type: String,
-            trim: true,
-            default: null,
         },
 
         status: {

@@ -8,12 +8,14 @@ import { dashboardController } from './controller/dash/index';
 import { mobileController } from './controller/mobile/index';
 import { ActivityLogPlugin } from './middleware/activity-log.middleware';
 import { ensureSuperAdminExists } from './migrations/ensure-super-admin.migration';
+import { seedChronicConditions } from './migrations/seed-chronic-conditions.migration';
 
 async function bootstrap() {
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
     await ensureSuperAdminExists();
+    await seedChronicConditions();
 
     // Connect Redis
     await RedisClient.getInstance().connect();
@@ -40,6 +42,7 @@ async function bootstrap() {
         .use(ActivityLogPlugin)
         .use(dashboardController)
         .use(mobileController)
+
         .onError(({ code, set }) => {
             if (code === 'NOT_FOUND') {
                 set.status = 404;

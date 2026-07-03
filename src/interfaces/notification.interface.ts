@@ -15,16 +15,6 @@ export const INotificationTypeEnum = {
 export type INotificationType =
     (typeof INotificationTypeEnum)[keyof typeof INotificationTypeEnum];
 
-export const INotificationChannelEnum = {
-    PUSH: 'push',
-    SMS: 'sms',
-    EMAIL: 'email',
-    IN_APP: 'in_app',
-} as const;
-
-export type INotificationChannel =
-    (typeof INotificationChannelEnum)[keyof typeof INotificationChannelEnum];
-
 export const INotificationStatusEnum = {
     PENDING: 'pending',
     SCHEDULED: 'scheduled',
@@ -46,10 +36,9 @@ export type INotificationRecipientModel =
     (typeof INotificationRecipientModelEnum)[keyof typeof INotificationRecipientModelEnum];
 
 export interface INotification extends IBaseDocument {
-    recipient_id: mongoose.Types.ObjectId;
+    recipient_ids: mongoose.Types.ObjectId[];
     recipient_model: INotificationRecipientModel;
     type: INotificationType;
-    channel: INotificationChannel;
     status: INotificationStatus;
     title: string;
     body: string;

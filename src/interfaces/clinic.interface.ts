@@ -1,4 +1,4 @@
-import type { IBaseDocument, IWithNotesInternal, IWithCreatedBy } from './common.interface';
+import type { IBaseDocument, IWithCreatedBy } from './common.interface';
 
 export const IClinicStatusEnum = {
     ACTIVE: 'active',
@@ -13,19 +13,11 @@ export interface IClinicMapLocation {
     lng?: number | null;
 }
 
-export interface IClinicWorkingDay {
-    day: number;
-    enabled: boolean;
-    from?: string | null;
-    to?: string | null;
-}
-
-export interface IClinic extends IBaseDocument, IWithNotesInternal, IWithCreatedBy {
+export interface IClinic extends IBaseDocument, IWithCreatedBy {
     name: string;
     description?: string | null;
     address: string;
     icon?: string | null;
     map_location?: IClinicMapLocation | null;
-    working_days: IClinicWorkingDay[];
     status: IClinicStatus;
 }

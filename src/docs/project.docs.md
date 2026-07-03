@@ -262,15 +262,8 @@ type Clinic = {
   address: string;
   icon?: string;
   map_location?: { lat?: number; lng?: number };
-  working_days?: {
-    day: number;
-    enabled: boolean;
-    from?: string;
-    to?: string;
-  }[];
   status: "active" | "inactive" | "suspended";
   created_by?: string;
-  notes_internal?: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -278,8 +271,7 @@ type Clinic = {
 
 Notes:
 
-- clinic working days represent clinic-level hours
-- detailed doctor availability should remain separate
+- detailed doctor availability should remain separate from clinic location data
 
 ### Specialties
 
@@ -359,7 +351,7 @@ Purpose: in-app and push notification records for patients and doctors.
 ```ts
 type Notification = {
   _id: string;
-  recipient_id: string;
+  recipient_ids: string[];
   recipient_model: "Patient" | "Doctor" | "User";
   type:
     | "appointment_booked"
@@ -370,7 +362,6 @@ type Notification = {
     | "appointment_no_show"
     | "appointment_rescheduled"
     | "general";
-  channel: "push" | "sms" | "email" | "in_app";
   status: "pending" | "scheduled" | "sent" | "failed" | "cancelled";
   title: string;
   body: string;

@@ -234,7 +234,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Kanona Center\",\n  \"address\": \"Baghdad - Karrada\",\n  \"description\": \"Main branch\",\n  \"icon\": null,\n  \"map_location\": {\n    \"lat\": 33.3152,\n    \"lng\": 44.3661\n  },\n  \"working_days\": [\n    {\n      \"day\": 1,\n      \"enabled\": true,\n      \"from\": \"09:00\",\n      \"to\": \"17:00\"\n    }\n  ],\n  \"status\": \"active\",\n  \"notes_internal\": null\n}"
+                  "raw": "{\n  \"name\": \"Kanona Center\",\n  \"address\": \"Baghdad - Karrada\",\n  \"description\": \"Main branch\",\n  \"icon\": null,\n  \"map_location\": {\n    \"lat\": 33.3152,\n    \"lng\": 44.3661\n  },\n  \"status\": \"active\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/dash/admin/clinics",

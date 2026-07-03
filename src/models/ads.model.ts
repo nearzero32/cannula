@@ -39,6 +39,8 @@ const adsSchema = new Schema<AdsDocument>(
             enum: Object.values(IAdsStatusEnum),
             default: IAdsStatusEnum.ACTIVE,
         },
+
+
         end_date: { type: Date, default: null },
     },
     { timestamps: true, versionKey: false }

@@ -1,7 +1,7 @@
 import Notification, { NotificationDocument } from '../models/notifications.model';
 import type { INotification, INotificationRecipientModel } from '../interfaces/notification.interface';
-import { INotificationStatusEnum, INotificationChannelEnum } from '../interfaces/notification.interface';
-import type { PipelineStage } from 'mongoose';
+import { INotificationStatusEnum } from '../interfaces/notification.interface';
+import mongoose, { type PipelineStage } from 'mongoose';
 import { oneSignal } from '../lib/onesignal';
 
 class NotificationService {
@@ -57,7 +57,11 @@ class NotificationService {
         recipient_id: string,
         recipient_model: INotificationRecipientModel
     ): Promise<number> {
-        return this.model.countDocuments({ recipient_id, recipient_model, is_read: false }).exec();
+        return this.model.countDocuments({
+            recipient_ids: new mongoose.Types.ObjectId(recipient_id),
+            recipient_model,
+            is_read: false,
+        }).exec();
     }
 
     // ─── Mutations ───────────────────────────────────────────────────────────
@@ -83,7 +87,11 @@ class NotificationService {
     ): Promise<number> {
         const result = await this.model
             .updateMany(
-                { recipient_id, recipient_model, is_read: false },
+                {
+                    recipient_ids: new mongoose.Types.ObjectId(recipient_id),
+                    recipient_model,
+                    is_read: false,
+                },
                 { $set: { is_read: true, read_at: new Date() } }
             )
             .exec();
@@ -97,36 +105,31 @@ class NotificationService {
     // ─── Delivery ────────────────────────────────────────────────────────────
 
     /**
-     * Dispatch a saved notification record to the appropriate channel.
+     * Dispatch a saved notification via OneSignal push.
      * Updates the record's status to `sent` or `failed` based on the result.
      */
     public async dispatch(id: string): Promise<NotificationDocument | null> {
         const notification = await this.getById(id);
         if (!notification) return null;
 
-        if (notification.channel === INotificationChannelEnum.PUSH) {
-            const result = await oneSignal.sendPush({
-                external_ids: [notification.recipient_id.toString()],
-                title: notification.title,
-                body: notification.body,
-                data: notification.data as Record<string, unknown> | null,
-            });
+        const result = await oneSignal.sendPush({
+            external_ids: notification.recipient_ids.map((id) => id.toString()),
+            title: notification.title,
+            body: notification.body,
+            data: notification.data as Record<string, unknown> | null,
+        });
 
-            if (result.success) {
-                return this.update(id, {
-                    status: INotificationStatusEnum.SENT,
-                    sent_at: new Date() as any,
-                });
-            } else {
-                return this.update(id, {
-                    status: INotificationStatusEnum.FAILED,
-                    failed_reason: result.error,
-                });
-            }
+        if (result.success) {
+            return this.update(id, {
+                status: INotificationStatusEnum.SENT,
+                sent_at: new Date() as any,
+            });
         }
 
-        // SMS / Email channels are not yet implemented — leave as pending
-        return notification;
+        return this.update(id, {
+            status: INotificationStatusEnum.FAILED,
+            failed_reason: result.error,
+        });
     }
 
     /**

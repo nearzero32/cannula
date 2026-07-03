@@ -1,11 +1,11 @@
-import User, { UserDocument } from '../models/users.model';
-import type { IUser } from '../interfaces/user.interface';
+import ChronicCondition, { ChronicConditionDocument } from '../models/chronic-conditions.model';
+import type { IChronicCondition } from '../interfaces/chronic-condition.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 
-class UserService {
-    private model = User;
+class ChronicConditionService {
+    private model = ChronicCondition;
     private activityLog = ActivityLogService;
 
     public async getPaginated({
@@ -20,7 +20,7 @@ class UserService {
         projection?: PipelineStage.Project['$project'] | null;
         page?: number;
         limit?: number;
-    }): Promise<{ data: UserDocument[]; count: number }> {
+    }): Promise<{ data: ChronicConditionDocument[]; count: number }> {
         const safePage = Math.max(1, page);
         const safeLimit = Math.max(1, limit);
         const skip = (safePage - 1) * safeLimit;
@@ -43,52 +43,19 @@ class UserService {
 
         const [agg] = await this.model.aggregate(pipeline).exec();
         return {
-            data: (agg?.data ?? []) as UserDocument[],
+            data: (agg?.data ?? []) as ChronicConditionDocument[],
             count: agg?.count?.[0]?.count ?? 0,
         };
     }
 
-    public async getOneBy({
-        main_match = { $match: {} },
-        additional_pipeline = [],
-        projection = null,
-    }: {
-        main_match?: PipelineStage.FacetPipelineStage;
-        additional_pipeline?: PipelineStage.FacetPipelineStage[];
-        projection?: PipelineStage.Project['$project'] | null;
-    }): Promise<UserDocument | null> {
-        const pipeline: PipelineStage[] = [
-            main_match,
-            ...additional_pipeline,
-            ...(projection ? [{ $project: projection } as PipelineStage.Project] : []),
-            { $limit: 1 },
-        ];
-        const [doc] = await this.model.aggregate(pipeline).exec();
-        return (doc as UserDocument) ?? null;
-    }
-
-    public async getById(id: string): Promise<UserDocument | null> {
+    public async getById(id: string): Promise<ChronicConditionDocument | null> {
         return await this.model.findById(id).exec();
     }
 
-    // passwordHash has select:false — querying by it still works; it's just excluded from output
-    public async findByCredentials({
-        phone,
-        password_hash,
-        roles,
-    }: {
-        phone: string;
-        password_hash: string;
-        roles: string[];
-    }): Promise<UserDocument | null> {
-        return await this.model.findOne({ phone, password_hash, role: { $in: roles } }).exec();
-    }
-
-    public async findByPhone(phone: string): Promise<UserDocument | null> {
-        return await this.model.findOne({ phone }).exec();
-    }
-
-    public async create(payload: Partial<IUser>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<UserDocument> {
+    public async create(
+        payload: Partial<IChronicCondition>,
+        meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }
+    ): Promise<ChronicConditionDocument> {
         const doc = await this.model.create(payload);
         try {
             await this.activityLog.logActivity({
@@ -96,9 +63,9 @@ class UserService {
                 user_name: meta?.user_name,
                 user_type: meta?.user_type,
                 method: 'POST',
-                endpoint: meta?.endpoint || '/users',
+                endpoint: meta?.endpoint || '/chronic-conditions',
                 action: IActivityLogActionEnum.CREATE,
-                collection_name: 'users',
+                collection_name: 'chronic_conditions',
                 document_id: (doc._id as any).toString(),
                 new_data: doc.toObject(),
                 request_body: payload,
@@ -108,20 +75,26 @@ class UserService {
         return doc;
     }
 
-    public async update(id: string, payload: Partial<IUser>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<UserDocument | null> {
+    public async update(
+        id: string,
+        payload: Partial<IChronicCondition>,
+        meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }
+    ): Promise<ChronicConditionDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
         if (doc && oldDoc) {
             try {
-                const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
+                const changed_fields = Object.keys(payload).filter(
+                    (k) => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k])
+                );
                 await this.activityLog.logActivity({
                     user_id: meta?.user_id,
                     user_name: meta?.user_name,
                     user_type: meta?.user_type,
-                    method: 'PATCH',
-                    endpoint: meta?.endpoint || `/users/${id}`,
+                    method: 'PUT',
+                    endpoint: meta?.endpoint || `/chronic-conditions/${id}`,
                     action: IActivityLogActionEnum.UPDATE,
-                    collection_name: 'users',
+                    collection_name: 'chronic_conditions',
                     document_id: id,
                     old_data: oldDoc.toObject(),
                     new_data: doc.toObject(),
@@ -134,6 +107,34 @@ class UserService {
         return doc;
     }
 
+    public async updateStatus(
+        id: string,
+        status: IChronicCondition['status'],
+        meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }
+    ): Promise<ChronicConditionDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        const doc = await this.model.findByIdAndUpdate(id, { status }, { returnDocument: 'after' }).exec();
+        if (doc && oldDoc) {
+            try {
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/chronic-conditions/${id}/status`,
+                    action: IActivityLogActionEnum.UPDATE,
+                    collection_name: 'chronic_conditions',
+                    document_id: id,
+                    old_data: { status: oldDoc.status },
+                    new_data: { status },
+                    changed_fields: ['status'],
+                    request_body: { status },
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+        return doc;
+    }
 }
 
-export default new UserService();
+export default new ChronicConditionService();

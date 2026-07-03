@@ -1,7 +1,6 @@
 import mongoose, { Schema, model, models } from 'mongoose';
 import {
     INotificationTypeEnum,
-    INotificationChannelEnum,
     INotificationRecipientModelEnum,
     INotificationStatusEnum,
 } from '../interfaces/notification.interface';
@@ -12,18 +11,22 @@ export type NotificationDocument = mongoose.Document & INotification;
 const notificationSchema = new Schema<NotificationDocument>(
     {
         /**
-         * The entity receiving the notification.
+         * Entities receiving the notification.
          * Resolved dynamically via recipient_model.
          */
-        recipient_id: {
-            type: Schema.Types.ObjectId,
+        recipient_ids: {
+            type: [Schema.Types.ObjectId],
             refPath: 'recipient_model',
             required: true,
+            validate: {
+                validator: (value: unknown[]) => Array.isArray(value) && value.length > 0,
+                message: 'يجب تحديد مستلم واحد على الأقل',
+            },
             index: true,
         },
 
         /**
-         * Dynamic reference model for recipient_id.
+         * Dynamic reference model for recipient_ids.
          * Example: Patient, Doctor, User
          */
         recipient_model: {
@@ -41,16 +44,6 @@ const notificationSchema = new Schema<NotificationDocument>(
             enum: Object.values(INotificationTypeEnum),
             required: true,
             index: true,
-        },
-
-        /**
-         * Delivery channel.
-         * Example: push, sms, email, in_app
-         */
-        channel: {
-            type: String,
-            enum: Object.values(INotificationChannelEnum),
-            required: true,
         },
 
         /**
@@ -83,7 +76,7 @@ const notificationSchema = new Schema<NotificationDocument>(
         },
 
         /**
-         * Whether the recipient has read this notification.
+         * Whether the notification has been read.
          */
         is_read: {
             type: Boolean,
@@ -92,7 +85,7 @@ const notificationSchema = new Schema<NotificationDocument>(
         },
 
         /**
-         * Timestamp when the recipient marked the notification as read.
+         * Timestamp when the notification was marked as read.
          */
         read_at: {
             type: Date,
@@ -155,7 +148,7 @@ const notificationSchema = new Schema<NotificationDocument>(
 /**
  * Fetch unread notifications for a specific recipient quickly.
  */
-notificationSchema.index({ recipient_id: 1, is_read: 1, createdAt: -1 });
+notificationSchema.index({ recipient_ids: 1, is_read: 1, createdAt: -1 });
 
 /**
  * Scheduler poll: find pending/scheduled notifications due for dispatch.
@@ -165,7 +158,7 @@ notificationSchema.index({ status: 1, scheduled_at: 1 });
 /**
  * Fetch all notifications for a recipient in chronological order.
  */
-notificationSchema.index({ recipient_id: 1, createdAt: -1 });
+notificationSchema.index({ recipient_ids: 1, createdAt: -1 });
 
 /**
  * Auto-delete notifications after 90 days.

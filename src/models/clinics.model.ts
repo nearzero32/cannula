@@ -37,29 +37,6 @@ const clinicSchema = new Schema(
             lng: { type: Number, default: null },
         },
 
-        working_days: [
-            {
-                day: {
-                    type: Number,
-                    min: 0,
-                    max: 6,
-                    required: true,
-                },
-                enabled: {
-                    type: Boolean,
-                    default: true,
-                },
-                from: {
-                    type: String,
-                    default: null,
-                },
-                to: {
-                    type: String,
-                    default: null,
-                },
-            },
-        ],
-
         status: {
             type: String,
             enum: Object.values(IClinicStatusEnum),
@@ -71,13 +48,6 @@ const clinicSchema = new Schema(
             ref: 'User',
             default: null,
         },
-
-        notes_internal: {
-            type: String,
-            trim: true,
-            maxlength: 2000,
-            default: null,
-        },
     },
     {
         timestamps: true,
@@ -86,7 +56,7 @@ const clinicSchema = new Schema(
 );
 
 clinicSchema.index({ name: 1 });
-clinicSchema.index({ city: 1, governorate: 1, status: 1 });
+clinicSchema.index({ status: 1 });
 
 export const Clinic = (models.Clinic as mongoose.Model<ClinicDocument>) || model<ClinicDocument>('Clinic', clinicSchema);
 export default Clinic;

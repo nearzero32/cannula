@@ -4,7 +4,6 @@ import mongoose from 'mongoose';
 import notificationService from '../../../services/notification.service';
 import {
     INotificationTypeEnum,
-    INotificationChannelEnum,
     INotificationStatusEnum,
     INotificationRecipientModelEnum,
 } from '../../../interfaces/notification.interface';
@@ -23,8 +22,8 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
 
             const main_match: Record<string, unknown> = {};
 
-            if (query.recipient_id && ObjectId.isValid(query.recipient_id))
-                main_match.recipient_id = new ObjectId(query.recipient_id);
+            if (query.recipient_ids && ObjectId.isValid(query.recipient_ids))
+                main_match.recipient_ids = new ObjectId(query.recipient_ids);
 
             if (query.recipient_model) main_match.recipient_model = query.recipient_model;
 
@@ -32,7 +31,6 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
                 main_match.appointment_id = new ObjectId(query.appointment_id);
 
             if (query.type) main_match.type = query.type;
-            if (query.channel) main_match.channel = query.channel;
             if (query.status) main_match.status = query.status;
 
             if (query.is_read !== undefined)
@@ -77,11 +75,10 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
             query: t.Object({
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
-                recipient_id: t.Optional(t.String()),
+                recipient_ids: t.Optional(t.String()),
                 recipient_model: t.Optional(t.Enum(INotificationRecipientModelEnum)),
                 appointment_id: t.Optional(t.String()),
                 type: t.Optional(t.Enum(INotificationTypeEnum)),
-                channel: t.Optional(t.Enum(INotificationChannelEnum)),
                 status: t.Optional(t.Enum(INotificationStatusEnum)),
                 is_read: t.Optional(t.Union([t.Literal('true'), t.Literal('false')])),
                 dateFrom: t.Optional(t.String()),
@@ -115,9 +112,10 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
     .post(
         '/',
         async ({ body, set }) => {
-            if (!ObjectId.isValid(body.recipient_id)) {
+            const invalidRecipient = body.recipient_ids.find((id) => !ObjectId.isValid(id));
+            if (invalidRecipient) {
                 set.status = 400;
-                return { error: true, message: 'معرف المستلم غير صالح' };
+                return { error: true, message: 'معرف مستلم غير صالح' };
             }
 
             if (body.appointment_id && !ObjectId.isValid(body.appointment_id)) {
@@ -128,10 +126,9 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
             const isScheduled = !!body.scheduled_at;
 
             const payload = {
-                recipient_id: new ObjectId(body.recipient_id) as any,
+                recipient_ids: body.recipient_ids.map((id) => new ObjectId(id) as any),
                 recipient_model: body.recipient_model,
                 type: body.type,
-                channel: body.channel,
                 title: body.title,
                 body: body.body,
                 data: body.data ?? null,
@@ -155,10 +152,9 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
         },
         {
             body: t.Object({
-                recipient_id: t.String(),
+                recipient_ids: t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
                 recipient_model: t.Enum(INotificationRecipientModelEnum),
                 type: t.Enum(INotificationTypeEnum),
-                channel: t.Enum(INotificationChannelEnum),
                 title: t.String({ minLength: 1, maxLength: 255 }),
                 body: t.String({ minLength: 1, maxLength: 2000 }),
                 data: t.Optional(t.Nullable(t.Record(t.String(), t.Unknown()))),

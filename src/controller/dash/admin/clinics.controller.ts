@@ -19,18 +19,7 @@ const clinicBodySchema = t.Object({
             })
         )
     ),
-    working_days: t.Optional(
-        t.Array(
-            t.Object({
-                day: t.Integer({ minimum: 0, maximum: 6 }),
-                enabled: t.Boolean(),
-                from: t.Optional(t.Nullable(t.String())),
-                to: t.Optional(t.Nullable(t.String())),
-            })
-        )
-    ),
     status: t.Optional(t.Enum(IClinicStatusEnum)),
-    notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
 
 export const clinicsController = new Elysia({ prefix: '/clinics' })
@@ -100,7 +89,6 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
                 description: body.description,
                 icon: body.icon,
                 map_location: body.map_location,
-                working_days: body.working_days ?? [],
                 status: body.status ?? IClinicStatusEnum.ACTIVE,
                 created_by: new ObjectId(phrase._id),
             }, {
@@ -137,8 +125,6 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             if (body.description !== undefined) payload.description = body.description;
             if (body.icon !== undefined) payload.icon = body.icon;
             if (body.map_location !== undefined) payload.map_location = body.map_location;
-            if (body.working_days !== undefined) payload.working_days = body.working_days;
-            if (body.notes_internal !== undefined) payload.notes_internal = body.notes_internal;
 
             const updated = await clinicService.update(params.id, payload, {
                 user_id: phrase._id,

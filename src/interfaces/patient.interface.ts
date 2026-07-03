@@ -39,8 +39,6 @@ export interface IPatient extends IBaseDocument, IWithNotesInternal {
     profile_photo?: string | null;
     blood_group?: IPatientBloodGroup | null;
     allergies: string[];
-    chronic_conditions: string[];
-    emergency_contact_name?: string | null;
-    emergency_contact_phone?: string | null;
+    chronic_condition_ids: string[];
     status: IPatientStatus;
 }
