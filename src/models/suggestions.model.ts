@@ -39,8 +39,8 @@ const suggestionSchema = new Schema(
     }
 );
 
-suggestionSchema.index({ user_id: 1, createdAt: -1 });
-suggestionSchema.index({ createdAt: -1 });
+suggestionSchema.index({ user_id: 1, is_deleted: 1, createdAt: -1 });
+suggestionSchema.index({ is_deleted: 1, createdAt: -1 });
 
 export const Suggestion =
     (models.Suggestion as mongoose.Model<SuggestionDocument>) ||

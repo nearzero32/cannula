@@ -48,8 +48,10 @@ class SuggestionService {
         };
     }
 
-    public async getById(id: string): Promise<SuggestionDocument | null> {
-        return await this.model.findById(id).exec();
+    public async getById(id: string, include_deleted = false): Promise<SuggestionDocument | null> {
+        const filter: Record<string, unknown> = { _id: id };
+        if (!include_deleted) filter.is_deleted = false;
+        return await this.model.findOne(filter).exec();
     }
 
     public async create(
@@ -72,6 +74,89 @@ class SuggestionService {
                 source: meta?.source || IActivityLogSourceEnum.MOBILE,
             });
         } catch {}
+        return doc;
+    }
+
+    public async softDelete(
+        id: string,
+        deleted_by: string,
+        meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }
+    ): Promise<SuggestionDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        if (!oldDoc || oldDoc.is_deleted) return null;
+
+        const doc = await this.model
+            .findByIdAndUpdate(
+                id,
+                {
+                    is_deleted: true,
+                    deleted_at: new Date(),
+                    deleted_by,
+                },
+                { returnDocument: 'after' }
+            )
+            .exec();
+
+        if (doc && oldDoc) {
+            try {
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/suggestions/${id}/delete`,
+                    action: IActivityLogActionEnum.DELETE,
+                    collection_name: 'suggestions',
+                    document_id: id,
+                    old_data: oldDoc.toObject(),
+                    new_data: doc.toObject(),
+                    changed_fields: ['is_deleted', 'deleted_at', 'deleted_by'],
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+
+        return doc;
+    }
+
+    public async restore(
+        id: string,
+        meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }
+    ): Promise<SuggestionDocument | null> {
+        const oldDoc = await this.model.findById(id).exec();
+        if (!oldDoc || !oldDoc.is_deleted) return null;
+
+        const doc = await this.model
+            .findByIdAndUpdate(
+                id,
+                {
+                    is_deleted: false,
+                    deleted_at: null,
+                    deleted_by: null,
+                },
+                { returnDocument: 'after' }
+            )
+            .exec();
+
+        if (doc && oldDoc) {
+            try {
+                await this.activityLog.logActivity({
+                    user_id: meta?.user_id,
+                    user_name: meta?.user_name,
+                    user_type: meta?.user_type,
+                    method: 'PATCH',
+                    endpoint: meta?.endpoint || `/suggestions/${id}/restore`,
+                    action: IActivityLogActionEnum.UPDATE,
+                    collection_name: 'suggestions',
+                    document_id: id,
+                    old_data: oldDoc.toObject(),
+                    new_data: doc.toObject(),
+                    changed_fields: ['is_deleted', 'deleted_at', 'deleted_by'],
+                    source: meta?.source || IActivityLogSourceEnum.DASHBOARD,
+                });
+            } catch {}
+        }
+
         return doc;
     }
 }

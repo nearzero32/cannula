@@ -1,0 +1,131 @@
+{
+  "info": {
+    "name": "Kanona - Admin Suggestions",
+    "_postman_id": "c0e6g3b4-5d9f-5c0g-0e3f-4b7g8c9d0e1f",
+    "description": "Admin suggestion endpoints.\n\nBase path: `/api/dash/admin/suggestions`\n\nSetup:\n1. Set `baseUrl` (default: http://localhost:3001/api).\n2. Login via `POST /dash/auth/login` and set `accessToken`.\n3. Replace `{{suggestion_id}}` with a real MongoDB ObjectId.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001/api",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "suggestion_id",
+      "value": "665000000000000000000020",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "665000000000000000000001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "List Suggestions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/dash/admin/suggestions?page=1&limit=10&user_id=&search=&is_deleted=false",
+          "host": ["{{baseUrl}}"],
+          "path": ["dash", "admin", "suggestions"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1",
+              "description": "Page number (default: 1)"
+            },
+            {
+              "key": "limit",
+              "value": "10",
+              "description": "Items per page (max: 100)"
+            },
+            {
+              "key": "user_id",
+              "value": "",
+              "description": "Filter by user ObjectId (optional)"
+            },
+            {
+              "key": "search",
+              "value": "",
+              "description": "Search in suggestion text (optional)"
+            },
+            {
+              "key": "is_deleted",
+              "value": "false",
+              "description": "Filter by deletion status: true | false (default: false)"
+            }
+          ]
+        },
+        "description": "Paginated list with user lookup (`user_name`, `user_phone`, `user_role`). Filter with `is_deleted=true` or `is_deleted=false`."
+      }
+    },
+    {
+      "name": "Get Suggestion By ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/dash/admin/suggestions/{{suggestion_id}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["dash", "admin", "suggestions", "{{suggestion_id}}"]
+        },
+        "description": "Get a single suggestion with user lookup fields."
+      }
+    },
+    {
+      "name": "Soft Delete Suggestion",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/dash/admin/suggestions/{{suggestion_id}}/delete",
+          "host": ["{{baseUrl}}"],
+          "path": ["dash", "admin", "suggestions", "{{suggestion_id}}", "delete"]
+        },
+        "description": "Soft-delete a suggestion (sets `is_deleted`, `deleted_at`, `deleted_by`)."
+      }
+    },
+    {
+      "name": "Restore Suggestion",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{accessToken}}"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/dash/admin/suggestions/{{suggestion_id}}/restore",
+          "host": ["{{baseUrl}}"],
+          "path": ["dash", "admin", "suggestions", "{{suggestion_id}}", "restore"]
+        },
+        "description": "Restore a soft-deleted suggestion (clears `is_deleted`, `deleted_at`, `deleted_by`)."
+      }
+    }
+  ]
+}

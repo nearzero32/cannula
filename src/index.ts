@@ -9,6 +9,7 @@ import { mobileController } from './controller/mobile/index';
 import { ActivityLogPlugin } from './middleware/activity-log.middleware';
 import { ensureSuperAdminExists } from './migrations/ensure-super-admin.migration';
 import { seedChronicConditions } from './migrations/seed-chronic-conditions.migration';
+import { seedSuggestions } from './migrations/seed-suggestions.migration';
 
 async function bootstrap() {
     // Connect MongoDB
@@ -16,6 +17,7 @@ async function bootstrap() {
     await db.connect();
     await ensureSuperAdminExists();
     await seedChronicConditions();
+    await seedSuggestions();
 
     // Connect Redis
     await RedisClient.getInstance().connect();
