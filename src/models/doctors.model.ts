@@ -70,16 +70,6 @@ const doctorSchema = new Schema(
             trim: true,
         },
 
-        sub_specialties: {
-            type: [String],
-            default: [],
-        },
-
-        languages: {
-            type: [String],
-            default: [],
-        },
-
         experience_years: {
             type: Number,
             min: 0,
@@ -193,12 +183,6 @@ const doctorSchema = new Schema(
             default: null,
         },
 
-        currency: {
-            type: String,
-            trim: true,
-            default: 'IQD',
-        },
-
         // ── Staff & visibility ───────────────────────────────────────────────────
 
         /** Linked assistant/reception User accounts. */
@@ -208,17 +192,6 @@ const doctorSchema = new Schema(
                 ref: 'User',
             },
         ],
-
-        accepting_new_patients: {
-            type: Boolean,
-            default: true,
-        },
-
-        /** Admin flag to highlight doctor in app listings. */
-        is_featured: {
-            type: Boolean,
-            default: false,
-        },
 
         /**
          * Operational profile state. Only `active` doctors accept bookings.
