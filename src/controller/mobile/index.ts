@@ -3,6 +3,8 @@ import { mobileAboutUsController } from './about-us.controller';
 import { mobileAdsController } from './ads.controller';
 import { mobileAuthController } from './auth.controller';
 import { mobileChronicConditionsController } from './chronic-conditions.controller';
+import { mobileDoctorsController } from './doctors.controller';
+import { mobileSpecialtiesController } from './specialties.controller';
 import { mobileProfileController } from './profile.controller';
 import { mobileSuggestionsController } from './suggestions.controller';
 import { mobileDoctorFavoritesController } from './doctor-favorites.controller';
@@ -13,7 +15,9 @@ const mobilePublicController = new Elysia()
     .use(mobileAuthController)
     .use(mobileAboutUsController)
     .use(mobileAdsController)
-    .use(mobileChronicConditionsController);
+    .use(mobileChronicConditionsController)
+    .use(mobileDoctorsController)
+    .use(mobileSpecialtiesController);
 
 /** Protected mobile routes — each controller applies AuthPlugin() */
 const mobileProtectedController = new Elysia()
@@ -21,8 +25,8 @@ const mobileProtectedController = new Elysia()
     .use(mobileSuggestionsController)
     .use(mobileDoctorFavoritesController)
     .use(sharedController);
-    // .use(mobileAppointmentsController)
-    // .use(mobileProfileController)
+// .use(mobileAppointmentsController)
+// .use(mobileProfileController)
 
 export const mobileController = new Elysia({
     prefix: '/mobile',

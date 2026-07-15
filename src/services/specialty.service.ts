@@ -30,7 +30,7 @@ class SpecialtyService {
             {
                 $facet: {
                     data: [
-                        { $sort: { sortOrder: 1, createdAt: -1 } },
+                        { $sort: { sort_order: 1, createdAt: -1 } },
                         { $skip: skip },
                         { $limit: safeLimit },
                         ...additional_pipeline,
