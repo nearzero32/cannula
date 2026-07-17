@@ -1,0 +1,58 @@
+name: Deploy Production
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cannula-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Deploy through SSH
+        uses: appleboy/ssh-action@v1.2.4
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_KEY }}
+          script_stop: true
+          script: |
+            set -Eeuo pipefail
+
+            cd /opt/cannula/api
+
+            test -f .env || {
+              echo "ERROR: /opt/cannula/api/.env is missing"
+              exit 1
+            }
+
+            git fetch origin main
+            git reset --hard origin/main
+
+            docker compose config -q
+            docker compose up -d --build --remove-orphans
+
+            sleep 10
+            docker compose ps
+
+            for service in api mongo redis; do
+              status="$(docker compose ps --format json "$service" | grep -o '"State":"[^"]*"' | head -1 || true)"
+              echo "$service: $status"
+
+              echo "$status" | grep -q '"State":"running"' || {
+                echo "ERROR: $service is not running"
+                docker compose logs --tail=100 "$service" || true
+                exit 1
+              }
+            done
