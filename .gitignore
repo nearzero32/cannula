@@ -7,7 +7,6 @@
 
 .env
 
-bun.lock
 
 package-lock.json
 
