@@ -1,0 +1,11 @@
+node_modules
+.git
+.env
+.env.*
+README.md
+postman
+Dockerfile
+compose.yml
+compose.yaml
+docker-compose.yml
+docker-compose.yaml
