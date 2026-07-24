@@ -17,12 +17,8 @@ const notificationSchema = new Schema<NotificationDocument>(
         recipient_ids: {
             type: [Schema.Types.ObjectId],
             refPath: 'recipient_model',
-            required: true,
-            validate: {
-                validator: (value: unknown[]) => Array.isArray(value) && value.length > 0,
-                message: 'يجب تحديد مستلم واحد على الأقل',
-            },
-            index: true,
+            required: false,
+            default: [],
         },
 
         /**

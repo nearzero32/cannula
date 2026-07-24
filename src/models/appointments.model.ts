@@ -79,9 +79,10 @@ const appointmentSchema = new Schema(
          * Appointment start time as display text.
          * Example: "09:30"
          */
-        start_time: {
+        starts_at: {
             type: String,
-            required: true,
+            required: false,
+            default: null,
             trim: true,
         },
 
@@ -89,9 +90,10 @@ const appointmentSchema = new Schema(
          * Appointment end time as display text.
          * Example: "10:00"
          */
-        end_time: {
+        ends_at: {
             type: String,
-            required: true,
+            required: false,
+            default: null,
             trim: true,
         },
 

@@ -23,11 +23,11 @@ const SUGGESTIONS_SEED: string[] = [
 
 async function resolveSeedUserId(): Promise<mongoose.Types.ObjectId | null> {
     const patient = await User.findOne({ role: IUserRoleEnum.PATIENT }).select('_id').lean();
-    if (patient?._id) return patient._id as mongoose.Types.ObjectId;
+    if (patient?._id) return new mongoose.Types.ObjectId(patient._id);
 
     const fallbackPhone = process.env.SUPER_ADMIN_PHONE || '07000000000';
     const adminUser = await User.findOne({ phone: fallbackPhone }).select('_id').lean();
-    if (adminUser?._id) return adminUser._id as mongoose.Types.ObjectId;
+    if (adminUser?._id) return new mongoose.Types.ObjectId(adminUser._id);
 
     return null;
 }

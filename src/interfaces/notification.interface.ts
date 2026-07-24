@@ -30,6 +30,8 @@ export const INotificationRecipientModelEnum = {
     PATIENT: 'Patient',
     DOCTOR: 'Doctor',
     USER: 'User',
+    SECRETARY: 'Secretary',
+    ALL: 'all',
 } as const;
 
 export type INotificationRecipientModel =

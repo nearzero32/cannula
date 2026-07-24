@@ -1,6 +1,9 @@
 import Notification, { NotificationDocument } from '../models/notifications.model';
 import type { INotification, INotificationRecipientModel } from '../interfaces/notification.interface';
-import { INotificationStatusEnum } from '../interfaces/notification.interface';
+import {
+    INotificationRecipientModelEnum,
+    INotificationStatusEnum,
+} from '../interfaces/notification.interface';
 import mongoose, { type PipelineStage } from 'mongoose';
 import { oneSignal } from '../lib/onesignal';
 
@@ -114,6 +117,8 @@ class NotificationService {
 
         const result = await oneSignal.sendPush({
             external_ids: notification.recipient_ids.map((id) => id.toString()),
+            send_to_all:
+                notification.recipient_model === INotificationRecipientModelEnum.ALL,
             title: notification.title,
             body: notification.body,
             data: notification.data as Record<string, unknown> | null,

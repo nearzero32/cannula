@@ -5,6 +5,8 @@ const ONESIGNAL_API_URL = 'https://api.onesignal.com/notifications';
 export interface OneSignalPushPayload {
     /** OneSignal external_user_id values — typically the recipient's MongoDB _id */
     external_ids: string[];
+    /** Send to every subscribed user instead of targeting external IDs. */
+    send_to_all?: boolean;
     title: string;
     body: string;
     /** Arbitrary key-value data passed to the app on notification tap */
@@ -29,7 +31,7 @@ async function sendPush(payload: OneSignalPushPayload): Promise<OneSignalResult>
         return { success: false, recipients: 0, error: 'OneSignal credentials not configured' };
     }
 
-    if (payload.external_ids.length === 0) {
+    if (!payload.send_to_all && payload.external_ids.length === 0) {
         return { success: false, recipients: 0, error: 'No recipients provided' };
     }
 
@@ -43,7 +45,9 @@ async function sendPush(payload: OneSignalPushPayload): Promise<OneSignalResult>
             },
             body: JSON.stringify({
                 app_id: appId,
-                include_external_user_ids: payload.external_ids,
+                ...(payload.send_to_all
+                    ? { included_segments: ['All'] }
+                    : { include_external_user_ids: payload.external_ids }),
                 headings: { en: payload.title },
                 contents: { en: payload.body },
                 data: payload.data ?? undefined,

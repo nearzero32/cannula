@@ -112,6 +112,14 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
     .post(
         '/',
         async ({ body, set }) => {
+            const isBroadcast =
+                body.recipient_model === INotificationRecipientModelEnum.ALL;
+
+            if (!isBroadcast && body.recipient_ids.length === 0) {
+                set.status = 400;
+                return { error: true, message: 'يجب تحديد مستلم واحد على الأقل' };
+            }
+
             const invalidRecipient = body.recipient_ids.find((id) => !ObjectId.isValid(id));
             if (invalidRecipient) {
                 set.status = 400;
@@ -126,7 +134,9 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
             const isScheduled = !!body.scheduled_at;
 
             const payload = {
-                recipient_ids: body.recipient_ids.map((id) => new ObjectId(id) as any),
+                recipient_ids: isBroadcast
+                    ? []
+                    : body.recipient_ids.map((id) => new ObjectId(id) as any),
                 recipient_model: body.recipient_model,
                 type: body.type,
                 title: body.title,
@@ -152,7 +162,7 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
         },
         {
             body: t.Object({
-                recipient_ids: t.Array(t.String({ minLength: 1 }), { minItems: 1 }),
+                recipient_ids: t.Array(t.String({ minLength: 1 })),
                 recipient_model: t.Enum(INotificationRecipientModelEnum),
                 type: t.Enum(INotificationTypeEnum),
                 title: t.String({ minLength: 1, maxLength: 255 }),
