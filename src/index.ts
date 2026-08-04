@@ -1,9 +1,11 @@
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
+import { swagger } from '@elysiajs/swagger';
 import { rateLimit } from 'elysia-rate-limit';
 import { MongoDB } from './databases/database';
 import RedisClient from './databases/redis';
 import { loadMongoConfigFromEnv } from './databases/config';
+import { swaggerConfig } from './constants/swagger.config';
 import { dashboardController } from './controller/dash/index';
 import { mobileController } from './controller/mobile/index';
 import { ActivityLogPlugin } from './middleware/activity-log.middleware';
@@ -25,6 +27,7 @@ async function bootstrap() {
     const app = new Elysia({
         prefix: '/api',
     })
+        .use(swagger(swaggerConfig))
         .use(cors({
             origin: process.env.ALLOWED_ORIGINS
                 ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())

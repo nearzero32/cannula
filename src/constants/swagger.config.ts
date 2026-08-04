@@ -1,13 +1,23 @@
 export const swaggerConfig = {
     documentation: {
         info: {
-            title: 'Qalam API V2',
-            version: '2.0.0',
+            title: 'Kanona API',
+            version: '1.0.0',
+            description: 'REST API لحجز المواعيد الطبية — مرضى، أطباء، عيادات، وإدارة',
         },
         tags: [
-            { name: 'Dash', description: 'لوحة التحكم للمدارس' },
-            { name: 'Dash: Admin', description: 'صلاحيات الإدارة العليا داخل اللوحة' },
-            { name: 'Mobile', description: 'تطبيق الطالب والمعلم' },
+            { name: 'Dash', description: 'لوحة التحكم' },
+            { name: 'Mobile', description: 'تطبيق الموبايل' },
         ],
+        components: {
+            securitySchemes: {
+                bearerAuth: {
+                    type: 'http' as const,
+                    scheme: 'bearer' as const,
+                    bearerFormat: 'JWT',
+                },
+            },
+        },
+        security: [{ bearerAuth: [] }],
     },
 };
