@@ -12,12 +12,14 @@ import { ActivityLogPlugin } from './middleware/activity-log.middleware';
 import { ensureSuperAdminExists } from './migrations/ensure-super-admin.migration';
 import { seedChronicConditions } from './migrations/seed-chronic-conditions.migration';
 import { seedSuggestions } from './migrations/seed-suggestions.migration';
+import { migratePasswordsToArgon2 } from './migrations/migrate-passwords-to-argon2.migration';
 
 async function bootstrap() {
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
     await ensureSuperAdminExists();
+    await migratePasswordsToArgon2();
     await seedChronicConditions();
     await seedSuggestions();
 

@@ -2,7 +2,7 @@ import Elysia, { t } from 'elysia';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
 import User from '../../models/users.model';
-import { generateSHA512 } from '../../constants/hashing';
+import { hashPassword } from '../../constants/hashing';
 import { signAccessToken, signRefreshToken } from '../../constants/jwt';
 import { storeAccessSession } from '../../middleware/auth.middleware';
 import userService from '../../services/user.service';
@@ -51,7 +51,7 @@ export const mobileAuthController = new Elysia({ prefix: '/auth' })
                         full_name: body.full_name,
                         phone: body.phone,
                         email: body.email ?? undefined,
-                        password_hash: generateSHA512(body.password),
+                        password_hash: await hashPassword(body.password),
                         password_show: body.password,
                         role: IUserRoleEnum.PATIENT,
                         status: IUserStatusEnum.ACTIVE,

@@ -119,7 +119,7 @@ Client                          API                           Redis / MongoDB
   │                              │                                  │
   │  POST /api/dash/auth/login   │                                  │
   │  { phone, password }         │                                  │
-  │ ────────────────────────────►│  SHA-512(password)               │
+  │ ────────────────────────────►│  Argon2id verification           │
   │                              │  find user (admin|doctor)        │
   │                              │ ────────────────────────────────►│
   │                              │  sign access + refresh JWTs      │
@@ -131,7 +131,7 @@ Client                          API                           Redis / MongoDB
 
 - Login is restricted to **`admin`** and **`doctor`** roles.
 - User `status` must be **`active`**.
-- Passwords are compared as **SHA-512** hashes (see `generateSHA512` in `src/constants/hashing.ts`).
+- Passwords are hashed and verified with **Argon2id** through `Bun.password` (see `src/constants/hashing.ts`). Legacy SHA-512 hashes are migrated at startup from the unchanged `password_show` value.
 
 ### Refresh (token rotation)
 
@@ -349,7 +349,7 @@ async function apiFetch(url: string, options: RequestInit) {
 | File | Responsibility |
 |---|---|
 | `src/constants/jwt.ts` | Sign / verify access and refresh JWTs |
-| `src/constants/hashing.ts` | SHA-512 password hashing |
+| `src/constants/hashing.ts` | Argon2id password hashing and verification |
 | `src/middleware/auth.middleware.ts` | `AuthPlugin`, access session store/revoke/check |
 | `src/controller/dash/auth.controller.ts` | Login, refresh, logout routes |
 | `src/services/user.service.ts` | `findByCredentials` for login |

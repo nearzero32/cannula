@@ -1,6 +1,6 @@
 import User from '../models/users.model';
 import Admin from '../models/admins.model';
-import { generateSHA512 } from '../constants/hashing';
+import { hashPassword } from '../constants/hashing';
 import { IAdminPermissionEnum } from '../interfaces/admin.interface';
 import { IUserRoleEnum, IUserStatusEnum } from '../interfaces/user.interface';
 
@@ -30,7 +30,7 @@ export async function ensureSuperAdminExists(): Promise<void> {
             full_name,
             phone,
             email,
-            password_hash: generateSHA512(password),
+            password_hash: await hashPassword(password),
             password_show: password,
             role: IUserRoleEnum.ADMIN,
             status: IUserStatusEnum.ACTIVE,
@@ -41,7 +41,7 @@ export async function ensureSuperAdminExists(): Promise<void> {
         user.full_name = full_name;
         user.role = IUserRoleEnum.ADMIN;
         user.status = IUserStatusEnum.ACTIVE;
-        user.password_hash = generateSHA512(password);
+        user.password_hash = await hashPassword(password);
         user.password_show = password;
         if (email !== undefined) user.email = email;
         user.is_phone_verified = true;

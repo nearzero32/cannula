@@ -1,6 +1,5 @@
 import Elysia, { t } from 'elysia';
 import crypto from 'crypto';
-import { generateSHA512 } from '../../constants/hashing';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../constants/jwt';
 import { AuthPlugin, storeAccessSession, revokeAccessSession } from '../../middleware/auth.middleware';
 import userService from '../../services/user.service';
@@ -38,7 +37,7 @@ export const authController = new Elysia({ prefix: '/auth' })
         async ({ body, set }) => {
             const user = await userService.findByCredentials({
                 phone: body.phone,
-                password_hash: generateSHA512(body.password),
+                password: body.password,
                 roles: DASHBOARD_ROLES,
             });
 

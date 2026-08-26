@@ -117,7 +117,7 @@ QI_UAT_PAYMENT_BASE_URL=, QI_PAYMENT_BASE_URL=
 
 ### Key Conventions
 
-- Passwords are hashed with **SHA-512** via Bun's `CryptoHasher`
+- Passwords are hashed with **Argon2id** via `Bun.password`; the startup migration re-hashes legacy records from their unchanged `password_show` value
 - Auth tokens are stored in Redis as their **SHA-256 hash** (not the raw token) for cache lookups
 - Swagger docs are auto-generated and served via `@elysiajs/swagger`
 - TypeScript target is ES2021; Bun handles transpilation natively (no build step needed for dev)

@@ -1,15 +1,67 @@
-# Elysia with Bun runtime
+# Kanona API
 
-## Getting Started
-To get started with this template, simply paste this command into your terminal:
-```bash
-bun create elysia ./elysia-example
-```
+Kanona is a medical appointment scheduling REST API for patients, doctors, clinics, and administrators. The repository is named `cannula` and runs on Bun with Elysia, MongoDB/Mongoose, and Redis.
+
+## Requirements
+
+- Bun 1.3 or newer
+- MongoDB
+- Redis
+
+Copy `.env.example` to `.env` and provide the required MongoDB, Redis, JWT, and bootstrap administrator settings.
 
 ## Development
-To start the development server run:
+
 ```bash
+bun install
 bun run dev
 ```
 
-Open http://localhost:3000/ with your browser to see the result.
+The API listens on `http://localhost:3001/api`. Swagger documentation is exposed by the Elysia Swagger plugin.
+
+To run without watch mode:
+
+```bash
+bun run start
+```
+
+To run the test suite:
+
+```bash
+bun test
+```
+
+## Architecture
+
+Requests pass through Elysia controllers, authentication middleware, services, and Mongoose models. Redis stores hashed access and refresh session tokens.
+
+- `src/index.ts` — application bootstrap and integrations
+- `src/controller/mobile` — patient/mobile routes under `/api/mobile`
+- `src/controller/dash/admin` — administration routes under `/api/dash/admin`
+- `src/controller/dash/doctor` — doctor routes under `/api/dash/doctor`
+- `src/services` — business and persistence operations
+- `src/models` — Mongoose schemas
+- `src/migrations` — startup data and password migrations
+- `src/docs` — API and domain documentation
+
+## Authentication and passwords
+
+Access tokens expire after 15 minutes and refresh tokens after seven days. Active sessions are stored in Redis using SHA-256 token fingerprints.
+
+Passwords are hashed with Argon2id through `Bun.password`. On startup, the password migration converts legacy SHA-512 hashes to Argon2id using each account's existing `password_show` value. The visible password value is intentionally retained and is not changed by this migration.
+
+The application ensures a super administrator exists at startup. Always set `SUPER_ADMIN_PHONE` and `SUPER_ADMIN_PASSWORD` in production instead of relying on development defaults.
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+The Compose stack starts the API, MongoDB, and Redis. The API is bound to localhost on port `3001` by default.
+
+## Project conventions
+
+- Controller response messages are written in Arabic.
+- Paginated responses use the `pagination` object documented in `CLAUDE.md`.
+- Domain records are generally deactivated through status updates rather than hard-deleted.

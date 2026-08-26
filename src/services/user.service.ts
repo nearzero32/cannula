@@ -3,6 +3,7 @@ import type { IUser } from '../interfaces/user.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import { verifyPassword } from '../constants/hashing';
 
 class UserService {
     private model = User;
@@ -71,17 +72,22 @@ class UserService {
         return await this.model.findById(id).exec();
     }
 
-    // passwordHash has select:false — querying by it still works; it's just excluded from output
     public async findByCredentials({
         phone,
-        password_hash,
+        password,
         roles,
     }: {
         phone: string;
-        password_hash: string;
+        password: string;
         roles: string[];
     }): Promise<UserDocument | null> {
-        return await this.model.findOne({ phone, password_hash, role: { $in: roles } }).exec();
+        const user = await this.model
+            .findOne({ phone, role: { $in: roles } })
+            .select('+password_hash')
+            .exec();
+
+        if (!user || !(await verifyPassword(password, user.password_hash))) return null;
+        return user;
     }
 
     public async findByPhone(phone: string): Promise<UserDocument | null> {
