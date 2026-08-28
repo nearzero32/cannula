@@ -74,6 +74,7 @@ Every protected route passes through `src/middleware/auth.middleware.ts`, which:
 | Interfaces | `src/interfaces/` | TypeScript types mirroring the models |
 | Databases | `src/databases/` | MongoDB connection pool + Redis client |
 | Constants | `src/constants/` | JWT config, hashing helpers, Swagger config |
+| Schemas | `src/schemas/` | Reusable Elysia request/response contracts and domain-specific Swagger schemas |
 
 Controllers are split by client type: `controller/dash/` (admin dashboard) and `controller/mobile/` (mobile app, currently empty).
 

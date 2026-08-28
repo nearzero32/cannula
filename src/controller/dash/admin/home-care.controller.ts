@@ -6,6 +6,24 @@ import homeCareCategoryService from '../../../services/home-care-category.servic
 import homeCareServiceService from '../../../services/home-care-service.service';
 import { HomeCareValidationError } from '../../../services/home-care.validation';
 import { IHomeCareStatusEnum } from '../../../interfaces/home-care.interface';
+import type { HomeCareCategoryDocument } from '../../../models/home-care-category.model';
+import type { HomeCareServiceDocument } from '../../../models/home-care-service.model';
+import {
+    BadRequestResponseSchema,
+    ConflictResponseSchema,
+    ForbiddenResponseSchema,
+    InternalServerErrorResponseSchema,
+    NotFoundResponseSchema,
+    RateLimitResponseSchema,
+    UnauthorizedResponseSchema,
+    ValidationErrorResponseSchema,
+} from '../../../schemas/api-response.schema';
+import {
+    HomeCareCategoryListResponseSchema,
+    HomeCareCategoryResponseSchema,
+    HomeCareServiceListResponseSchema,
+    HomeCareServiceResponseSchema,
+} from '../../../schemas/home-care-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -61,12 +79,61 @@ function pagination(page: number, limit: number, total: number) {
     return { page, limit, total, pages, hasNext: page < pages, hasPrev: page > 1 };
 }
 
+export function formatHomeCareCategoryForDashboard(category: HomeCareCategoryDocument) {
+    return {
+        _id: String(category._id),
+        name: category.name,
+        description: category.description ?? null,
+        icon: category.icon ?? null,
+        image: category.image ?? null,
+        status: category.status,
+        display_order: category.display_order,
+        created_by: category.created_by ? String(category.created_by) : null,
+        createdAt: category.createdAt.toISOString(),
+        updatedAt: category.updatedAt.toISOString(),
+    };
+}
+
+export function formatHomeCareServiceForDashboard(service: HomeCareServiceDocument) {
+    return {
+        _id: String(service._id),
+        category_id: String(service.category_id),
+        name: service.name,
+        short_description: service.short_description ?? null,
+        description: service.description ?? null,
+        image: service.image ?? null,
+        duration_min: service.duration_min ?? null,
+        duration_max: service.duration_max ?? null,
+        price: service.price,
+        status: service.status,
+        display_order: service.display_order,
+        created_by: service.created_by ? String(service.created_by) : null,
+        createdAt: service.createdAt.toISOString(),
+        updatedAt: service.updatedAt.toISOString(),
+    };
+}
+
+const protectedResponses = {
+    401: UnauthorizedResponseSchema,
+    403: ForbiddenResponseSchema,
+    429: RateLimitResponseSchema,
+    500: InternalServerErrorResponseSchema,
+};
+
 const categoriesController = new Elysia({ prefix: '/categories', detail: { tags: ['Dash'] } })
     .use(AuthPlugin())
-    .onError(({ error, set }) => {
+    .onError(({ code, error, set }) => {
         if (error instanceof HomeCareValidationError) {
             set.status = error.statusCode;
             return { error: true, message: error.message };
+        }
+        if (code === 'PARSE') {
+            set.status = 400;
+            return { error: true, message: 'صيغة البيانات المرسلة غير صحيحة' };
+        }
+        if (code === 'UNKNOWN' || code === 'INTERNAL_SERVER_ERROR') {
+            set.status = 500;
+            return { error: true, message: 'حدث خطأ في الخادم' };
         }
     })
     .get('/', async ({ query, phrase, set }) => {
@@ -82,13 +149,16 @@ const categoriesController = new Elysia({ prefix: '/categories', detail: { tags:
         return {
             error: false,
             message: 'تم جلب أنواع الرعاية المنزلية بنجاح',
-            data,
+            data: data.map(formatHomeCareCategoryForDashboard),
             pagination: pagination(page, limit, count),
         };
-    }, { query: t.Object({
-        page: t.Optional(t.String()), limit: t.Optional(t.String()),
-        status: t.Optional(t.Enum(IHomeCareStatusEnum)), search: t.Optional(t.String()),
-    }) })
+    }, {
+        query: t.Object({
+            page: t.Optional(t.String()), limit: t.Optional(t.String()),
+            status: t.Optional(t.Enum(IHomeCareStatusEnum)), search: t.Optional(t.String()),
+        }),
+        response: { 200: HomeCareCategoryListResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses },
+    })
     .get('/:id', async ({ params, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'read')) {
             set.status = 403;
@@ -103,8 +173,14 @@ const categoriesController = new Elysia({ prefix: '/categories', detail: { tags:
             set.status = 404;
             return { error: true, message: 'نوع الرعاية المنزلية غير موجود' };
         }
-        return { error: false, message: 'تم جلب نوع الرعاية المنزلية بنجاح', data: category };
-    }, { params: t.Object({ id: t.String() }) })
+        return { error: false, message: 'تم جلب نوع الرعاية المنزلية بنجاح', data: formatHomeCareCategoryForDashboard(category) };
+    }, {
+        params: t.Object({ id: t.String() }),
+        response: {
+            200: HomeCareCategoryResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+            ...protectedResponses,
+        },
+    })
     .post('/', async ({ body, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) {
             set.status = 403;
@@ -112,8 +188,14 @@ const categoriesController = new Elysia({ prefix: '/categories', detail: { tags:
         }
         const category = await homeCareCategoryService.create({ ...body, createdBy: phrase._id });
         set.status = 201;
-        return { error: false, message: 'تم إنشاء نوع الرعاية المنزلية بنجاح', data: category };
-    }, { body: categoryCreateSchema })
+        return { error: false, message: 'تم إنشاء نوع الرعاية المنزلية بنجاح', data: formatHomeCareCategoryForDashboard(category) };
+    }, {
+        body: categoryCreateSchema,
+        response: {
+            201: HomeCareCategoryResponseSchema, 400: BadRequestResponseSchema, 409: ConflictResponseSchema,
+            422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    })
     .patch('/:id', async ({ params, body, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) {
             set.status = 403;
@@ -124,8 +206,14 @@ const categoriesController = new Elysia({ prefix: '/categories', detail: { tags:
             return { error: true, message: 'معرف نوع الرعاية المنزلية غير صالح' };
         }
         const category = await homeCareCategoryService.update(params.id, body);
-        return { error: false, message: 'تم تحديث نوع الرعاية المنزلية بنجاح', data: category };
-    }, { params: t.Object({ id: t.String() }), body: categoryUpdateSchema })
+        return { error: false, message: 'تم تحديث نوع الرعاية المنزلية بنجاح', data: formatHomeCareCategoryForDashboard(category) };
+    }, {
+        params: t.Object({ id: t.String() }), body: categoryUpdateSchema,
+        response: {
+            200: HomeCareCategoryResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+            409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    })
     .patch('/:id/status', async ({ params, body, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) {
             set.status = 403;
@@ -136,15 +224,29 @@ const categoriesController = new Elysia({ prefix: '/categories', detail: { tags:
             return { error: true, message: 'معرف نوع الرعاية المنزلية غير صالح' };
         }
         const category = await homeCareCategoryService.updateStatus(params.id, body.status);
-        return { error: false, message: 'تم تحديث حالة نوع الرعاية المنزلية بنجاح', data: category };
-    }, { params: t.Object({ id: t.String() }), body: t.Object({ status: t.Enum(IHomeCareStatusEnum) }) });
+        return { error: false, message: 'تم تحديث حالة نوع الرعاية المنزلية بنجاح', data: formatHomeCareCategoryForDashboard(category) };
+    }, {
+        params: t.Object({ id: t.String() }), body: t.Object({ status: t.Enum(IHomeCareStatusEnum) }),
+        response: {
+            200: HomeCareCategoryResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+            409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    });
 
 const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['Dash'] } })
     .use(AuthPlugin())
-    .onError(({ error, set }) => {
+    .onError(({ code, error, set }) => {
         if (error instanceof HomeCareValidationError) {
             set.status = error.statusCode;
             return { error: true, message: error.message };
+        }
+        if (code === 'PARSE') {
+            set.status = 400;
+            return { error: true, message: 'صيغة البيانات المرسلة غير صحيحة' };
+        }
+        if (code === 'UNKNOWN' || code === 'INTERNAL_SERVER_ERROR') {
+            set.status = 500;
+            return { error: true, message: 'حدث خطأ في الخادم' };
         }
     })
     .get('/', async ({ query, phrase, set }) => {
@@ -164,13 +266,19 @@ const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['D
         return {
             error: false,
             message: 'تم جلب خدمات الرعاية المنزلية بنجاح',
-            data,
+            data: data.map(formatHomeCareServiceForDashboard),
             pagination: pagination(page, limit, count),
         };
-    }, { query: t.Object({
-        page: t.Optional(t.String()), limit: t.Optional(t.String()), categoryId: t.Optional(t.String()),
-        status: t.Optional(t.Enum(IHomeCareStatusEnum)), search: t.Optional(t.String()),
-    }) })
+    }, {
+        query: t.Object({
+            page: t.Optional(t.String()), limit: t.Optional(t.String()), categoryId: t.Optional(t.String()),
+            status: t.Optional(t.Enum(IHomeCareStatusEnum)), search: t.Optional(t.String()),
+        }),
+        response: {
+            200: HomeCareServiceListResponseSchema, 400: BadRequestResponseSchema,
+            422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    })
     .get('/:id', async ({ params, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'read')) {
             set.status = 403;
@@ -185,8 +293,14 @@ const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['D
             set.status = 404;
             return { error: true, message: 'الخدمة غير موجودة' };
         }
-        return { error: false, message: 'تم جلب الخدمة بنجاح', data: service };
-    }, { params: t.Object({ id: t.String() }) })
+        return { error: false, message: 'تم جلب الخدمة بنجاح', data: formatHomeCareServiceForDashboard(service) };
+    }, {
+        params: t.Object({ id: t.String() }),
+        response: {
+            200: HomeCareServiceResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+            ...protectedResponses,
+        },
+    })
     .post('/', async ({ body, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) {
             set.status = 403;
@@ -198,8 +312,14 @@ const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['D
         }
         const service = await homeCareServiceService.create({ ...body, createdBy: phrase._id });
         set.status = 201;
-        return { error: false, message: 'تم إنشاء خدمة الرعاية المنزلية بنجاح', data: service };
-    }, { body: serviceCreateSchema })
+        return { error: false, message: 'تم إنشاء خدمة الرعاية المنزلية بنجاح', data: formatHomeCareServiceForDashboard(service) };
+    }, {
+        body: serviceCreateSchema,
+        response: {
+            201: HomeCareServiceResponseSchema, 400: BadRequestResponseSchema,
+            422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    })
     .patch('/:id', async ({ params, body, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) {
             set.status = 403;
@@ -210,8 +330,14 @@ const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['D
             return { error: true, message: 'المعرف غير صالح' };
         }
         const service = await homeCareServiceService.update(params.id, body);
-        return { error: false, message: 'تم تحديث الخدمة بنجاح', data: service };
-    }, { params: t.Object({ id: t.String() }), body: serviceUpdateSchema })
+        return { error: false, message: 'تم تحديث الخدمة بنجاح', data: formatHomeCareServiceForDashboard(service) };
+    }, {
+        params: t.Object({ id: t.String() }), body: serviceUpdateSchema,
+        response: {
+            200: HomeCareServiceResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+            422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    })
     .patch('/:id/status', async ({ params, body, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) {
             set.status = 403;
@@ -222,8 +348,14 @@ const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['D
             return { error: true, message: 'معرف الخدمة غير صالح' };
         }
         const service = await homeCareServiceService.updateStatus(params.id, body.status);
-        return { error: false, message: 'تم تحديث حالة الخدمة بنجاح', data: service };
-    }, { params: t.Object({ id: t.String() }), body: t.Object({ status: t.Enum(IHomeCareStatusEnum) }) });
+        return { error: false, message: 'تم تحديث حالة الخدمة بنجاح', data: formatHomeCareServiceForDashboard(service) };
+    }, {
+        params: t.Object({ id: t.String() }), body: t.Object({ status: t.Enum(IHomeCareStatusEnum) }),
+        response: {
+            200: HomeCareServiceResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+            422: ValidationErrorResponseSchema, ...protectedResponses,
+        },
+    });
 
 export const homeCareAdminController = new Elysia({ prefix: '/home-care' })
     .use(categoriesController)

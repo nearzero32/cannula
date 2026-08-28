@@ -14,6 +14,7 @@ import { seedChronicConditions } from './migrations/seed-chronic-conditions.migr
 import { seedSuggestions } from './migrations/seed-suggestions.migration';
 import { migratePasswordsToArgon2 } from './migrations/migrate-passwords-to-argon2.migration';
 import { seedHomeCareCategories } from './migrations/seed-home-care-categories.migration';
+import { RATE_LIMIT_RESPONSE } from './schemas/api-response.schema';
 
 async function bootstrap() {
     // Connect MongoDB
@@ -44,7 +45,7 @@ async function bootstrap() {
             duration: 60_000,
             max: 100,
             errorResponse: new Response(
-                JSON.stringify({ error: true, message: 'لقد تجاوزت الحد المسموح به من الطلبات، يرجى المحاولة لاحقاً' }),
+                JSON.stringify(RATE_LIMIT_RESPONSE),
                 { status: 429, headers: { 'Content-Type': 'application/json' } }
             ),
         }))
