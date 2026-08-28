@@ -85,6 +85,7 @@ Controllers are split by client type: `controller/dash/` (admin dashboard) and `
 - **Appointment** — links Doctor + Patient + Clinic; has a status enum workflow (`pending → active → completed`)
 - **Specialty** — medical specialties referenced by Doctors
 - **Admin** — administrative accounts with role-based access
+- **HomeCareCategory / HomeCareService** — dashboard-managed Home Care catalog with fixed integer IQD prices. Active normal admins have dashboard read access; only the existing `Admin.super_admin` may mutate catalog content or prices. Mobile endpoints expose only active services whose category is also active.
 
 ### Environment Variables
 

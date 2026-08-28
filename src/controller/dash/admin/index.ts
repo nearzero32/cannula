@@ -10,6 +10,7 @@ import { appointmentsController } from './appointments.controller';
 import { notificationsController } from './notifications.controller';
 import { doctorsController } from './doctors.controller';
 import { suggestionsController } from './suggestions.controller';
+import { homeCareAdminController } from './home-care.controller';
 
 export const adminController = new Elysia({ prefix: '/admin' })
     .use(clinicsController)
@@ -22,4 +23,5 @@ export const adminController = new Elysia({ prefix: '/admin' })
     .use(patientsController)
     .use(appointmentsController)
     .use(notificationsController)
-    .use(suggestionsController);
+    .use(suggestionsController)
+    .use(homeCareAdminController);

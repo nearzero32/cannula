@@ -9,6 +9,7 @@ import { mobileProfileController } from './profile.controller';
 import { mobileSuggestionsController } from './suggestions.controller';
 import { mobileDoctorFavoritesController } from './doctor-favorites.controller';
 import { sharedController } from '../shared/index';
+import { mobileHomeCareController } from './home-care.controller';
 
 /** Public mobile routes — no authentication required */
 const mobilePublicController = new Elysia()
@@ -17,7 +18,8 @@ const mobilePublicController = new Elysia()
     .use(mobileAdsController)
     .use(mobileChronicConditionsController)
     .use(mobileDoctorsController)
-    .use(mobileSpecialtiesController);
+    .use(mobileSpecialtiesController)
+    .use(mobileHomeCareController);
 
 /** Protected mobile routes — each controller applies AuthPlugin() */
 const mobileProtectedController = new Elysia()

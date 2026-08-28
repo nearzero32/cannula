@@ -13,6 +13,7 @@ import { ensureSuperAdminExists } from './migrations/ensure-super-admin.migratio
 import { seedChronicConditions } from './migrations/seed-chronic-conditions.migration';
 import { seedSuggestions } from './migrations/seed-suggestions.migration';
 import { migratePasswordsToArgon2 } from './migrations/migrate-passwords-to-argon2.migration';
+import { seedHomeCareCategories } from './migrations/seed-home-care-categories.migration';
 
 async function bootstrap() {
     // Connect MongoDB
@@ -22,6 +23,7 @@ async function bootstrap() {
     await migratePasswordsToArgon2();
     await seedChronicConditions();
     await seedSuggestions();
+    await seedHomeCareCategories();
 
     // Connect Redis
     await RedisClient.getInstance().connect();
