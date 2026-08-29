@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import clinicService from '../../../services/clinic.service';
 import { IClinicStatusEnum } from '../../../interfaces/clinic.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -58,6 +59,7 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
                 status: t.Optional(t.Enum(IClinicStatusEnum)),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -77,7 +79,10 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
 
             return { error: false, message: 'تم جلب العيادة بنجاح', data: clinic };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .post(
@@ -102,7 +107,10 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
             set.status = 201;
             return { error: false, message: 'تم إنشاء العيادة بنجاح', data: clinic };
         },
-        { body: clinicBodySchema }
+        {
+            body: clinicBodySchema,
+            response: { 201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .put(
@@ -138,6 +146,7 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Partial(clinicBodySchema),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -167,5 +176,6 @@ export const clinicsController = new Elysia({ prefix: '/clinics' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({ status: t.Enum(IClinicStatusEnum) }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     );

@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import { UploadFolderEnum } from '../../constants/r2.config';
 import storageService from '../../services/storage.service';
+import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, ServiceUnavailableResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const presignBodySchema = t.Object({
     folder: t.Enum(UploadFolderEnum),
@@ -42,5 +43,11 @@ export const uploadController = new Elysia({ prefix: '/upload' })
                 data: result,
             };
         },
-        { body: presignBodySchema }
+        {
+            body: presignBodySchema,
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema,
+                503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     );

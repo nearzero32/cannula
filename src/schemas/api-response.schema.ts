@@ -17,6 +17,7 @@ export function errorResponse(description: string, message: string) {
     }, {
         description,
         examples: [{ error: true, message }],
+        additionalProperties: true,
     });
 }
 
@@ -33,6 +34,11 @@ export const SuccessResponseWithoutDataSchema = t.Object({
     message: t.String(),
 }, { description: 'تمت العملية بنجاح' });
 
+export const SuccessDataWithoutMessageSchema = t.Object({
+    error: t.Literal(false),
+    data: t.Unknown(),
+}, { description: 'تمت العملية بنجاح' });
+
 export function paginatedResponse<TItem extends TSchema>(itemSchema: TItem, description = 'تم جلب البيانات بنجاح') {
     return t.Object({
         error: t.Literal(false),
@@ -42,12 +48,19 @@ export function paginatedResponse<TItem extends TSchema>(itemSchema: TItem, desc
     }, { description });
 }
 
+/** Strict API envelope with intentionally flexible legacy data until a stable DTO is available. */
+export const GenericDataResponseSchema = successResponse(t.Unknown());
+export const GenericArrayResponseSchema = successResponse(t.Array(t.Unknown()));
+export const GenericPaginatedResponseSchema = paginatedResponse(t.Unknown());
+
 export const BadRequestResponseSchema = errorResponse('طلب غير صالح', 'البيانات المدخلة غير صحيحة');
 export const UnauthorizedResponseSchema = errorResponse('المصادقة مطلوبة', 'غير مصرح لك بالدخول');
 export const ForbiddenResponseSchema = errorResponse('لا توجد صلاحية لتنفيذ الإجراء', 'ليس لديك صلاحية لتنفيذ هذا الإجراء');
 export const NotFoundResponseSchema = errorResponse('السجل المطلوب غير موجود', 'السجل غير موجود');
 export const ConflictResponseSchema = errorResponse('تعارض مع سجل موجود', 'هذا السجل موجود مسبقاً');
+export const UnprocessableEntityResponseSchema = errorResponse('تعذر تنفيذ الطلب وفق حالة السجل الحالية', 'لا يمكن تنفيذ هذا الإجراء في الحالة الحالية');
 export const InternalServerErrorResponseSchema = errorResponse('خطأ داخلي آمن', 'حدث خطأ في الخادم');
+export const ServiceUnavailableResponseSchema = errorResponse('الخدمة غير متاحة حالياً', 'الخدمة غير متاحة حالياً');
 
 export const ValidationErrorResponseSchema = t.Object({
     type: t.Literal('validation'),
@@ -72,6 +85,22 @@ export const ValidationErrorResponseSchema = t.Object({
     }],
 });
 
+export const ValidationOrBusinessRuleResponseSchema = t.Union([
+    ValidationErrorResponseSchema,
+    UnprocessableEntityResponseSchema,
+], { description: 'خطأ تحقق أو تعارض مع حالة السجل الحالية' });
+
 export const RATE_LIMIT_MESSAGE = 'لقد تجاوزت الحد المسموح به من الطلبات، يرجى المحاولة لاحقاً';
 export const RATE_LIMIT_RESPONSE = { error: true, message: RATE_LIMIT_MESSAGE } as const;
 export const RateLimitResponseSchema = errorResponse('تم تجاوز حد الطلبات', RATE_LIMIT_MESSAGE);
+
+export const PublicApiErrorResponses = {
+    429: RateLimitResponseSchema,
+    500: InternalServerErrorResponseSchema,
+};
+
+export const ProtectedApiErrorResponses = {
+    401: UnauthorizedResponseSchema,
+    429: RateLimitResponseSchema,
+    500: InternalServerErrorResponseSchema,
+};

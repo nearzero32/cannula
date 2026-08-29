@@ -3,6 +3,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import adsService from '../../../services/ads.service';
 import { IAdsStatusEnum } from '../../../interfaces/ads.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -90,6 +91,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
                 is_ended: t.Optional(t.Union([t.Literal('true'), t.Literal('false')])),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -109,7 +111,10 @@ export const adsController = new Elysia({ prefix: '/ads' })
 
             return { error: false, message: 'تم جلب الإعلان بنجاح', data: withIsEnded(ad) };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .post(
@@ -145,7 +150,10 @@ export const adsController = new Elysia({ prefix: '/ads' })
             set.status = 201;
             return { error: false, message: 'تم إنشاء الإعلان بنجاح', data: withIsEnded(ad) };
         },
-        { body: adsBodySchema }
+        {
+            body: adsBodySchema,
+            response: { 201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .put(
@@ -196,6 +204,7 @@ export const adsController = new Elysia({ prefix: '/ads' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Partial(adsBodySchema),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -225,5 +234,6 @@ export const adsController = new Elysia({ prefix: '/ads' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({ status: t.Enum(IAdsStatusEnum) }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     );

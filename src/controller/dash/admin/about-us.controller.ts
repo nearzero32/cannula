@@ -1,6 +1,7 @@
 import Elysia, { t } from 'elysia';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import aboutUsService from '../../../services/about-us.service';
+import { BadRequestResponseSchema, GenericDataResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const aboutUsBodySchema = t.Object({
     name: t.Optional(t.String({ minLength: 1, maxLength: 150 })),
@@ -25,7 +26,7 @@ export const aboutUsController = new Elysia({ prefix: '/about-us' })
         }
 
         return { error: false, message: 'تم جلب بيانات من نحن بنجاح', data };
-    })
+    }, { response: { 200: GenericDataResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } })
 
     .patch(
         '/',
@@ -39,5 +40,8 @@ export const aboutUsController = new Elysia({ prefix: '/about-us' })
             });
             return { error: false, message: 'تم تحديث بيانات من نحن بنجاح', data };
         },
-        { body: aboutUsBodySchema }
+        {
+            body: aboutUsBodySchema,
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
     );

@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import suggestionService from '../../../services/suggestion.service';
 import { IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -116,6 +117,7 @@ export const suggestionsController = new Elysia({ prefix: '/suggestions' })
                 search: t.Optional(t.String()),
                 is_deleted: t.Optional(t.Union([t.Literal('true'), t.Literal('false')])),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -148,7 +150,10 @@ export const suggestionsController = new Elysia({ prefix: '/suggestions' })
 
             return { error: false, message: 'تم حذف الاقتراح بنجاح', data: updated };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .put(
@@ -180,5 +185,8 @@ export const suggestionsController = new Elysia({ prefix: '/suggestions' })
 
             return { error: false, message: 'تم استعادة الاقتراح بنجاح', data: updated };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     );

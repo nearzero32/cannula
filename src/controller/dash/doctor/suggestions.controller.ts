@@ -4,6 +4,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import suggestionService from '../../../services/suggestion.service';
 import { IUserRoleEnum } from '../../../interfaces/user.interface';
 import { IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
+import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -44,6 +45,7 @@ export const doctorSuggestionsController = new Elysia({ prefix: '/suggestions' }
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 403: ForbiddenResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -72,5 +74,11 @@ export const doctorSuggestionsController = new Elysia({ prefix: '/suggestions' }
             set.status = 201;
             return { error: false, message: 'تم إرسال الاقتراح بنجاح', data: item };
         },
-        { body: createSuggestionBodySchema }
+        {
+            body: createSuggestionBodySchema,
+            response: {
+                201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     );

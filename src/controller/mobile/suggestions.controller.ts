@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import suggestionService from '../../services/suggestion.service';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -45,6 +46,7 @@ export const mobileSuggestionsController = new Elysia({ prefix: '/suggestions' }
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -68,5 +70,11 @@ export const mobileSuggestionsController = new Elysia({ prefix: '/suggestions' }
             set.status = 201;
             return { error: false, message: 'تم إرسال الاقتراح بنجاح', data: item };
         },
-        { body: createSuggestionBodySchema }
+        {
+            body: createSuggestionBodySchema,
+            response: {
+                201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema,
+                ...ProtectedApiErrorResponses,
+            },
+        }
     );

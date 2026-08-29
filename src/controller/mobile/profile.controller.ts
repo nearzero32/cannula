@@ -10,6 +10,7 @@ import {
 } from '../../interfaces/patient.interface';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
+import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, InternalServerErrorResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -67,6 +68,11 @@ export const mobileProfileController = new Elysia({ prefix: '/profile' })
             message: 'تم جلب الملف الشخصي بنجاح',
             data: formatPatientResponse(patient),
         };
+    }, {
+        response: {
+            200: GenericDataResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema,
+            ...ProtectedApiErrorResponses,
+        },
     })
 
     .patch(
@@ -133,5 +139,12 @@ export const mobileProfileController = new Elysia({ prefix: '/profile' })
                 data: formatPatientResponse(updated),
             };
         },
-        { body: completeProfileBodySchema }
+        {
+            body: completeProfileBodySchema,
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema,
+                ...ProtectedApiErrorResponses, 500: InternalServerErrorResponseSchema,
+            },
+        }
     );

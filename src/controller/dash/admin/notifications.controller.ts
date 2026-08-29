@@ -7,6 +7,7 @@ import {
     INotificationStatusEnum,
     INotificationRecipientModelEnum,
 } from '../../../interfaces/notification.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -85,6 +86,7 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
                 dateTo: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -105,7 +107,10 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
 
             return { error: false, message: 'تم جلب الإشعار بنجاح', data: notification };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     // Create / schedule a notification manually
@@ -171,6 +176,7 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
                 appointment_id: t.Optional(t.Nullable(t.String())),
                 scheduled_at: t.Optional(t.Nullable(t.String())),
             }),
+            response: { 201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -201,5 +207,11 @@ export const notificationsController = new Elysia({ prefix: '/notifications' })
             const updated = await notificationService.cancel(params.id);
             return { error: false, message: 'تم إلغاء الإشعار بنجاح', data: updated };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+                422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     );

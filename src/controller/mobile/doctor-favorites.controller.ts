@@ -7,6 +7,7 @@ import doctorService from '../../services/doctor.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IDoctorStatusEnum } from '../../interfaces/doctor.interface';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
+import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -94,6 +95,10 @@ export const mobileDoctorFavoritesController = new Elysia({ prefix: '/doctor-fav
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
             }),
+            response: {
+                200: GenericPaginatedResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema,
+                ...ProtectedApiErrorResponses,
+            },
         }
     )
 
@@ -142,7 +147,14 @@ export const mobileDoctorFavoritesController = new Elysia({ prefix: '/doctor-fav
             set.status = 201;
             return { error: false, message: 'تمت إضافة الطبيب إلى المفضلة بنجاح', data: item };
         },
-        { body: createFavoriteBodySchema }
+        {
+            body: createFavoriteBodySchema,
+            response: {
+                201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema,
+                ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     .delete(
@@ -177,5 +189,11 @@ export const mobileDoctorFavoritesController = new Elysia({ prefix: '/doctor-fav
 
             return { error: false, message: 'تمت إزالة الطبيب من المفضلة بنجاح', data: removed };
         },
-        { params: t.Object({ doctor_id: t.String() }) }
+        {
+            params: t.Object({ doctor_id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     );

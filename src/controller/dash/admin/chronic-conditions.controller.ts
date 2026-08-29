@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import chronicConditionService from '../../../services/chronic-condition.service';
 import { IChronicConditionStatusEnum } from '../../../interfaces/chronic-condition.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -48,6 +49,7 @@ export const chronicConditionsController = new Elysia({ prefix: '/chronic-condit
                 status: t.Optional(t.Enum(IChronicConditionStatusEnum)),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -67,7 +69,10 @@ export const chronicConditionsController = new Elysia({ prefix: '/chronic-condit
 
             return { error: false, message: 'تم جلب المرض المزمن بنجاح', data: item };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .post(
@@ -92,7 +97,10 @@ export const chronicConditionsController = new Elysia({ prefix: '/chronic-condit
             set.status = 201;
             return { error: false, message: 'تم إنشاء المرض المزمن بنجاح', data: item };
         },
-        { body: chronicConditionBodySchema }
+        {
+            body: chronicConditionBodySchema,
+            response: { 201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .put(
@@ -126,6 +134,7 @@ export const chronicConditionsController = new Elysia({ prefix: '/chronic-condit
         {
             params: t.Object({ id: t.String() }),
             body: t.Partial(chronicConditionBodySchema),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -156,5 +165,6 @@ export const chronicConditionsController = new Elysia({ prefix: '/chronic-condit
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({ status: t.Enum(IChronicConditionStatusEnum) }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     );

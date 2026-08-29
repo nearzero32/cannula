@@ -8,6 +8,7 @@ import {
     IAppointmentPaymentStatusEnum,
     IAppointmentCancelledByModelEnum,
 } from '../../../interfaces/appointment.interface';
+import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema, ValidationOrBusinessRuleResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -96,6 +97,10 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
                 dateTo: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
+            response: {
+                200: GenericPaginatedResponseSchema, 404: NotFoundResponseSchema,
+                422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
         }
     )
 
@@ -127,7 +132,13 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
 
             return { error: false, message: 'تم جلب الموعد بنجاح', data: appointment };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     // Cancel appointment
@@ -182,6 +193,10 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
             body: t.Object({
                 cancel_reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
             }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: ValidationOrBusinessRuleResponseSchema, ...ProtectedApiErrorResponses,
+            },
         }
     )
 
@@ -226,7 +241,13 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
             );
             return { error: false, message: 'تم تسجيل وصول المريض بنجاح', data: updated };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     // Complete appointment
@@ -271,7 +292,13 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
             );
             return { error: false, message: 'تم إنهاء الموعد بنجاح', data: updated };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     // Mark as no-show
@@ -315,7 +342,13 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
             );
             return { error: false, message: 'تم تسجيل غياب المريض بنجاح', data: updated };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     // Update internal notes
@@ -356,5 +389,9 @@ export const doctorAppointmentsController = new Elysia({ prefix: '/appointments'
             body: t.Object({
                 notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
             }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
         }
     );

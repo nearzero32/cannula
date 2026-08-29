@@ -3,6 +3,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import patientService from '../../../services/patient.service';
 import { IPatientStatusEnum, IPatientGenderEnum, IPatientBloodGroupEnum } from '../../../interfaces/patient.interface';
+import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -53,6 +54,7 @@ export const patientsController = new Elysia({ prefix: '/patients' })
                 status: t.Optional(t.Enum(IPatientStatusEnum)),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -72,7 +74,10 @@ export const patientsController = new Elysia({ prefix: '/patients' })
 
             return { error: false, message: 'تم جلب المريض بنجاح', data: patient };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .post(
@@ -109,7 +114,10 @@ export const patientsController = new Elysia({ prefix: '/patients' })
             set.status = 201;
             return { error: false, message: 'تم إنشاء المريض بنجاح', data: patient };
         },
-        { body: patientBodySchema }
+        {
+            body: patientBodySchema,
+            response: { 201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .patch(
@@ -138,5 +146,6 @@ export const patientsController = new Elysia({ prefix: '/patients' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({ status: t.Enum(IPatientStatusEnum) }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     );

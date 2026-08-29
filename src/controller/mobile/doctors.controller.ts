@@ -6,6 +6,7 @@ import {
     IDoctorStatusEnum,
     type IDoctor,
 } from '../../interfaces/doctor.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -94,6 +95,7 @@ export const mobileDoctorsController = new Elysia({ prefix: '/doctors' })
                 is_featured: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
         }
     )
 
@@ -117,5 +119,8 @@ export const mobileDoctorsController = new Elysia({ prefix: '/doctors' })
                 data: formatDoctorForMobile(doctor, true),
             };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses },
+        }
     );

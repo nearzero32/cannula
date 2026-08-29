@@ -12,6 +12,7 @@ import { IUserRoleEnum, IUserStatusEnum } from '../../interfaces/user.interface'
 import { IPatientStatusEnum } from '../../interfaces/patient.interface';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import RedisClient from '../../databases/redis';
+import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, InternalServerErrorResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const ACCESS_TTL = 60 * 15;
 const REFRESH_TTL = 60 * 60 * 24 * 7;
@@ -136,5 +137,15 @@ export const mobileAuthController = new Elysia({ prefix: '/auth' })
                 return { error: true, message: 'فشل إنشاء الحساب، يرجى المحاولة لاحقاً' };
             }
         },
-        { body: registerBodySchema }
+        {
+            body: registerBodySchema,
+            response: {
+                201: GenericDataResponseSchema,
+                400: BadRequestResponseSchema,
+                409: ConflictResponseSchema,
+                422: ValidationErrorResponseSchema,
+                ...PublicApiErrorResponses,
+                500: InternalServerErrorResponseSchema,
+            },
+        }
     );

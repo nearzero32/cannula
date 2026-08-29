@@ -3,6 +3,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import secretaryService from '../../../services/secretary.service';
 import { ISecretaryPermissionEnum, ISecretaryStatusEnum } from '../../../interfaces/secretary.interface';
+import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -51,6 +52,7 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
                 status: t.Optional(t.Enum(ISecretaryStatusEnum)),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -76,7 +78,13 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
 
             return { error: false, message: 'تم جلب السكرتير بنجاح', data: secretary };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     .post(
@@ -117,7 +125,13 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
             set.status = 201;
             return { error: false, message: 'تم إنشاء السكرتير بنجاح', data: secretary };
         },
-        { body: secretaryBodySchema }
+        {
+            body: secretaryBodySchema,
+            response: {
+                201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 409: ConflictResponseSchema,
+                422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     )
 
     .patch(
@@ -161,6 +175,10 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Partial(secretaryBodySchema),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
         }
     )
 
@@ -196,5 +214,9 @@ export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({ status: t.Enum(ISecretaryStatusEnum) }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
+                404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
         }
     );

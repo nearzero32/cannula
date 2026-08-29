@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
 import specialtyService from '../../services/specialty.service';
 import { ISpecialtyStatusEnum, type ISpecialty } from '../../interfaces/specialty.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -50,6 +51,7 @@ export const mobileSpecialtiesController = new Elysia({ prefix: '/specialties' }
                 limit: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, ...PublicApiErrorResponses },
         }
     )
 
@@ -73,5 +75,8 @@ export const mobileSpecialtiesController = new Elysia({ prefix: '/specialties' }
                 data: formatSpecialtyForMobile(specialty),
             };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses },
+        }
     );

@@ -3,6 +3,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import specialtyService from '../../../services/specialty.service';
 import { ISpecialtyStatusEnum } from '../../../interfaces/specialty.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -50,6 +51,7 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
                 status: t.Optional(t.Enum(ISpecialtyStatusEnum)),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -69,7 +71,10 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
 
             return { error: false, message: 'تم جلب التخصص بنجاح', data: specialty };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .post(
@@ -93,7 +98,10 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
             set.status = 201;
             return { error: false, message: 'تم إنشاء التخصص بنجاح', data: specialty };
         },
-        { body: specialtyBodySchema }
+        {
+            body: specialtyBodySchema,
+            response: { 201: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 
     .put(
@@ -128,6 +136,7 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Partial(specialtyBodySchema),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -157,5 +166,6 @@ export const specialtiesController = new Elysia({ prefix: '/specialties' })
         {
             params: t.Object({ id: t.String() }),
             body: t.Object({ status: t.Enum(ISpecialtyStatusEnum) }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     );

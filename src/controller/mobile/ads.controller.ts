@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
 import adsService from '../../services/ads.service';
 import { IAdsStatusEnum } from '../../interfaces/ads.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -43,6 +44,7 @@ export const mobileAdsController = new Elysia({ prefix: '/ads' })
                 clinic_id: t.Optional(t.String()),
                 doctor_id: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, ...PublicApiErrorResponses },
         }
     )
 
@@ -62,5 +64,8 @@ export const mobileAdsController = new Elysia({ prefix: '/ads' })
 
             return { error: false, message: 'تم جلب الإعلان بنجاح', data: ad };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses },
+        }
     );

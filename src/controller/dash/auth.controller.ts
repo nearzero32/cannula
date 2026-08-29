@@ -7,6 +7,7 @@ import ActivityLogService from '../../services/activity-log.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import RedisClient from '../../databases/redis';
+import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, PublicApiErrorResponses, SuccessDataWithoutMessageSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR];
 const ACCESS_TTL = 60 * 15;       // 15 minutes
@@ -96,6 +97,10 @@ export const authController = new Elysia({ prefix: '/auth' })
                 phone: t.String({ minLength: 1 }),
                 password: t.String({ minLength: 1 }),
             }),
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 401: UnauthorizedResponseSchema,
+                422: ValidationErrorResponseSchema, ...PublicApiErrorResponses,
+            },
         }
     )
 
@@ -140,6 +145,10 @@ export const authController = new Elysia({ prefix: '/auth' })
             body: t.Object({
                 refreshToken: t.String({ minLength: 1 }),
             }),
+            response: {
+                200: SuccessDataWithoutMessageSchema, 400: BadRequestResponseSchema, 401: UnauthorizedResponseSchema,
+                422: ValidationErrorResponseSchema, ...PublicApiErrorResponses,
+            },
         }
     )
 
@@ -165,5 +174,5 @@ export const authController = new Elysia({ prefix: '/auth' })
             } catch {}
 
             return { error: false, message: 'تم تسجيل الخروج بنجاح' };
-        })
+        }, { response: { 200: SuccessResponseWithoutDataSchema, ...ProtectedApiErrorResponses } })
     );

@@ -1,5 +1,6 @@
 import Elysia from 'elysia';
 import aboutUsService from '../../services/about-us.service';
+import { GenericDataResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 
 export const mobileAboutUsController = new Elysia({ prefix: '/about-us' })
 
@@ -12,4 +13,4 @@ export const mobileAboutUsController = new Elysia({ prefix: '/about-us' })
         }
 
         return { error: false, message: 'تم جلب بيانات من نحن بنجاح', data };
-    });
+    }, { response: { 200: GenericDataResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses } });

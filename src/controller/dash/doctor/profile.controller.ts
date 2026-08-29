@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import doctorService from '../../../services/doctor.service';
 import { IDoctorGenderEnum } from '../../../interfaces/doctor.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const profileBodySchema = t.Object({
     display_name: t.Optional(t.String({ minLength: 1, maxLength: 120 })),
@@ -45,7 +46,7 @@ export const doctorProfileController = new Elysia({ prefix: '/profile' })
         }
 
         return { error: false, message: 'تم جلب الملف الشخصي بنجاح', data: doctor };
-    })
+    }, { response: { 200: GenericDataResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } })
 
     .patch(
         '/',
@@ -88,5 +89,11 @@ export const doctorProfileController = new Elysia({ prefix: '/profile' })
             });
             return { error: false, message: 'تم تحديث الملف الشخصي بنجاح', data: updated };
         },
-        { body: profileBodySchema }
+        {
+            body: profileBodySchema,
+            response: {
+                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema,
+                422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
+            },
+        }
     );

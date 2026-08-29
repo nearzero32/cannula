@@ -8,6 +8,7 @@ import {
     IAppointmentPaymentStatusEnum,
     IAppointmentCancelledByModelEnum,
 } from '../../../interfaces/appointment.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -92,6 +93,7 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
                 dateTo: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -112,6 +114,9 @@ export const appointmentsController = new Elysia({ prefix: '/appointments' })
 
             return { error: false, message: 'تم جلب الموعد بنجاح', data: appointment };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     )
 

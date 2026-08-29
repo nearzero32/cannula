@@ -15,6 +15,7 @@ import { seedSuggestions } from './migrations/seed-suggestions.migration';
 import { migratePasswordsToArgon2 } from './migrations/migrate-passwords-to-argon2.migration';
 import { seedHomeCareCategories } from './migrations/seed-home-care-categories.migration';
 import { RATE_LIMIT_RESPONSE } from './schemas/api-response.schema';
+import { ApiErrorPlugin } from './middleware/api-error.middleware';
 
 async function bootstrap() {
     // Connect MongoDB
@@ -50,18 +51,9 @@ async function bootstrap() {
             ),
         }))
         .use(ActivityLogPlugin)
+        .use(ApiErrorPlugin)
         .use(dashboardController)
         .use(mobileController)
-
-        .onError(({ code, set }) => {
-            if (code === 'NOT_FOUND') {
-                set.status = 404;
-                return {
-                    error: true,
-                    message: 'المسار غير موجود',
-                };
-            }
-        })
         .listen(3001);
 
     console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);

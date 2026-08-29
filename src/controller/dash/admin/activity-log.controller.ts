@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import { ActivityLoggerPlugin } from '../../../middleware/logger.middleware';
 import activityLogService from '../../../services/activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
+import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -69,6 +70,7 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
                 dateTo: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
+            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
         }
     )
 
@@ -88,5 +90,8 @@ export const activityLogController = new Elysia({ prefix: '/activity-logs' })
 
             return { error: false, message: 'تم جلب سجل النشاط بنجاح', data: log };
         },
-        { params: t.Object({ id: t.String() }) }
+        {
+            params: t.Object({ id: t.String() }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
+        }
     );
