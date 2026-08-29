@@ -3,6 +3,7 @@ import type { IPatient } from '../interfaces/patient.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import PatientHealthProfile from '../models/patient-health-profile.model';
 
 class PatientService {
     private model = Patient;
@@ -77,6 +78,12 @@ class PatientService {
 
     public async create(payload: Partial<IPatient>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<PatientDocument> {
         const doc = await this.model.create(payload);
+        try {
+            await PatientHealthProfile.create({ patient_id: doc._id });
+        } catch (error) {
+            await this.model.findByIdAndDelete(doc._id).exec();
+            throw error;
+        }
         try {
             await this.activityLog.logActivity({
                 user_id: meta?.user_id,

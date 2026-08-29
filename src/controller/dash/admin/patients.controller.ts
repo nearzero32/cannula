@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import patientService from '../../../services/patient.service';
 import { IPatientStatusEnum, IPatientGenderEnum, IPatientBloodGroupEnum } from '../../../interfaces/patient.interface';
 import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { patientHealthProfileService } from '../../../services/health-profile.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -102,7 +103,6 @@ export const patientsController = new Elysia({ prefix: '/patients' })
                 phone: body.phone,
                 address: body.address,
                 profile_photo: body.profile_photo,
-                blood_group: body.blood_group,
             }, {
                 user_id: phrase._id,
                 user_name: phrase.role + '_' + phrase._id,
@@ -111,8 +111,19 @@ export const patientsController = new Elysia({ prefix: '/patients' })
                 source: 'dashboard',
             });
 
+            if (body.blood_group !== undefined) {
+                await patientHealthProfileService.update(
+                    new ObjectId(patient._id.toString()),
+                    { blood_type: body.blood_group }
+                );
+            }
+
             set.status = 201;
-            return { error: false, message: 'تم إنشاء المريض بنجاح', data: patient };
+            return {
+                error: false,
+                message: 'تم إنشاء المريض بنجاح',
+                data: { ...patient.toObject(), blood_group: body.blood_group ?? null },
+            };
         },
         {
             body: patientBodySchema,

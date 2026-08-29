@@ -1,5 +1,6 @@
 import type mongoose from 'mongoose';
 import type { IBaseDocument, IWithNotesInternal } from './common.interface';
+import { BloodTypeEnum, type BloodType } from './health-profile.interface';
 
 export const IPatientGenderEnum = {
     MALE: 'male',
@@ -8,18 +9,10 @@ export const IPatientGenderEnum = {
 
 export type IPatientGender = (typeof IPatientGenderEnum)[keyof typeof IPatientGenderEnum];
 
-export const IPatientBloodGroupEnum = {
-    A_POSITIVE: 'A+',
-    A_NEGATIVE: 'A-',
-    B_POSITIVE: 'B+',
-    B_NEGATIVE: 'B-',
-    AB_POSITIVE: 'AB+',
-    AB_NEGATIVE: 'AB-',
-    O_POSITIVE: 'O+',
-    O_NEGATIVE: 'O-',
-} as const;
-
-export type IPatientBloodGroup = (typeof IPatientBloodGroupEnum)[keyof typeof IPatientBloodGroupEnum];
+/** @deprecated Health data now belongs to PatientHealthProfile. */
+export const IPatientBloodGroupEnum = BloodTypeEnum;
+/** @deprecated Use BloodType from health-profile.interface. */
+export type IPatientBloodGroup = BloodType;
 
 export const IPatientStatusEnum = {
     ACTIVE: 'active',
@@ -37,8 +30,5 @@ export interface IPatient extends IBaseDocument, IWithNotesInternal {
     phone?: string | null;
     address?: string | null;
     profile_photo?: string | null;
-    blood_group?: IPatientBloodGroup | null;
-    allergies: string[];
-    chronic_condition_ids: string[];
     status: IPatientStatus;
 }

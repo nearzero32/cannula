@@ -46,12 +46,14 @@ export type IAppointmentCancelledByModel =
 export interface IAppointment extends IBaseDocument, IWithNotesInternal {
     appointment_number: string;
     patient_id: mongoose.Types.ObjectId;
+    /** Optional child beneficiary. Missing/null means the appointment is for the patient. */
+    child_id?: mongoose.Types.ObjectId | null;
     doctor_id: mongoose.Types.ObjectId;
     clinic_id: mongoose.Types.ObjectId;
     specialty_id?: mongoose.Types.ObjectId | null;
     date: Date;
-    start_time: string;
-    end_time: string;
+    starts_at: string;
+    ends_at: string;
     status: IAppointmentStatus;
     booked_by?: mongoose.Types.ObjectId | null;
     booking_source: IAppointmentBookingSource;

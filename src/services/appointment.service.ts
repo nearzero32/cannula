@@ -39,7 +39,7 @@ class AppointmentService {
             {
                 $facet: {
                     data: [
-                        { $sort: { date: -1, start_time: 1, createdAt: -1 } },
+                        { $sort: { date: -1, starts_at: 1, createdAt: -1 } },
                         { $skip: skip },
                         { $limit: safeLimit },
                         ...additional_pipeline,
@@ -83,13 +83,13 @@ class AppointmentService {
     public async isSlotTaken(
         doctor_id: string,
         date: Date,
-        start_time: string,
+        starts_at: string,
         exclude_id?: string
     ): Promise<boolean> {
         const query: Record<string, unknown> = {
             doctor_id,
             date,
-            start_time,
+            starts_at,
             status: {
                 $nin: [
                     IAppointmentStatusEnum.CANCELLED,

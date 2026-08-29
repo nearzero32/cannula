@@ -1,5 +1,5 @@
 import mongoose, { Schema, model, models } from 'mongoose';
-import { IPatientBloodGroupEnum, IPatientGenderEnum, IPatientStatusEnum } from '../interfaces/patient.interface';
+import { IPatientGenderEnum, IPatientStatusEnum } from '../interfaces/patient.interface';
 import type { IPatient } from '../interfaces/patient.interface';
 
 export type PatientDocument = mongoose.Document & IPatient;
@@ -46,22 +46,6 @@ const patientSchema = new Schema(
         profile_photo: {
             type: String,
             default: null,
-        },
-
-        blood_group: {
-            type: String,
-            enum: Object.values(IPatientBloodGroupEnum),
-            default: null,
-        },
-
-        allergies: {
-            type: [String],
-            default: [],
-        },
-
-        chronic_condition_ids: {
-            type: [String],
-            default: [],
         },
 
         status: {

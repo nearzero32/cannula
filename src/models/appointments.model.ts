@@ -33,6 +33,13 @@ const appointmentSchema = new Schema(
             index: true,
         },
 
+        /** Optional child beneficiary; null keeps all historical appointments as SELF. */
+        child_id: {
+            type: Schema.Types.ObjectId,
+            ref: 'PatientChild',
+            default: null,
+        },
+
         /**
          * The doctor assigned to this appointment.
          */
@@ -258,7 +265,7 @@ const appointmentSchema = new Schema(
  * can be booked again if needed.
  */
 appointmentSchema.index(
-    { doctor_id: 1, date: 1, start_time: 1 },
+    { doctor_id: 1, date: 1, starts_at: 1 },
     {
         unique: true,
         partialFilterExpression: {

@@ -16,6 +16,8 @@ import { migratePasswordsToArgon2 } from './migrations/migrate-passwords-to-argo
 import { seedHomeCareCategories } from './migrations/seed-home-care-categories.migration';
 import { RATE_LIMIT_RESPONSE } from './schemas/api-response.schema';
 import { ApiErrorPlugin } from './middleware/api-error.middleware';
+import { backfillHealthProfiles } from './migrations/backfill-health-profiles.migration';
+import { repairAppointmentSlotIndex } from './migrations/repair-appointment-slot-index.migration';
 
 async function bootstrap() {
     // Connect MongoDB
@@ -26,6 +28,8 @@ async function bootstrap() {
     await seedChronicConditions();
     await seedSuggestions();
     await seedHomeCareCategories();
+    await backfillHealthProfiles();
+    await repairAppointmentSlotIndex();
 
     // Connect Redis
     await RedisClient.getInstance().connect();
