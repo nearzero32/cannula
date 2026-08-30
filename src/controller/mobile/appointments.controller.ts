@@ -7,7 +7,7 @@ import { DomainError } from '../../services/domain-error';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import {
     BadRequestResponseSchema,
-    ConflictResponseSchema,
+    AppointmentSlotConflictResponseSchema,
     ForbiddenResponseSchema,
     NotFoundResponseSchema,
     ProtectedApiErrorResponses,
@@ -65,7 +65,7 @@ export const mobileAppointmentsController = new Elysia({ prefix: '/appointments'
             400: BadRequestResponseSchema,
             403: ForbiddenResponseSchema,
             404: NotFoundResponseSchema,
-            409: ConflictResponseSchema,
+            409: AppointmentSlotConflictResponseSchema,
             422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]),
             ...ProtectedApiErrorResponses,
         },

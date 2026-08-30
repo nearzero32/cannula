@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import mongoose from 'mongoose';
-import { MobileAppointmentService, validateAppointmentTime } from '../src/services/mobile-appointment.service';
+import {
+    APPOINTMENT_SLOT_CONFLICT_MESSAGE,
+    isAppointmentSlotDuplicateKeyError,
+    MobileAppointmentService,
+    validateAppointmentTime,
+} from '../src/services/mobile-appointment.service';
 import patientChildService from '../src/services/patient-child.service';
 import doctorService from '../src/services/doctor.service';
 import clinicService from '../src/services/clinic.service';
@@ -82,5 +87,30 @@ describe('Mobile appointment beneficiaries', () => {
     test('validates date and time without weakening existing slot checks', () => {
         expect(() => validateAppointmentTime('2000-01-01', '09:00', '09:30')).toThrow('تاريخ سابق');
         expect(() => validateAppointmentTime('2099-01-01', '09:30', '09:00')).toThrow('بعد وقت البداية');
+    });
+
+    test('turns the database slot safeguard into a clean 409 conflict', async () => {
+        mockAvailableBooking();
+        spyOn(appointmentService, 'create').mockRejectedValue({
+            code: 11000,
+            keyPattern: { doctor_id: 1, date: 1, starts_at: 1 },
+            message: 'raw database details must not escape',
+        });
+
+        try {
+            await new MobileAppointmentService().create(patientId, userId, input);
+            throw new Error('Expected booking to fail');
+        } catch (error: any) {
+            expect(error.status).toBe(409);
+            expect(error.message).toBe(APPOINTMENT_SLOT_CONFLICT_MESSAGE);
+            expect(error.message).not.toContain('E11000');
+        }
+    });
+
+    test('does not misclassify an unrelated duplicate key as a slot collision', () => {
+        expect(isAppointmentSlotDuplicateKeyError({
+            code: 11000,
+            keyPattern: { appointment_number: 1 },
+        })).toBe(false);
     });
 });

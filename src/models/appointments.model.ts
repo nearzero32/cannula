@@ -9,6 +9,15 @@ import type { IAppointment } from '../interfaces/appointment.interface';
 
 export type AppointmentDocument = mongoose.Document & IAppointment;
 
+export const APPOINTMENT_SLOT_INDEX_NAME = 'appointments_doctor_date_start_active_unique';
+export const APPOINTMENT_SLOT_INDEX_KEY = { doctor_id: 1, date: 1, starts_at: 1 } as const;
+export const APPOINTMENT_BLOCKING_STATUSES = [
+    IAppointmentStatusEnum.PENDING,
+    IAppointmentStatusEnum.CONFIRMED,
+    IAppointmentStatusEnum.CHECKED_IN,
+    IAppointmentStatusEnum.IN_PROGRESS,
+] as const;
+
 const appointmentSchema = new Schema(
     {
         /**
@@ -255,25 +264,25 @@ const appointmentSchema = new Schema(
          * Automatically adds createdAt and updatedAt fields.
          */
         timestamps: true,
+        // This model's indexes are reconciled by the startup migration before they are created.
+        autoIndex: false,
     }
 );
 
 /**
  * Prevents double booking for the same doctor at the same date and start time.
  *
- * Cancelled and no-show appointments are excluded, so their time slots
- * can be booked again if needed.
+ * Only lifecycle states that still occupy the slot participate in the index.
+ * Terminal/released states (cancelled, no-show, rescheduled, completed) do not.
  */
 appointmentSchema.index(
-    { doctor_id: 1, date: 1, starts_at: 1 },
+    APPOINTMENT_SLOT_INDEX_KEY,
     {
+        name: APPOINTMENT_SLOT_INDEX_NAME,
         unique: true,
         partialFilterExpression: {
             status: {
-                $nin: [
-                    IAppointmentStatusEnum.CANCELLED,
-                    IAppointmentStatusEnum.NO_SHOW,
-                ],
+                $in: APPOINTMENT_BLOCKING_STATUSES,
             },
         },
     }

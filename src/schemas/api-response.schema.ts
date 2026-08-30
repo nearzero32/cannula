@@ -58,6 +58,10 @@ export const UnauthorizedResponseSchema = errorResponse('المصادقة مطل
 export const ForbiddenResponseSchema = errorResponse('لا توجد صلاحية لتنفيذ الإجراء', 'ليس لديك صلاحية لتنفيذ هذا الإجراء');
 export const NotFoundResponseSchema = errorResponse('السجل المطلوب غير موجود', 'السجل غير موجود');
 export const ConflictResponseSchema = errorResponse('تعارض مع سجل موجود', 'هذا السجل موجود مسبقاً');
+export const AppointmentSlotConflictResponseSchema = errorResponse(
+    'تعارض مع موعد محجوز',
+    'هذا الموعد محجوز بالفعل'
+);
 export const UnprocessableEntityResponseSchema = errorResponse('تعذر تنفيذ الطلب وفق حالة السجل الحالية', 'لا يمكن تنفيذ هذا الإجراء في الحالة الحالية');
 export const InternalServerErrorResponseSchema = errorResponse('خطأ داخلي آمن', 'حدث خطأ في الخادم');
 export const ServiceUnavailableResponseSchema = errorResponse('الخدمة غير متاحة حالياً', 'الخدمة غير متاحة حالياً');

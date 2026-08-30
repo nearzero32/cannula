@@ -1,4 +1,7 @@
-import Appointment, { AppointmentDocument } from '../models/appointments.model';
+import Appointment, {
+    APPOINTMENT_BLOCKING_STATUSES,
+    AppointmentDocument,
+} from '../models/appointments.model';
 import type { IAppointment } from '../interfaces/appointment.interface';
 import { IAppointmentStatusEnum, IAppointmentCancelledByModelEnum } from '../interfaces/appointment.interface';
 import type { PipelineStage } from 'mongoose';
@@ -91,11 +94,7 @@ class AppointmentService {
             date,
             starts_at,
             status: {
-                $nin: [
-                    IAppointmentStatusEnum.CANCELLED,
-                    IAppointmentStatusEnum.NO_SHOW,
-                    IAppointmentStatusEnum.RESCHEDULED,
-                ],
+                $in: APPOINTMENT_BLOCKING_STATUSES,
             },
         };
         if (exclude_id) query._id = { $ne: exclude_id };

@@ -14,6 +14,26 @@ import {
 } from '../interfaces/appointment.interface';
 import type { PatientChildDocument } from '../models/patient-child.model';
 import type { AppointmentDocument } from '../models/appointments.model';
+import { APPOINTMENT_SLOT_INDEX_NAME } from '../models/appointments.model';
+
+export const APPOINTMENT_SLOT_CONFLICT_MESSAGE = 'هذا الموعد محجوز بالفعل';
+
+export function isAppointmentSlotDuplicateKeyError(error: unknown): boolean {
+    if (typeof error !== 'object' || error === null || !('code' in error) || error.code !== 11000) {
+        return false;
+    }
+    const mongoError = error as {
+        keyPattern?: Record<string, unknown>;
+        message?: string;
+    };
+    const keyPattern = mongoError.keyPattern;
+    if (keyPattern?.doctor_id === 1 && keyPattern?.date === 1 && keyPattern?.starts_at === 1) {
+        return true;
+    }
+    return typeof mongoError.message === 'string' &&
+        (mongoError.message.includes(APPOINTMENT_SLOT_INDEX_NAME) ||
+            mongoError.message.includes('doctor_id_1_date_1_starts_at_1'));
+}
 
 export interface MobileAppointmentInput {
     doctor_id: string;
@@ -109,31 +129,39 @@ export class MobileAppointmentService {
         }
 
         if (await appointmentService.isSlotTaken(doctorId.toString(), date, input.starts_at)) {
-            throw new DomainError('هذا الموعد محجوز مسبقاً', 409);
+            throw new DomainError(APPOINTMENT_SLOT_CONFLICT_MESSAGE, 409);
         }
 
-        const appointment = await appointmentService.create({
-            patient_id: patientId,
-            child_id: child ? new mongoose.Types.ObjectId(child._id.toString()) : null,
-            doctor_id: doctorId,
-            clinic_id: clinicId,
-            specialty_id: specialtyId,
-            date,
-            starts_at: input.starts_at,
-            ends_at: input.ends_at,
-            status: IAppointmentStatusEnum.PENDING,
-            booked_by: objectId(authenticatedUserId, 'معرف المستخدم غير صالح'),
-            booking_source: IAppointmentBookingSourceEnum.APP,
-            reason: input.reason?.trim() || null,
-            payment_status: IAppointmentPaymentStatusEnum.UNPAID,
-            appointment_fee: doctor.consultation_fee ?? 0,
-        }, {
-            user_id: authenticatedUserId,
-            user_name: `patient_${authenticatedUserId}`,
-            user_type: 'patient',
-            endpoint: '/mobile/appointments',
-            source: 'mobile',
-        });
+        let appointment: AppointmentDocument;
+        try {
+            appointment = await appointmentService.create({
+                patient_id: patientId,
+                child_id: child ? new mongoose.Types.ObjectId(child._id.toString()) : null,
+                doctor_id: doctorId,
+                clinic_id: clinicId,
+                specialty_id: specialtyId,
+                date,
+                starts_at: input.starts_at,
+                ends_at: input.ends_at,
+                status: IAppointmentStatusEnum.PENDING,
+                booked_by: objectId(authenticatedUserId, 'معرف المستخدم غير صالح'),
+                booking_source: IAppointmentBookingSourceEnum.APP,
+                reason: input.reason?.trim() || null,
+                payment_status: IAppointmentPaymentStatusEnum.UNPAID,
+                appointment_fee: doctor.consultation_fee ?? 0,
+            }, {
+                user_id: authenticatedUserId,
+                user_name: `patient_${authenticatedUserId}`,
+                user_type: 'patient',
+                endpoint: '/mobile/appointments',
+                source: 'mobile',
+            });
+        } catch (error) {
+            if (isAppointmentSlotDuplicateKeyError(error)) {
+                throw new DomainError(APPOINTMENT_SLOT_CONFLICT_MESSAGE, 409);
+            }
+            throw error;
+        }
         return { appointment, child };
     }
 }
