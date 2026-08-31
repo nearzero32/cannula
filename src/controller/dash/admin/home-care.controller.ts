@@ -24,6 +24,7 @@ import {
     HomeCareServiceListResponseSchema,
     HomeCareServiceResponseSchema,
 } from '../../../schemas/home-care-response.schema';
+import { homeCareRequestsAdminController } from './home-care-requests.controller';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -359,4 +360,5 @@ const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['D
 
 export const homeCareAdminController = new Elysia({ prefix: '/home-care' })
     .use(categoriesController)
-    .use(servicesController);
+    .use(servicesController)
+    .use(homeCareRequestsAdminController);
