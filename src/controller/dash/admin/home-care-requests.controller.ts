@@ -4,28 +4,33 @@ import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import homeCarePolicyService from '../../../services/home-care-policy.service';
 import homeCareRequestService from '../../../services/home-care-request.service';
+import homeCareDispatchService from '../../../services/home-care-dispatch.service';
+import homeCareRequestHistoryService from '../../../services/home-care-request-history.service';
 import { formatHomeCareRequestForDashboard } from '../../../services/home-care-request.formatter';
 import { DomainError } from '../../../services/domain-error';
 import { IHomeCareRequestStatusEnum } from '../../../interfaces/home-care-request.interface';
+import type { IUserRole } from '../../../interfaces/user.interface';
 import {
     BadRequestResponseSchema,
     ConflictResponseSchema,
     ForbiddenResponseSchema,
     NotFoundResponseSchema,
     ProtectedApiErrorResponses,
+    UnprocessableEntityResponseSchema,
     ValidationErrorResponseSchema,
 } from '../../../schemas/api-response.schema';
 import {
     DashboardHomeCareRequestListResponseSchema,
     DashboardHomeCareRequestResponseSchema,
 } from '../../../schemas/home-care-request-response.schema';
+import { HomeCareHistoryListResponseSchema } from '../../../schemas/nurse-response.schema';
 
 function pagination(page: number, limit: number, total: number) {
     const pages = Math.ceil(total / limit);
     return { page, limit, total, pages, hasNext: page < pages, hasPrev: page > 1 };
 }
 
-async function requireOperationalAccess(userId: string, role: 'admin' | 'doctor' | 'patient') {
+async function requireOperationalAccess(userId: string, role: IUserRole) {
     const access = await homeCarePolicyService.getAccess(userId, role);
     if (access === 'none') throw new DomainError('غير مصرح لك بإدارة طلبات الرعاية المنزلية', 403);
 }
@@ -37,6 +42,28 @@ function adminActor(userId: string, endpoint: string) {
         user_type: 'admin' as const,
         endpoint,
         source: 'dashboard' as const,
+    };
+}
+
+function dispatchActor(userId: string, endpoint: string) {
+    return { user_id: userId, user_type: 'admin' as const, endpoint };
+}
+
+function historyId(value: unknown): string | null {
+    if (!value) return null;
+    if (typeof value === 'object' && '_id' in value) return String((value as { _id: unknown })._id);
+    return String(value);
+}
+
+function formatHistory(item: any) {
+    return {
+        _id: String(item._id), request_id: String(item.request_id), request_number: item.request_number,
+        event_type: item.event_type,
+        actor: { type: item.actor.type, user_id: historyId(item.actor.user_id), nurse_id: historyId(item.actor.nurse_id) },
+        from_status: item.from_status ?? null, to_status: item.to_status ?? null,
+        from_nurse_id: historyId(item.from_nurse_id), to_nurse_id: historyId(item.to_nurse_id),
+        dispatch_mode: item.dispatch_mode ?? null, reason: item.reason ?? null,
+        createdAt: new Date(item.createdAt).toISOString(),
     };
 }
 
@@ -126,6 +153,33 @@ export const homeCareRequestsAdminController = new Elysia({
             ...ProtectedApiErrorResponses,
         },
     })
+    .get('/:id/history', async ({ params, phrase }) => {
+        await requireOperationalAccess(phrase._id, phrase.role);
+        const request = await homeCareRequestService.getForDashboard(params.id);
+        if (!request) throw new DomainError('الطلب غير موجود', 404);
+        const history = await homeCareRequestHistoryService.list(params.id);
+        return { error: false, message: 'تم جلب سجل الطلب بنجاح', data: history.map(formatHistory) };
+    }, { params: t.Object({ id: t.String() }), response: { 200: HomeCareHistoryListResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } })
+    .patch('/:id/assign', async ({ params, body, phrase }) => {
+        await requireOperationalAccess(phrase._id, phrase.role);
+        const request = await homeCareDispatchService.assign(params.id, body.nurse_id, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/assign`));
+        return { error: false, message: 'تم تعيين الممرض بنجاح', data: formatHomeCareRequestForDashboard(request) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String() }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } })
+    .patch('/:id/reassign', async ({ params, body, phrase }) => {
+        await requireOperationalAccess(phrase._id, phrase.role);
+        const request = await homeCareDispatchService.reassign(params.id, body.nurse_id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/reassign`));
+        return { error: false, message: 'تم إعادة تعيين الممرض بنجاح', data: formatHomeCareRequestForDashboard(request) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String(), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } })
+    .patch('/:id/unassign', async ({ params, body, phrase }) => {
+        await requireOperationalAccess(phrase._id, phrase.role);
+        const request = await homeCareDispatchService.unassign(params.id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/unassign`));
+        return { error: false, message: 'تم إلغاء تعيين الممرض بنجاح', data: formatHomeCareRequestForDashboard(request) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ reason: t.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
+    .patch('/:id/reopen', async ({ params, body, phrase }) => {
+        await requireOperationalAccess(phrase._id, phrase.role);
+        const request = await homeCareDispatchService.reopen(params.id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/reopen`));
+        return { error: false, message: 'تم إعادة فتح الطلب بنجاح', data: formatHomeCareRequestForDashboard(request) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ reason: t.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
     .patch('/:id/status', async ({ params, body, phrase, set }) => {
         await requireOperationalAccess(phrase._id, phrase.role);
         if (!mongoose.Types.ObjectId.isValid(params.id)) {

@@ -7,6 +7,7 @@ type PopulatedReference = {
     date_of_birth?: Date;
     phone?: string | null;
     profile_photo?: string | null;
+    license_verified?: boolean;
 };
 
 function populatedReference(value: unknown): PopulatedReference | null {
@@ -52,6 +53,7 @@ function formatCancellation(request: HomeCareRequestDocument) {
 }
 
 export function formatHomeCareRequestForMobile(request: HomeCareRequestDocument) {
+    const nurse = populatedReference(request.dispatch?.nurse_id);
     return {
         _id: String(request._id),
         request_number: request.request_number,
@@ -73,6 +75,11 @@ export function formatHomeCareRequestForMobile(request: HomeCareRequestDocument)
         },
         notes: request.notes ?? null,
         status: request.status,
+        assigned_nurse: nurse?.full_name ? {
+            _id: idString(nurse), full_name: nurse.full_name ?? '',
+            profile_photo: nurse.profile_photo ?? null,
+            license_verified: nurse.license_verified ?? false,
+        } : null,
         cancellation: formatCancellation(request),
         createdAt: isoString(request.createdAt),
         updatedAt: isoString(request.updatedAt),
@@ -90,5 +97,24 @@ export function formatHomeCareRequestForDashboard(request: HomeCareRequestDocume
             profile_photo: patient?.profile_photo ?? null,
         },
         internal_notes: request.internal_notes ?? null,
+        dispatch: {
+            status: request.dispatch?.status ?? 'OPEN',
+            mode: request.dispatch?.mode ?? 'OPEN_POOL',
+            nurse: formatHomeCareRequestForMobile(request).assigned_nurse,
+            assigned_at: request.dispatch?.assigned_at ? isoString(request.dispatch.assigned_at) : null,
+            assigned_by_user_id: request.dispatch?.assigned_by_user_id ? String(request.dispatch.assigned_by_user_id) : null,
+            version: request.dispatch?.version ?? 0,
+        },
+    };
+}
+
+export function formatHomeCareRequestForNurse(request: HomeCareRequestDocument) {
+    const patient = populatedReference(request.patient_id);
+    return {
+        ...formatHomeCareRequestForMobile(request),
+        patient: {
+            _id: idString(request.patient_id), full_name: patient?.full_name ?? null,
+            phone: patient?.phone ?? null, profile_photo: patient?.profile_photo ?? null,
+        },
     };
 }

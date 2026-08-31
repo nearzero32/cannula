@@ -104,6 +104,7 @@ describe('API response documentation coverage', () => {
             'Dashboard',
             'Admin',
             'Doctor',
+            'Nurse',
             'Mobile',
         ]);
 
@@ -122,6 +123,10 @@ describe('API response documentation coverage', () => {
             SWAGGER_TAGS.MOBILE.APPOINTMENTS,
             SWAGGER_TAGS.MOBILE.HOME_CARE,
         ]));
+        expect(groupsByName.get('Nurse')).toEqual([
+            SWAGGER_TAGS.NURSE.PROFILE,
+            SWAGGER_TAGS.NURSE.HOME_CARE,
+        ]);
 
         const tagDefinitions = new Map(document.tags?.map(tag => [tag.name, tag]));
         expect(tagDefinitions.get(SWAGGER_TAGS.ADMIN.CLINICS)?.['x-displayName']).toBe('Clinics');
@@ -152,6 +157,12 @@ describe('API response documentation coverage', () => {
             ['get', '/api/dash/doctor/profile/', SWAGGER_TAGS.DOCTOR.PROFILE],
             ['get', '/api/dash/doctor/appointments/', SWAGGER_TAGS.DOCTOR.APPOINTMENTS],
             ['get', '/api/dash/doctor/secretaries/', SWAGGER_TAGS.DOCTOR.SECRETARIES],
+            ['get', '/api/dash/admin/nurses/', SWAGGER_TAGS.ADMIN.NURSES],
+            ['get', '/api/dash/nurse/profile', SWAGGER_TAGS.NURSE.PROFILE],
+            ['get', '/api/dash/nurse/home-care/available', SWAGGER_TAGS.NURSE.HOME_CARE],
+            ['patch', '/api/dash/nurse/home-care/{id}/claim', SWAGGER_TAGS.NURSE.HOME_CARE],
+            ['patch', '/api/dash/admin/home-care/requests/{id}/assign', SWAGGER_TAGS.ADMIN.HOME_CARE],
+            ['get', '/api/dash/admin/home-care/requests/{id}/history', SWAGGER_TAGS.ADMIN.HOME_CARE],
             ['post', '/api/mobile/auth/register', SWAGGER_TAGS.MOBILE.AUTH],
             ['get', '/api/mobile/doctors/', SWAGGER_TAGS.MOBILE.DOCTORS],
             ['post', '/api/mobile/appointments/', SWAGGER_TAGS.MOBILE.APPOINTMENTS],
@@ -174,6 +185,11 @@ describe('API response documentation coverage', () => {
                 expect(definedTagNames.has(operation.tags?.[0] ?? ''), `${method.toUpperCase()} ${path}`).toBe(true);
             }
         }
+        const historyPath = document.paths?.['/api/dash/admin/home-care/requests/{id}/history'];
+        expect(historyPath?.get).toBeDefined();
+        expect(historyPath?.post).toBeUndefined();
+        expect(historyPath?.patch).toBeUndefined();
+        expect(historyPath?.delete).toBeUndefined();
     });
 });
 

@@ -4,9 +4,13 @@ import HomeCareRequestCounter from '../models/home-care-request-counter.model';
 import homeCareServiceService from './home-care-service.service';
 import patientChildService from './patient-child.service';
 import ActivityLogService from './activity-log.service';
+import homeCareRequestHistoryService from './home-care-request-history.service';
+import { HomeCareHistoryActorTypeEnum, HomeCareHistoryEventEnum } from '../interfaces/home-care-request-history.interface';
 import { PatientChildStatusEnum } from '../interfaces/patient-child.interface';
 import {
     IHomeCareRequestCancelledByTypeEnum,
+    IHomeCareDispatchModeEnum,
+    IHomeCareDispatchStatusEnum,
     IHomeCareRequestStatusEnum,
     type IHomeCareRequest,
     type IHomeCareRequestStatus,
@@ -66,6 +70,9 @@ export const HOME_CARE_REQUEST_TRANSITIONS: Record<
         IHomeCareRequestStatusEnum.IN_PROGRESS,
         IHomeCareRequestStatusEnum.CANCELLED,
     ],
+    [IHomeCareRequestStatusEnum.ASSIGNED]: [IHomeCareRequestStatusEnum.CANCELLED],
+    [IHomeCareRequestStatusEnum.ON_THE_WAY]: [IHomeCareRequestStatusEnum.CANCELLED],
+    [IHomeCareRequestStatusEnum.ARRIVED]: [IHomeCareRequestStatusEnum.CANCELLED],
     [IHomeCareRequestStatusEnum.IN_PROGRESS]: [IHomeCareRequestStatusEnum.COMPLETED],
     [IHomeCareRequestStatusEnum.COMPLETED]: [],
     [IHomeCareRequestStatusEnum.CANCELLED]: [],
@@ -118,7 +125,8 @@ function normalizedFilterDate(value: string, endOfDay: boolean): Date {
 function withSafePopulation(query: any) {
     return query
         .populate({ path: 'patient_id', select: 'full_name phone profile_photo' })
-        .populate({ path: 'child_id', select: 'full_name date_of_birth status' });
+        .populate({ path: 'child_id', select: 'full_name date_of_birth status' })
+        .populate({ path: 'dispatch.nurse_id', select: 'full_name profile_photo license_verified status user_id' });
 }
 
 export class HomeCareRequestService {
@@ -163,6 +171,14 @@ export class HomeCareRequestService {
             address,
             notes,
             status: IHomeCareRequestStatusEnum.PENDING,
+            dispatch: {
+                status: IHomeCareDispatchStatusEnum.OPEN,
+                mode: IHomeCareDispatchModeEnum.OPEN_POOL,
+                nurse_id: null,
+                assigned_at: null,
+                assigned_by_user_id: null,
+                version: 0,
+            },
             internal_notes: null,
             cancelled_at: null,
             cancelled_by: null,
@@ -182,6 +198,15 @@ export class HomeCareRequestService {
             }
         }
         if (!request) throw new Error('Failed to create Home Care request');
+        await homeCareRequestHistoryService.append({
+            request_id: new mongoose.Types.ObjectId(String(request._id)),
+            request_number: request.request_number,
+            event_type: HomeCareHistoryEventEnum.REQUEST_CREATED,
+            actor: { type: HomeCareHistoryActorTypeEnum.PATIENT, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: null },
+            from_status: null, to_status: IHomeCareRequestStatusEnum.PENDING,
+            from_nurse_id: null, to_nurse_id: null,
+            dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: null, metadata: null,
+        });
         await this.logWrite('POST', IActivityLogActionEnum.CREATE, request, null, input, actor);
         return await this.getForPatient(patientId, request._id.toString()) ?? request;
     }
@@ -244,11 +269,14 @@ export class HomeCareRequestService {
                         type: IHomeCareRequestCancelledByTypeEnum.PATIENT,
                     },
                     cancellation_reason: cancellationReason,
+                    'dispatch.status': IHomeCareDispatchStatusEnum.CLOSED,
                 },
+                $inc: { 'dispatch.version': 1 },
             },
             { returnDocument: 'after', runValidators: true }
         ).exec();
         if (!updated) throw new DomainError('لا يمكنك إلغاء هذا الطلب في حالته الحالية', 409);
+        await this.appendMutationHistory(updated, HomeCareHistoryEventEnum.REQUEST_CANCELLED, actor, current.status, updated.status, cancellationReason);
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { reason }, actor);
         return await this.getForPatient(patientId, updated._id.toString()) ?? updated;
     }
@@ -307,8 +335,14 @@ export class HomeCareRequestService {
     ): Promise<HomeCareRequestDocument> {
         const current = await this.getForDashboard(requestId);
         if (!current) throw new DomainError('الطلب غير موجود', 404);
+        if (status === IHomeCareRequestStatusEnum.CANCELLED && current.dispatch?.nurse_id) {
+            throw new DomainError('استخدم إجراء الإلغاء المخصص للطلبات المعينة', 409);
+        }
         assertHomeCareRequestTransition(current.status, status);
         const set: Record<string, unknown> = { status };
+        if ([IHomeCareRequestStatusEnum.CANCELLED, IHomeCareRequestStatusEnum.REJECTED, IHomeCareRequestStatusEnum.COMPLETED].includes(status as any)) {
+            set['dispatch.status'] = IHomeCareDispatchStatusEnum.CLOSED;
+        }
         if (status === IHomeCareRequestStatusEnum.CANCELLED) {
             set.cancelled_at = new Date();
             set.cancelled_by = {
@@ -319,10 +353,14 @@ export class HomeCareRequestService {
         }
         const updated = await HomeCareRequest.findOneAndUpdate(
             { _id: current._id, status: current.status },
-            { $set: set },
+            { $set: set, $inc: { 'dispatch.version': 1 } },
             { returnDocument: 'after', runValidators: true }
         ).exec();
         if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
+        await this.appendMutationHistory(updated,
+            status === IHomeCareRequestStatusEnum.REJECTED ? HomeCareHistoryEventEnum.REQUEST_REJECTED :
+                status === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED,
+            actor, current.status, updated.status, null);
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { status }, actor);
         return await this.getForDashboard(updated._id.toString()) ?? updated;
     }
@@ -336,8 +374,13 @@ export class HomeCareRequestService {
         if (!current) throw new DomainError('الطلب غير موجود', 404);
         assertHomeCareRequestTransition(current.status, IHomeCareRequestStatusEnum.CANCELLED);
         const cancellationReason = normalizeOptionalRequestText(reason, 1000, 'سبب الإلغاء طويل جداً');
+        if ([IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, IHomeCareRequestStatusEnum.ARRIVED, IHomeCareRequestStatusEnum.IN_PROGRESS].includes(current.status as any) && !cancellationReason) {
+            throw new DomainError('سبب الإلغاء مطلوب', 400);
+        }
+        const cancelFilter: Record<string, unknown> = { _id: current._id, status: current.status };
+        if (current.dispatch?.version !== undefined) cancelFilter['dispatch.version'] = current.dispatch.version;
         const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: current._id, status: current.status },
+            cancelFilter,
             {
                 $set: {
                     status: IHomeCareRequestStatusEnum.CANCELLED,
@@ -347,11 +390,14 @@ export class HomeCareRequestService {
                         type: IHomeCareRequestCancelledByTypeEnum.ADMIN,
                     },
                     cancellation_reason: cancellationReason,
+                    'dispatch.status': IHomeCareDispatchStatusEnum.CLOSED,
                 },
+                $inc: { 'dispatch.version': 1 },
             },
             { returnDocument: 'after', runValidators: true }
         ).exec();
         if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
+        await this.appendMutationHistory(updated, HomeCareHistoryEventEnum.REQUEST_CANCELLED, actor, current.status, updated.status, cancellationReason);
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { reason }, actor);
         return await this.getForDashboard(updated._id.toString()) ?? updated;
     }
@@ -415,6 +461,25 @@ export class HomeCareRequestService {
         } catch {
             // Activity logging is best-effort across the existing services.
         }
+    }
+
+    private async appendMutationHistory(
+        request: HomeCareRequestDocument,
+        event_type: (typeof HomeCareHistoryEventEnum)[keyof typeof HomeCareHistoryEventEnum],
+        actor: HomeCareRequestActor,
+        from_status: string,
+        to_status: string,
+        reason: string | null
+    ): Promise<void> {
+        const nurseValue = request.dispatch?.nurse_id as unknown as { _id?: unknown } | null | undefined;
+        const nurseId = nurseValue ? new mongoose.Types.ObjectId(String(nurseValue._id ?? nurseValue)) : null;
+        await homeCareRequestHistoryService.append({
+            request_id: new mongoose.Types.ObjectId(String(request._id)), request_number: request.request_number,
+            event_type,
+            actor: { type: actor.user_type === 'patient' ? HomeCareHistoryActorTypeEnum.PATIENT : HomeCareHistoryActorTypeEnum.ADMIN, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: null },
+            from_status, to_status, from_nurse_id: nurseId, to_nurse_id: nurseId,
+            dispatch_mode: request.dispatch?.mode ?? null, reason, metadata: null,
+        });
     }
 }
 

@@ -125,6 +125,19 @@ describe('Home Care request persistence and formatters', () => {
         expect(Value.Check(MobileHomeCareRequestSchema, formatted)).toBe(true);
     });
 
+    test('mobile exposes only safe assigned Nurse fields and returns null while unassigned', () => {
+        expect(formatHomeCareRequestForMobile(requestFixture()).assigned_nurse).toBeNull();
+        const assigned: any = requestFixture();
+        assigned.dispatch = {
+            status: 'CLAIMED', mode: 'OPEN_POOL', version: 1,
+            nurse_id: { _id: new mongoose.Types.ObjectId(), full_name: 'سارة', profile_photo: null, license_verified: true, license_number: 'SECRET' },
+        };
+        const formatted = formatHomeCareRequestForMobile(assigned);
+        expect(formatted.assigned_nurse).toMatchObject({ full_name: 'سارة', license_verified: true });
+        expect(JSON.stringify(formatted)).not.toContain('SECRET');
+        expect(JSON.stringify(formatted)).not.toContain('internal_notes');
+    });
+
     test('dashboard formatter includes safe patient data and internal notes', () => {
         const formatted = formatHomeCareRequestForDashboard(requestFixture());
         expect(formatted.patient.full_name).toBe('مريض تجريبي');

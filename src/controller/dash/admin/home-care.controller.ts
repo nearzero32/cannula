@@ -26,6 +26,7 @@ import {
 } from '../../../schemas/home-care-response.schema';
 import { homeCareRequestsAdminController } from './home-care-requests.controller';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
+import type { IUserRole } from '../../../interfaces/user.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -71,7 +72,7 @@ const serviceUpdateSchema = t.Partial(t.Object({
     price: t.Integer({ minimum: 1 }),
 }));
 
-async function hasAccess(userId: string, role: 'admin' | 'doctor' | 'patient', required: 'read' | 'manage') {
+async function hasAccess(userId: string, role: IUserRole, required: 'read' | 'manage') {
     const access = await homeCarePolicyService.getAccess(userId, role);
     return access === 'manage' || (required === 'read' && access === 'read');
 }

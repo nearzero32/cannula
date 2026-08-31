@@ -51,6 +51,9 @@ export const MobileHomeCareRequestSchema = t.Object({
     address: HomeCareRequestAddressSchema,
     notes: nullableString,
     status: t.Enum(IHomeCareRequestStatusEnum),
+    assigned_nurse: t.Nullable(t.Object({
+        _id: t.String(), full_name: t.String(), profile_photo: nullableString, license_verified: t.Boolean(),
+    })),
     cancellation: HomeCareRequestCancellationSchema,
     createdAt: t.String({ format: 'date-time' }),
     updatedAt: t.String({ format: 'date-time' }),
@@ -66,7 +69,20 @@ export const DashboardHomeCareRequestSchema = t.Composite([
             profile_photo: nullableString,
         }),
         internal_notes: nullableString,
+        dispatch: t.Object({
+            status: t.Union([t.Literal('OPEN'), t.Literal('CLAIMED'), t.Literal('CLOSED')]),
+            mode: t.Union([t.Literal('OPEN_POOL'), t.Literal('ADMIN_DIRECT'), t.Literal('ADMIN_REASSIGN')]),
+            nurse: t.Nullable(t.Object({ _id: t.String(), full_name: t.String(), profile_photo: nullableString, license_verified: t.Boolean() })),
+            assigned_at: nullableString,
+            assigned_by_user_id: nullableString,
+            version: t.Integer({ minimum: 0 }),
+        }),
     }),
+]);
+
+export const NurseHomeCareRequestSchema = t.Composite([
+    MobileHomeCareRequestSchema,
+    t.Object({ patient: t.Object({ _id: t.String(), full_name: nullableString, phone: nullableString, profile_photo: nullableString }) }),
 ]);
 
 export const MobileHomeCareRequestResponseSchema = successResponse(
@@ -85,3 +101,5 @@ export const DashboardHomeCareRequestListResponseSchema = paginatedResponse(
     DashboardHomeCareRequestSchema,
     'تم جلب طلبات الرعاية المنزلية بنجاح'
 );
+export const NurseHomeCareRequestResponseSchema = successResponse(NurseHomeCareRequestSchema, 'تم جلب طلب الرعاية المنزلية بنجاح');
+export const NurseHomeCareRequestListResponseSchema = paginatedResponse(NurseHomeCareRequestSchema, 'تم جلب طلبات الرعاية المنزلية بنجاح');

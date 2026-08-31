@@ -5,6 +5,7 @@ import HomeCareRequestCounter from '../src/models/home-care-request-counter.mode
 import homeCareServiceService from '../src/services/home-care-service.service';
 import patientChildService from '../src/services/patient-child.service';
 import ActivityLogService from '../src/services/activity-log.service';
+import homeCareRequestHistoryService from '../src/services/home-care-request-history.service';
 import {
     HomeCareRequestService,
     nextHomeCareRequestNumber,
@@ -87,6 +88,7 @@ function mockCreateFoundation(requestService: HomeCareRequestService) {
     spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(serviceDocument() as never);
     mockCounter();
     spyOn(ActivityLogService, 'logActivity').mockResolvedValue({} as never);
+    spyOn(homeCareRequestHistoryService, 'append').mockResolvedValue();
     spyOn(requestService, 'getForPatient').mockResolvedValue(null);
 }
 
@@ -117,7 +119,10 @@ describe('Home Care request creation', () => {
         expect(createdPayload.service_price).toBe(15000);
         expect(createdPayload.service_duration_min).toBe(30);
         expect(createdPayload.status).toBe(IHomeCareRequestStatusEnum.PENDING);
+        expect(createdPayload.dispatch).toMatchObject({ status: 'OPEN', mode: 'OPEN_POOL', nurse_id: null, version: 0 });
         expect(createdPayload.internal_notes).toBeNull();
+        expect(homeCareRequestHistoryService.append).toHaveBeenCalledTimes(1);
+        expect((homeCareRequestHistoryService.append as any).mock.calls[0][0].event_type).toBe('REQUEST_CREATED');
     });
 
     test('creates a CHILD request only for an owned active child', async () => {
@@ -229,6 +234,7 @@ describe('Home Care patient ownership and cancellation', () => {
                 exec: async () => updated,
             } as never);
             spyOn(ActivityLogService, 'logActivity').mockResolvedValue({} as never);
+            spyOn(homeCareRequestHistoryService, 'append').mockResolvedValue();
 
             const result = await requestService.cancelForPatient(
                 patientId,
@@ -282,6 +288,7 @@ describe('Home Care dashboard request operations', () => {
             exec: async () => updated,
         } as never);
         spyOn(ActivityLogService, 'logActivity').mockResolvedValue({} as never);
+        spyOn(homeCareRequestHistoryService, 'append').mockResolvedValue();
 
         const result = await requestService.updateStatus(
             current._id.toString(),
@@ -321,6 +328,7 @@ describe('Home Care dashboard request operations', () => {
             exec: async () => updated,
         } as never);
         spyOn(ActivityLogService, 'logActivity').mockResolvedValue({} as never);
+        spyOn(homeCareRequestHistoryService, 'append').mockResolvedValue();
 
         await requestService.cancelForAdmin(
             current._id.toString(),

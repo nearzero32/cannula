@@ -1,6 +1,8 @@
 import mongoose, { model, models, Schema } from 'mongoose';
 import {
     IHomeCareRequestCancelledByTypeEnum,
+    IHomeCareDispatchModeEnum,
+    IHomeCareDispatchStatusEnum,
     IHomeCareRequestStatusEnum,
     type IHomeCareRequest,
 } from '../interfaces/home-care-request.interface';
@@ -35,6 +37,15 @@ const homeCareRequestSchema = new Schema(
             enum: Object.values(IHomeCareRequestStatusEnum),
             default: IHomeCareRequestStatusEnum.PENDING,
         },
+        dispatch: {
+            status: { type: String, enum: Object.values(IHomeCareDispatchStatusEnum), default: IHomeCareDispatchStatusEnum.OPEN },
+            mode: { type: String, enum: Object.values(IHomeCareDispatchModeEnum), default: IHomeCareDispatchModeEnum.OPEN_POOL },
+            nurse_id: { type: Schema.Types.ObjectId, ref: 'Nurse', default: null },
+            assigned_at: { type: Date, default: null },
+            assigned_by_user_id: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+            version: { type: Number, min: 0, default: 0 },
+            _id: false,
+        },
         internal_notes: { type: String, trim: true, maxlength: 3000, default: null },
         cancelled_at: { type: Date, default: null },
         cancelled_by: {
@@ -56,6 +67,8 @@ homeCareRequestSchema.index({ status: 1, createdAt: -1 });
 homeCareRequestSchema.index({ requested_date: 1, status: 1 });
 homeCareRequestSchema.index({ service_id: 1, createdAt: -1 });
 homeCareRequestSchema.index({ category_id: 1, createdAt: -1 });
+homeCareRequestSchema.index({ 'dispatch.status': 1, status: 1, service_id: 1, requested_date: 1 });
+homeCareRequestSchema.index({ 'dispatch.nurse_id': 1, status: 1, requested_date: -1 });
 
 const HomeCareRequest =
     (models.HomeCareRequest as mongoose.Model<HomeCareRequestDocument>) ||

@@ -1,0 +1,34 @@
+import Elysia, { t } from 'elysia';
+import { AuthPlugin } from '../../../middleware/auth.middleware';
+import { IUserRoleEnum } from '../../../interfaces/user.interface';
+import { IHomeCareRequestStatusEnum } from '../../../interfaces/home-care-request.interface';
+import dispatchService from '../../../services/home-care-dispatch.service';
+import nurseService from '../../../services/nurse.service';
+import { formatHomeCareRequestForNurse } from '../../../services/home-care-request.formatter';
+import { DomainError } from '../../../services/domain-error';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
+import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { NurseHomeCareRequestListResponseSchema, NurseHomeCareRequestResponseSchema } from '../../../schemas/home-care-request-response.schema';
+
+function pagination(page: number, limit: number, total: number) { const pages = Math.ceil(total / limit); return { page, limit, total, pages, hasNext: page < pages, hasPrev: page > 1 }; }
+function requireRole(role: string) { if (role !== IUserRoleEnum.NURSE) throw new DomainError('غير مصرح لك بالوصول', 403); }
+function actor(userId: string, nurseId: string, endpoint: string) { return { user_id: userId, user_type: 'nurse' as const, nurse_id: nurseId, endpoint }; }
+const listQuery = t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()), status: t.Optional(t.Enum(IHomeCareRequestStatusEnum)), service_id: t.Optional(t.String()), dateFrom: t.Optional(t.String({ format: 'date' })), dateTo: t.Optional(t.String({ format: 'date' })) });
+const errors = { 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses };
+
+export const nurseHomeCareController = new Elysia({ prefix: '/home-care', detail: { tags: [SWAGGER_TAGS.NURSE.HOME_CARE] } })
+    .use(AuthPlugin()).onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message }; } })
+    .get('/available', async ({ query, phrase }) => { requireRole(phrase.role); const page = Math.max(1, Number(query.page) || 1), limit = Math.min(100, Math.max(1, Number(query.limit) || 10)); const { data, count } = await dispatchService.listAvailable(phrase._id, { page, limit, service_id: query.service_id, dateFrom: query.dateFrom, dateTo: query.dateTo }); return { error: false, message: 'تم جلب الطلبات المتاحة بنجاح', data: data.map(formatHomeCareRequestForNurse), pagination: pagination(page, limit, count) }; }, { query: listQuery, response: { 200: NurseHomeCareRequestListResponseSchema, ...errors } })
+    .get('/my-requests', async ({ query, phrase }) => { requireRole(phrase.role); const page = Math.max(1, Number(query.page) || 1), limit = Math.min(100, Math.max(1, Number(query.limit) || 10)); const { data, count } = await dispatchService.listMine(phrase._id, { page, limit, status: query.status, dateFrom: query.dateFrom, dateTo: query.dateTo }); return { error: false, message: 'تم جلب طلباتي بنجاح', data: data.map(formatHomeCareRequestForNurse), pagination: pagination(page, limit, count) }; }, { query: listQuery, response: { 200: NurseHomeCareRequestListResponseSchema, ...errors } })
+    .get('/:id', async ({ params, phrase }) => { requireRole(phrase.role); const request = await dispatchService.getMine(phrase._id, params.id); if (!request) throw new DomainError('الطلب غير موجود', 404); return { error: false, message: 'تم جلب طلب الرعاية المنزلية بنجاح', data: formatHomeCareRequestForNurse(request) }; }, { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors } })
+    .patch('/:id/claim', async ({ params, phrase }) => { requireRole(phrase.role); const nurse = await nurseService.requireActiveByUserId(phrase._id); const request = await dispatchService.claim(phrase._id, params.id, actor(phrase._id, String(nurse._id), `/dash/nurse/home-care/${params.id}/claim`)); return { error: false, message: 'تم استلام طلب الرعاية المنزلية بنجاح', data: formatHomeCareRequestForNurse(request) }; }, { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors } })
+    .patch('/:id/on-the-way', ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, 'on-the-way'), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors } })
+    .patch('/:id/arrived', ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ON_THE_WAY, IHomeCareRequestStatusEnum.ARRIVED, 'arrived'), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors } })
+    .patch('/:id/start', ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ARRIVED, IHomeCareRequestStatusEnum.IN_PROGRESS, 'start'), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors } })
+    .patch('/:id/complete', ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.IN_PROGRESS, IHomeCareRequestStatusEnum.COMPLETED, 'complete'), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors } });
+
+async function transition(id: string, phrase: { _id: string; role: string }, expected: typeof IHomeCareRequestStatusEnum[keyof typeof IHomeCareRequestStatusEnum], next: typeof IHomeCareRequestStatusEnum[keyof typeof IHomeCareRequestStatusEnum], action: string) {
+    requireRole(phrase.role); const nurse = await nurseService.requireActiveByUserId(phrase._id);
+    const request = await dispatchService.transition(phrase._id, id, expected, next, actor(phrase._id, String(nurse._id), `/dash/nurse/home-care/${id}/${action}`));
+    return { error: false, message: 'تم تحديث حالة الطلب بنجاح', data: formatHomeCareRequestForNurse(request) };
+}

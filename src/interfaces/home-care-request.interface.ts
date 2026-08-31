@@ -4,6 +4,9 @@ import type { IBaseDocument } from './common.interface';
 export const IHomeCareRequestStatusEnum = {
     PENDING: 'pending',
     CONFIRMED: 'confirmed',
+    ASSIGNED: 'assigned',
+    ON_THE_WAY: 'on_the_way',
+    ARRIVED: 'arrived',
     IN_PROGRESS: 'in_progress',
     COMPLETED: 'completed',
     CANCELLED: 'cancelled',
@@ -12,6 +15,22 @@ export const IHomeCareRequestStatusEnum = {
 
 export type IHomeCareRequestStatus =
     (typeof IHomeCareRequestStatusEnum)[keyof typeof IHomeCareRequestStatusEnum];
+
+export const IHomeCareDispatchStatusEnum = { OPEN: 'OPEN', CLAIMED: 'CLAIMED', CLOSED: 'CLOSED' } as const;
+export type IHomeCareDispatchStatus = (typeof IHomeCareDispatchStatusEnum)[keyof typeof IHomeCareDispatchStatusEnum];
+export const IHomeCareDispatchModeEnum = {
+    OPEN_POOL: 'OPEN_POOL', ADMIN_DIRECT: 'ADMIN_DIRECT', ADMIN_REASSIGN: 'ADMIN_REASSIGN',
+} as const;
+export type IHomeCareDispatchMode = (typeof IHomeCareDispatchModeEnum)[keyof typeof IHomeCareDispatchModeEnum];
+
+export interface IHomeCareRequestDispatch {
+    status: IHomeCareDispatchStatus;
+    mode: IHomeCareDispatchMode;
+    nurse_id?: mongoose.Types.ObjectId | null;
+    assigned_at?: Date | null;
+    assigned_by_user_id?: mongoose.Types.ObjectId | null;
+    version: number;
+}
 
 export const IHomeCareRequestCancelledByTypeEnum = {
     PATIENT: 'PATIENT',
@@ -47,6 +66,7 @@ export interface IHomeCareRequest extends IBaseDocument {
     address: IHomeCareRequestAddress;
     notes?: string | null;
     status: IHomeCareRequestStatus;
+    dispatch: IHomeCareRequestDispatch;
     internal_notes?: string | null;
     cancelled_at?: Date | null;
     cancelled_by?: IHomeCareRequestCancelledBy | null;

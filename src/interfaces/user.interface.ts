@@ -1,6 +1,7 @@
 export const IUserRoleEnum = {
     ADMIN: 'admin',
     DOCTOR: 'doctor',
+    NURSE: 'nurse',
     PATIENT: 'patient',
 } as const;
 
