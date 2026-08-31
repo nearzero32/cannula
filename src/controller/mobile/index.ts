@@ -15,6 +15,7 @@ import { mobileChildrenController } from './children.controller';
 import { mobileAppointmentsController } from './appointments.controller';
 import { mobileHomeCareRequestsController } from './home-care-requests.controller';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
+import { mobilePharmacyRequestsController } from './pharmacy-requests.controller';
 
 /** Public mobile routes — no authentication required */
 const mobilePublicController = new Elysia()
@@ -33,6 +34,7 @@ const mobileProtectedController = new Elysia()
     .use(mobileChildrenController)
     .use(mobileAppointmentsController)
     .use(mobileHomeCareRequestsController)
+    .use(mobilePharmacyRequestsController)
     .use(mobileSuggestionsController)
     .use(mobileDoctorFavoritesController)
     .use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE));

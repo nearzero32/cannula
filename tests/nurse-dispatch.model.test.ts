@@ -11,7 +11,7 @@ describe('Nurse identity and dispatch persistence', () => {
     test('supports Nurse dashboard identity without changing token role architecture', () => {
         expect(IUserRoleEnum.NURSE).toBe('nurse');
         expect(DASHBOARD_ROLES).toContain(IUserRoleEnum.NURSE);
-        expect(DASHBOARD_ROLES).toEqual(['admin', 'doctor', 'nurse']);
+        expect(DASHBOARD_ROLES).toEqual(['admin', 'doctor', 'nurse', 'pharmacy']);
     });
 
     test('defines the complete backward-compatible Home Care lifecycle and dispatch enums', () => {
@@ -38,6 +38,6 @@ describe('Nurse identity and dispatch persistence', () => {
         const groups = new Map(SWAGGER_TAG_GROUPS.map(group => [group.name, group.tags]));
         expect(groups.get('Nurse')).toEqual([SWAGGER_TAGS.NURSE.PROFILE, SWAGGER_TAGS.NURSE.HOME_CARE]);
         expect(groups.get('Admin')).toContain(SWAGGER_TAGS.ADMIN.NURSES);
-        expect([...groups.keys()]).toEqual(['Dashboard', 'Admin', 'Doctor', 'Nurse', 'Mobile']);
+        expect([...groups.keys()]).toEqual(['Dashboard', 'Admin', 'Doctor', 'Nurse', 'Pharmacy', 'Mobile']);
     });
 });

@@ -105,6 +105,7 @@ describe('API response documentation coverage', () => {
             'Admin',
             'Doctor',
             'Nurse',
+            'Pharmacy',
             'Mobile',
         ]);
 

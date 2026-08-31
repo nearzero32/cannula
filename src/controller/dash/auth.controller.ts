@@ -10,7 +10,7 @@ import RedisClient from '../../databases/redis';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, PublicApiErrorResponses, SuccessDataWithoutMessageSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
-export const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR, IUserRoleEnum.NURSE];
+export const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR, IUserRoleEnum.NURSE, IUserRoleEnum.PHARMACY];
 const ACCESS_TTL = 60 * 15;       // 15 minutes
 const REFRESH_TTL = 60 * 60 * 24 * 7; // 7 days
 
