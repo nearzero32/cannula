@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import clinicService from '../../../services/clinic.service';
@@ -23,7 +24,10 @@ const clinicBodySchema = t.Object({
     status: t.Optional(t.Enum(IClinicStatusEnum)),
 });
 
-export const clinicsController = new Elysia({ prefix: '/clinics' })
+export const clinicsController = new Elysia({
+    prefix: '/clinics',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.CLINICS] },
+})
     .use(AuthPlugin())
 
     .get(

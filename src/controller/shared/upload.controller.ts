@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import { UploadFolderEnum } from '../../constants/r2.config';
 import storageService from '../../services/storage.service';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, ServiceUnavailableResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const presignBodySchema = t.Object({
@@ -15,7 +16,8 @@ const presignBodySchema = t.Object({
     fileName: t.Optional(t.String({ maxLength: 120 })),
 });
 
-export const uploadController = new Elysia({ prefix: '/upload' })
+export function createUploadController(tag: string) {
+    return new Elysia({ prefix: '/upload', detail: { tags: [tag] } })
     .use(AuthPlugin())
 
     .post(
@@ -51,3 +53,6 @@ export const uploadController = new Elysia({ prefix: '/upload' })
             },
         }
     );
+}
+
+export const uploadController = createUploadController(SWAGGER_TAGS.DASHBOARD.SHARED);

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import aboutUsService from '../../../services/about-us.service';
 import { BadRequestResponseSchema, GenericDataResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
@@ -14,7 +15,10 @@ const aboutUsBodySchema = t.Object({
     instagram: t.Optional(t.Nullable(t.String())),
 });
 
-export const aboutUsController = new Elysia({ prefix: '/about-us' })
+export const aboutUsController = new Elysia({
+    prefix: '/about-us',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.ABOUT_US] },
+})
     .use(AuthPlugin())
 
     .get('/', async ({ set }) => {

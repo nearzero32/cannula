@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import suggestionService from '../../../services/suggestion.service';
@@ -12,7 +13,10 @@ const createSuggestionBodySchema = t.Object({
     suggestion: t.String({ minLength: 1, maxLength: 2000 }),
 });
 
-export const doctorSuggestionsController = new Elysia({ prefix: '/suggestions' })
+export const doctorSuggestionsController = new Elysia({
+    prefix: '/suggestions',
+    detail: { tags: [SWAGGER_TAGS.DOCTOR.SUGGESTIONS] },
+})
     .use(AuthPlugin())
 
     .get(

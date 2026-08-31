@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import suggestionService from '../../services/suggestion.service';
@@ -17,7 +18,10 @@ const listProjection = {
     createdAt: 1,
 };
 
-export const mobileSuggestionsController = new Elysia({ prefix: '/suggestions' })
+export const mobileSuggestionsController = new Elysia({
+    prefix: '/suggestions',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.SUGGESTIONS] },
+})
     .use(AuthPlugin())
 
     .get(

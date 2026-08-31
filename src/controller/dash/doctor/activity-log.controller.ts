@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import activityLogService from '../../../services/activity-log.service';
@@ -7,7 +8,10 @@ import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseS
 
 const ObjectId = mongoose.Types.ObjectId;
 
-export const doctorActivityLogController = new Elysia({ prefix: '/activity-logs' })
+export const doctorActivityLogController = new Elysia({
+    prefix: '/activity-logs',
+    detail: { tags: [SWAGGER_TAGS.DOCTOR.ACTIVITY_LOGS] },
+})
     .use(AuthPlugin())
 
     .get(

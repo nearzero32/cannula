@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
@@ -35,7 +36,10 @@ async function authenticatedPatient(phrase: { _id: string; role: string }) {
     return patient;
 }
 
-export const mobileProfileHealthController = new Elysia({ prefix: '/profile/health' })
+export const mobileProfileHealthController = new Elysia({
+    prefix: '/profile/health',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.HEALTH_PROFILE] },
+})
     .use(AuthPlugin())
     .get('/', async ({ phrase, set }) => {
         if (phrase.role !== IUserRoleEnum.PATIENT) {

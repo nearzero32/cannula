@@ -1,5 +1,9 @@
 import Elysia from 'elysia';
-import { uploadController } from './upload.controller';
+import { createUploadController } from './upload.controller';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 
-export const sharedController = new Elysia()
-    .use(uploadController);
+export function createSharedController(tag: string) {
+    return new Elysia().use(createUploadController(tag));
+}
+
+export const sharedController = createSharedController(SWAGGER_TAGS.DASHBOARD.SHARED);

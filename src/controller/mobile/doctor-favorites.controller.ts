@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import doctorFavoriteService from '../../services/doctor-favorite.service';
@@ -55,7 +56,10 @@ function activityMeta(phrase: { _id: string; role: string }, endpoint: string) {
     };
 }
 
-export const mobileDoctorFavoritesController = new Elysia({ prefix: '/doctor-favorites' })
+export const mobileDoctorFavoritesController = new Elysia({
+    prefix: '/doctor-favorites',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.FAVORITES] },
+})
     .use(AuthPlugin())
 
     .get(

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import appointmentService from '../../../services/appointment.service';
@@ -20,7 +21,10 @@ const buildMeta = (phrase: any, endpoint: string) => ({
     source: 'dashboard',
 });
 
-export const appointmentsController = new Elysia({ prefix: '/appointments' })
+export const appointmentsController = new Elysia({
+    prefix: '/appointments',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.APPOINTMENTS] },
+})
     .use(AuthPlugin())
 
     // List appointments with filters

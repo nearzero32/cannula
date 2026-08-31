@@ -6,7 +6,6 @@ import { sharedController } from '../shared/index';
 
 export const dashboardController = new Elysia({
     prefix: '/dash',
-    detail: { tags: ['Dash'] },
 })
     .use(authController)
     .use(sharedController)

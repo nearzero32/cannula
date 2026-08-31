@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
@@ -44,7 +45,10 @@ function handleDomainError(error: unknown, set: { status?: number | string }) {
     return { error: true as const, message: error.message };
 }
 
-export const mobileChildrenController = new Elysia({ prefix: '/children' })
+export const mobileChildrenController = new Elysia({
+    prefix: '/children',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.CHILDREN] },
+})
     .use(AuthPlugin())
     .get('/', async ({ query, phrase, set }) => {
         try {

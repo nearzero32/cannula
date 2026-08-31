@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import suggestionService from '../../../services/suggestion.service';
@@ -69,7 +70,10 @@ const userLookupPipeline = [
     },
 ];
 
-export const suggestionsController = new Elysia({ prefix: '/suggestions' })
+export const suggestionsController = new Elysia({
+    prefix: '/suggestions',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.SUGGESTIONS] },
+})
     .use(AuthPlugin())
 
     .get(

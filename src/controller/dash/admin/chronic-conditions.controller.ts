@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import chronicConditionService from '../../../services/chronic-condition.service';
@@ -13,7 +14,10 @@ const chronicConditionBodySchema = t.Object({
     status: t.Optional(t.Enum(IChronicConditionStatusEnum)),
 });
 
-export const chronicConditionsController = new Elysia({ prefix: '/chronic-conditions' })
+export const chronicConditionsController = new Elysia({
+    prefix: '/chronic-conditions',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.CHRONIC_CONDITIONS] },
+})
     .use(AuthPlugin())
 
     .get(

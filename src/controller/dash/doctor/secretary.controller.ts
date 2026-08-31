@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import secretaryService from '../../../services/secretary.service';
@@ -15,7 +16,10 @@ const secretaryBodySchema = t.Object({
     notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
 
-export const doctorSecretaryController = new Elysia({ prefix: '/secretaries' })
+export const doctorSecretaryController = new Elysia({
+    prefix: '/secretaries',
+    detail: { tags: [SWAGGER_TAGS.DOCTOR.SECRETARIES] },
+})
     .use(AuthPlugin())
 
     .get(

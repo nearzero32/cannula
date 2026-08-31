@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import doctorService from '../../services/doctor.service';
 import {
@@ -45,7 +46,10 @@ function formatDoctorForMobile(doctor: IDoctor & { _id: mongoose.Types.ObjectId 
     };
 }
 
-export const mobileDoctorsController = new Elysia({ prefix: '/doctors' })
+export const mobileDoctorsController = new Elysia({
+    prefix: '/doctors',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.DOCTORS] },
+})
 
     .get(
         '/',

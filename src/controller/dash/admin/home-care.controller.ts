@@ -25,6 +25,7 @@ import {
     HomeCareServiceResponseSchema,
 } from '../../../schemas/home-care-response.schema';
 import { homeCareRequestsAdminController } from './home-care-requests.controller';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -121,7 +122,10 @@ const protectedResponses = {
     500: InternalServerErrorResponseSchema,
 };
 
-const categoriesController = new Elysia({ prefix: '/categories', detail: { tags: ['Dash'] } })
+const categoriesController = new Elysia({
+    prefix: '/categories',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.HOME_CARE] },
+})
     .use(AuthPlugin())
     .onError(({ code, error, set }) => {
         if (error instanceof HomeCareValidationError) {
@@ -234,7 +238,10 @@ const categoriesController = new Elysia({ prefix: '/categories', detail: { tags:
         },
     });
 
-const servicesController = new Elysia({ prefix: '/services', detail: { tags: ['Dash'] } })
+const servicesController = new Elysia({
+    prefix: '/services',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.HOME_CARE] },
+})
     .use(AuthPlugin())
     .onError(({ code, error, set }) => {
         if (error instanceof HomeCareValidationError) {

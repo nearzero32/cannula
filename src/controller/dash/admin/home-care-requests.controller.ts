@@ -1,5 +1,6 @@
 import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import homeCarePolicyService from '../../../services/home-care-policy.service';
 import homeCareRequestService from '../../../services/home-care-request.service';
@@ -41,7 +42,7 @@ function adminActor(userId: string, endpoint: string) {
 
 export const homeCareRequestsAdminController = new Elysia({
     prefix: '/requests',
-    detail: { tags: ['Dash'] },
+    detail: { tags: [SWAGGER_TAGS.ADMIN.HOME_CARE] },
 })
     .use(AuthPlugin())
     .onError(({ code, error, set }) => {

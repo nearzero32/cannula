@@ -7,6 +7,7 @@ import ActivityLogService from '../../services/activity-log.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import RedisClient from '../../databases/redis';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, PublicApiErrorResponses, SuccessDataWithoutMessageSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR];
@@ -31,7 +32,10 @@ async function isRefreshSessionValid(user_id: string, token: string): Promise<bo
     return result === '1';
 }
 
-export const authController = new Elysia({ prefix: '/auth' })
+export const authController = new Elysia({
+    prefix: '/auth',
+    detail: { tags: [SWAGGER_TAGS.DASHBOARD.AUTH] },
+})
 
     .post(
         '/login',

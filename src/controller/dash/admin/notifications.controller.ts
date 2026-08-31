@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import notificationService from '../../../services/notification.service';
@@ -11,7 +12,10 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedRe
 
 const ObjectId = mongoose.Types.ObjectId;
 
-export const notificationsController = new Elysia({ prefix: '/notifications' })
+export const notificationsController = new Elysia({
+    prefix: '/notifications',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.NOTIFICATIONS] },
+})
     .use(AuthPlugin())
 
     // List all notifications with filters

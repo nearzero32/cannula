@@ -1,5 +1,6 @@
 import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import homeCareCategoryService from '../../services/home-care-category.service';
 import homeCareServiceService from '../../services/home-care-service.service';
 import type { HomeCareCategoryDocument } from '../../models/home-care-category.model';
@@ -44,7 +45,10 @@ export function formatHomeCareService(service: HomeCareServiceDocument) {
     };
 }
 
-export const mobileHomeCareController = new Elysia({ prefix: '/home-care', detail: { tags: ['Mobile'] } })
+export const mobileHomeCareController = new Elysia({
+    prefix: '/home-care',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.HOME_CARE] },
+})
     .onError(({ code, set }) => {
         if (code === 'UNKNOWN' || code === 'INTERNAL_SERVER_ERROR') {
             set.status = 500;

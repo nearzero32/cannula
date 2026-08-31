@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import adsService from '../../../services/ads.service';
@@ -29,7 +30,10 @@ const adsBodySchema = t.Object({
     end_date: t.Optional(t.Nullable(t.String())),
 });
 
-export const adsController = new Elysia({ prefix: '/ads' })
+export const adsController = new Elysia({
+    prefix: '/ads',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.ADS] },
+})
     .use(AuthPlugin())
 
     .get(

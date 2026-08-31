@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
@@ -54,7 +55,10 @@ function formatPatientResponse(patient: IPatient, health: PatientHealthProfileDo
     };
 }
 
-export const mobileProfileController = new Elysia({ prefix: '/profile' })
+export const mobileProfileController = new Elysia({
+    prefix: '/profile',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.PROFILE] },
+})
     .use(AuthPlugin())
 
     .get('/', async ({ phrase, set }) => {

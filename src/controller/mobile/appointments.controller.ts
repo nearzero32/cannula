@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
@@ -27,7 +28,10 @@ const mobileAppointmentBodySchema = t.Object({
     child_id: t.Optional(t.Nullable(t.String({ description: 'اختياري؛ غيابه يعني أن الموعد للمريض نفسه' }))),
 }, { additionalProperties: false });
 
-export const mobileAppointmentsController = new Elysia({ prefix: '/appointments' })
+export const mobileAppointmentsController = new Elysia({
+    prefix: '/appointments',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.APPOINTMENTS] },
+})
     .use(AuthPlugin())
     .post('/', async ({ body, phrase, set }) => {
         if (phrase.role !== IUserRoleEnum.PATIENT) {

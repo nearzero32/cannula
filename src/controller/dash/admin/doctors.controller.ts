@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import doctorService from '../../../services/doctor.service';
@@ -89,7 +90,10 @@ const doctorUpdateSchema = t.Partial(
     })
 );
 
-export const doctorsController = new Elysia({ prefix: '/doctors' })
+export const doctorsController = new Elysia({
+    prefix: '/doctors',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.DOCTORS] },
+})
     .use(AuthPlugin())
 
     .get(

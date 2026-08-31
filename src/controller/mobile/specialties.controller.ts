@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import specialtyService from '../../services/specialty.service';
 import { ISpecialtyStatusEnum, type ISpecialty } from '../../interfaces/specialty.interface';
@@ -16,7 +17,10 @@ function formatSpecialtyForMobile(specialty: ISpecialty & { _id: mongoose.Types.
     };
 }
 
-export const mobileSpecialtiesController = new Elysia({ prefix: '/specialties' })
+export const mobileSpecialtiesController = new Elysia({
+    prefix: '/specialties',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.SPECIALTIES] },
+})
 
     .get(
         '/',

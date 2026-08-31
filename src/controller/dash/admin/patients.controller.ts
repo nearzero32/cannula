@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import patientService from '../../../services/patient.service';
@@ -19,7 +20,10 @@ const patientBodySchema = t.Object({
     blood_group: t.Optional(t.Nullable(t.Enum(IPatientBloodGroupEnum))),
 });
 
-export const patientsController = new Elysia({ prefix: '/patients' })
+export const patientsController = new Elysia({
+    prefix: '/patients',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.PATIENTS] },
+})
     .use(AuthPlugin())
 
     .get(

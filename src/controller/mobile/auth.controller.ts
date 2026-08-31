@@ -12,6 +12,7 @@ import { IUserRoleEnum, IUserStatusEnum } from '../../interfaces/user.interface'
 import { IPatientStatusEnum } from '../../interfaces/patient.interface';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import RedisClient from '../../databases/redis';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, InternalServerErrorResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
 const ACCESS_TTL = 60 * 15;
@@ -33,7 +34,10 @@ const registerBodySchema = t.Object({
     email: t.Optional(t.Nullable(t.String())),
 });
 
-export const mobileAuthController = new Elysia({ prefix: '/auth' })
+export const mobileAuthController = new Elysia({
+    prefix: '/auth',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH] },
+})
 
     .post(
         '/register',

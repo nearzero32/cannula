@@ -6,6 +6,7 @@ import { dashboardController } from '../src/controller/dash/index';
 import { mobileController } from '../src/controller/mobile/index';
 import { swaggerConfig } from '../src/constants/swagger.config';
 import { ApiErrorPlugin } from '../src/middleware/api-error.middleware';
+import { SWAGGER_TAG_DEFINITIONS, SWAGGER_TAG_GROUPS, SWAGGER_TAGS } from '../src/constants/swagger-tags';
 import {
     BadRequestResponseSchema,
     InternalServerErrorResponseSchema,
@@ -14,10 +15,13 @@ import {
 
 interface OpenApiOperation {
     responses?: Record<string, unknown>;
+    tags?: string[];
 }
 
 interface OpenApiDocument {
     paths?: Record<string, Record<string, OpenApiOperation>>;
+    tags?: Array<{ name: string; description?: string; 'x-displayName'?: string }>;
+    'x-tagGroups'?: Array<{ name: string; tags: string[] }>;
 }
 
 async function responseBody(response: Response): Promise<Record<string, unknown>> {
@@ -83,6 +87,94 @@ describe('API response documentation coverage', () => {
         }
         expect(Object.keys(document.paths?.['/api/mobile/profile/']?.get?.responses ?? {})).toContain('401');
     });
+
+    test('uses ordered role-domain tags without generic parent-tag inheritance', async () => {
+        const app = new Elysia({ prefix: '/api' })
+            .use(swagger(swaggerConfig))
+            .use(dashboardController)
+            .use(mobileController);
+        const response = await app.handle(new Request('http://localhost/api/swagger/json'));
+        const document = await response.json() as OpenApiDocument;
+
+        expect(document.tags?.map(tag => tag.name)).toEqual(
+            SWAGGER_TAG_DEFINITIONS.map(tag => tag.name)
+        );
+        expect(document['x-tagGroups']).toEqual(SWAGGER_TAG_GROUPS);
+        expect(document['x-tagGroups']?.map(group => group.name)).toEqual([
+            'Dashboard',
+            'Admin',
+            'Doctor',
+            'Mobile',
+        ]);
+
+        const groupsByName = new Map(document['x-tagGroups']?.map(group => [group.name, group.tags]));
+        expect(groupsByName.get('Admin')).toEqual(expect.arrayContaining([
+            SWAGGER_TAGS.ADMIN.CLINICS,
+            SWAGGER_TAGS.ADMIN.APPOINTMENTS,
+            SWAGGER_TAGS.ADMIN.HOME_CARE,
+        ]));
+        expect(groupsByName.get('Doctor')).toEqual(expect.arrayContaining([
+            SWAGGER_TAGS.DOCTOR.PROFILE,
+            SWAGGER_TAGS.DOCTOR.APPOINTMENTS,
+        ]));
+        expect(groupsByName.get('Mobile')).toEqual(expect.arrayContaining([
+            SWAGGER_TAGS.MOBILE.AUTH,
+            SWAGGER_TAGS.MOBILE.APPOINTMENTS,
+            SWAGGER_TAGS.MOBILE.HOME_CARE,
+        ]));
+
+        const tagDefinitions = new Map(document.tags?.map(tag => [tag.name, tag]));
+        expect(tagDefinitions.get(SWAGGER_TAGS.ADMIN.CLINICS)?.['x-displayName']).toBe('Clinics');
+        expect(tagDefinitions.get(SWAGGER_TAGS.DOCTOR.APPOINTMENTS)?.['x-displayName']).toBe('Appointments');
+        expect(tagDefinitions.get(SWAGGER_TAGS.MOBILE.HOME_CARE)?.['x-displayName']).toBe('Home Care');
+        for (const tag of document.tags ?? []) {
+            expect(tag['x-displayName']?.trim(), tag.name).toBeTruthy();
+        }
+
+        const definedTagNames = new Set(document.tags?.map(tag => tag.name));
+        const groupedTagNames = document['x-tagGroups']?.flatMap(group => group.tags) ?? [];
+        expect(groupedTagNames.length).toBe(definedTagNames.size);
+        expect(new Set(groupedTagNames).size).toBe(groupedTagNames.length);
+        for (const tag of groupedTagNames) {
+            expect(definedTagNames.has(tag), tag).toBe(true);
+        }
+
+        const expectedTags: Array<[string, string, string]> = [
+            ['post', '/api/dash/auth/login', SWAGGER_TAGS.DASHBOARD.AUTH],
+            ['post', '/api/dash/upload/presign', SWAGGER_TAGS.DASHBOARD.SHARED],
+            ['get', '/api/dash/admin/clinics/', SWAGGER_TAGS.ADMIN.CLINICS],
+            ['get', '/api/dash/admin/doctors/', SWAGGER_TAGS.ADMIN.DOCTORS],
+            ['get', '/api/dash/admin/patients/', SWAGGER_TAGS.ADMIN.PATIENTS],
+            ['get', '/api/dash/admin/appointments/', SWAGGER_TAGS.ADMIN.APPOINTMENTS],
+            ['get', '/api/dash/admin/home-care/categories/', SWAGGER_TAGS.ADMIN.HOME_CARE],
+            ['get', '/api/dash/admin/home-care/services/', SWAGGER_TAGS.ADMIN.HOME_CARE],
+            ['get', '/api/dash/admin/home-care/requests/', SWAGGER_TAGS.ADMIN.HOME_CARE],
+            ['get', '/api/dash/doctor/profile/', SWAGGER_TAGS.DOCTOR.PROFILE],
+            ['get', '/api/dash/doctor/appointments/', SWAGGER_TAGS.DOCTOR.APPOINTMENTS],
+            ['get', '/api/dash/doctor/secretaries/', SWAGGER_TAGS.DOCTOR.SECRETARIES],
+            ['post', '/api/mobile/auth/register', SWAGGER_TAGS.MOBILE.AUTH],
+            ['get', '/api/mobile/doctors/', SWAGGER_TAGS.MOBILE.DOCTORS],
+            ['post', '/api/mobile/appointments/', SWAGGER_TAGS.MOBILE.APPOINTMENTS],
+            ['get', '/api/mobile/home-care/categories', SWAGGER_TAGS.MOBILE.HOME_CARE],
+            ['get', '/api/mobile/home-care/requests/', SWAGGER_TAGS.MOBILE.HOME_CARE],
+        ];
+
+        for (const [method, path, tag] of expectedTags) {
+            const operation = document.paths?.[path]?.[method];
+            expect(operation, `${method.toUpperCase()} ${path}`).toBeDefined();
+            expect(operation?.tags, `${method.toUpperCase()} ${path}`).toEqual([tag]);
+        }
+
+        for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
+            for (const [method, operation] of Object.entries(pathItem)) {
+                if (!['get', 'post', 'put', 'patch', 'delete'].includes(method)) continue;
+                expect(operation.tags, `${method.toUpperCase()} ${path}`).not.toContain('Dash');
+                expect(operation.tags, `${method.toUpperCase()} ${path}`).not.toContain('Mobile');
+                expect(operation.tags?.length, `${method.toUpperCase()} ${path}`).toBe(1);
+                expect(definedTagNames.has(operation.tags?.[0] ?? ''), `${method.toUpperCase()} ${path}`).toBe(true);
+            }
+        }
+    });
 });
 
 describe('global framework error contracts', () => {
@@ -117,4 +209,3 @@ describe('global framework error contracts', () => {
         expect(JSON.stringify(body)).not.toContain('private infrastructure detail');
     });
 });
-

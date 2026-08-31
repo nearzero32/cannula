@@ -1,10 +1,14 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import chronicConditionService from '../../services/chronic-condition.service';
 import { IChronicConditionStatusEnum } from '../../interfaces/chronic-condition.interface';
 import { GenericPaginatedResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 
-export const mobileChronicConditionsController = new Elysia({ prefix: '/chronic-conditions' })
+export const mobileChronicConditionsController = new Elysia({
+    prefix: '/chronic-conditions',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.CHRONIC_CONDITIONS] },
+})
 
     .get(
         '/',

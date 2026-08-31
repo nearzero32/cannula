@@ -1,5 +1,6 @@
 import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
 import homeCareRequestService from '../../services/home-care-request.service';
@@ -62,7 +63,7 @@ function mobileActor(userId: string, endpoint: string) {
 
 export const mobileHomeCareRequestsController = new Elysia({
     prefix: '/home-care/requests',
-    detail: { tags: ['Mobile'] },
+    detail: { tags: [SWAGGER_TAGS.MOBILE.HOME_CARE] },
 })
     .use(AuthPlugin())
     .onError(({ code, error, set }) => {

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import { ActivityLoggerPlugin } from '../../../middleware/logger.middleware';
@@ -8,7 +9,10 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedRe
 
 const ObjectId = mongoose.Types.ObjectId;
 
-export const activityLogController = new Elysia({ prefix: '/activity-logs' })
+export const activityLogController = new Elysia({
+    prefix: '/activity-logs',
+    detail: { tags: [SWAGGER_TAGS.ADMIN.ACTIVITY_LOGS] },
+})
     .use(AuthPlugin())
     .use(ActivityLoggerPlugin)
 

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import doctorService from '../../../services/doctor.service';
 import { IDoctorGenderEnum } from '../../../interfaces/doctor.interface';
@@ -34,7 +35,10 @@ const profileBodySchema = t.Object({
     accepting_new_patients: t.Optional(t.Boolean()),
 });
 
-export const doctorProfileController = new Elysia({ prefix: '/profile' })
+export const doctorProfileController = new Elysia({
+    prefix: '/profile',
+    detail: { tags: [SWAGGER_TAGS.DOCTOR.PROFILE] },
+})
     .use(AuthPlugin())
 
     .get('/', async ({ phrase, set }) => {

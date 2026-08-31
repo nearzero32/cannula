@@ -8,12 +8,13 @@ import { mobileSpecialtiesController } from './specialties.controller';
 import { mobileProfileController } from './profile.controller';
 import { mobileSuggestionsController } from './suggestions.controller';
 import { mobileDoctorFavoritesController } from './doctor-favorites.controller';
-import { sharedController } from '../shared/index';
+import { createSharedController } from '../shared/index';
 import { mobileHomeCareController } from './home-care.controller';
 import { mobileProfileHealthController } from './profile-health.controller';
 import { mobileChildrenController } from './children.controller';
 import { mobileAppointmentsController } from './appointments.controller';
 import { mobileHomeCareRequestsController } from './home-care-requests.controller';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 
 /** Public mobile routes — no authentication required */
 const mobilePublicController = new Elysia()
@@ -34,11 +35,10 @@ const mobileProtectedController = new Elysia()
     .use(mobileHomeCareRequestsController)
     .use(mobileSuggestionsController)
     .use(mobileDoctorFavoritesController)
-    .use(sharedController);
+    .use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE));
 
 export const mobileController = new Elysia({
     prefix: '/mobile',
-    detail: { tags: ['Mobile'] },
 })
     .use(mobilePublicController)
     .use(mobileProtectedController);

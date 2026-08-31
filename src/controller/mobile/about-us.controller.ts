@@ -1,8 +1,12 @@
 import Elysia from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import aboutUsService from '../../services/about-us.service';
 import { GenericDataResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 
-export const mobileAboutUsController = new Elysia({ prefix: '/about-us' })
+export const mobileAboutUsController = new Elysia({
+    prefix: '/about-us',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.ABOUT_US] },
+})
 
     .get('/', async ({ set }) => {
         const data = await aboutUsService.get();

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import adsService from '../../services/ads.service';
 import { IAdsStatusEnum } from '../../interfaces/ads.interface';
@@ -6,7 +7,10 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedRe
 
 const ObjectId = mongoose.Types.ObjectId;
 
-export const mobileAdsController = new Elysia({ prefix: '/ads' })
+export const mobileAdsController = new Elysia({
+    prefix: '/ads',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.ADS] },
+})
 
     .get(
         '/',

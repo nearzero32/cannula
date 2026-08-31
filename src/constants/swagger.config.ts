@@ -1,3 +1,5 @@
+import { SWAGGER_TAG_DEFINITIONS, SWAGGER_TAG_GROUPS } from './swagger-tags';
+
 export const swaggerConfig = {
   documentation: {
     info: {
@@ -6,10 +8,8 @@ export const swaggerConfig = {
       description:
         "REST API لحجز المواعيد الطبية — مرضى، أطباء، عيادات، وإدارة",
     },
-    tags: [
-      { name: "Dash", description: "لوحة التحكم" },
-      { name: "Mobile", description: "تطبيق الموبايل" },
-    ],
+    tags: SWAGGER_TAG_DEFINITIONS,
+    'x-tagGroups': SWAGGER_TAG_GROUPS,
     components: {
       securitySchemes: {
         bearerAuth: {
