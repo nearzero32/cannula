@@ -49,11 +49,11 @@ describe('Pharmacy atomic dispatch and quotation CAS', () => {
         expect(filter.status).toBe(S.OPEN); expect(filter.excluded_pharmacy_ids.$ne).toEqual(pharmacyA); expect(filter.$and).toBeDefined();
     });
     test('two claims share one conditional OPEN write and only one wins', async () => {
-        const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner); spyOn(pharmacyService,'requireOperational').mockImplementation(async uid=>({_id:uid===userA?pharmacyA:pharmacyB} as any)); quiet(); let open=true; spyOn(TreatmentRequest,'findOne').mockReturnValue(query(request(S.OPEN,null,0,0)) as never);const claimed=request(S.UNDER_REVIEW,pharmacyA,1,0);claimed.prescription_images=['private-key'];
+        const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner); spyOn(pharmacyService,'requireOperational').mockImplementation(async uid=>({_id:uid===userA?pharmacyA:pharmacyB} as any)); quiet(); let open=true; spyOn(TreatmentRequest,'findOne').mockReturnValue(query(request(S.OPEN,null,0,0)) as never);const claimed=request(S.UNDER_REVIEW,pharmacyA,1,0);claimed.prescription_images=['private-key'];claimed.treatment_details='sensitive treatment';claimed.delivery_address={address_text:'private address',lat:33,lng:44};claimed.delivery_phone='07700000000';claimed.notes='private note';
         const update=spyOn(TreatmentRequest,'findOneAndUpdate').mockImplementation(()=>query(open?(open=false,claimed):null) as never);
         const results=await Promise.allSettled([service.claim(userA,requestId,actor),service.claim('507f191e810c19729de86106',requestId,{...actor,user_id:'507f191e810c19729de86106'})]);
         expect(results.filter(x=>x.status==='fulfilled')).toHaveLength(1); expect(results.filter(x=>x.status==='rejected')).toHaveLength(1);
-        const [filter,mutation]=update.mock.calls[0] as any; expect(filter.status).toBe(S.OPEN); expect(filter.excluded_pharmacy_ids.$ne).toBeDefined(); expect(mutation.$inc['dispatch.version']).toBe(1);expect(mutation.$inc.workflowVersion).toBe(1);expect(((ActivityLogService.logActivity as any).mock.calls[0][0].new_data).prescription_images).toBeUndefined();
+        const [filter,mutation]=update.mock.calls[0] as any; expect(filter.status).toBe(S.OPEN); expect(filter.excluded_pharmacy_ids.$ne).toBeDefined(); expect(mutation.$inc['dispatch.version']).toBe(1);expect(mutation.$inc.workflowVersion).toBe(1);const logged=(ActivityLogService.logActivity as any).mock.calls[0][0].new_data;for(const key of ['prescription_images','treatment_details','delivery_address','delivery_phone','notes'])expect(logged[key]).toBeUndefined();expect(logged.prescription_image_count).toBe(1);
     });
     test('quote revision CASes dispatch and quote versions and computes totals', async () => {
         const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner),current=request(S.WAITING_CUSTOMER_APPROVAL,pharmacyA,4,2),updated=request(S.WAITING_CUSTOMER_APPROVAL,pharmacyA,5,3);
@@ -90,9 +90,19 @@ describe('Pharmacy atomic dispatch and quotation CAS', () => {
         const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner); spyOn(pharmacyService,'requireOperational').mockResolvedValue({_id:pharmacyA} as any); quiet(); const update=spyOn(TreatmentRequest,'findOneAndUpdate');
         await expect(service.transition(userA,requestId,S.CONFIRMED,S.READY_FOR_DELIVERY,actor)).rejects.toMatchObject({status:409,code:'INVALID_STATE_TRANSITION'}); expect(update).not.toHaveBeenCalled();
     });
+    test('fulfillment refuses malformed confirmed data without an accepted quotation', async () => {
+        const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner),current=request(S.CONFIRMED,pharmacyA,6,3);spyOn(pharmacyService,'requireOperational').mockResolvedValue({_id:pharmacyA} as any);spyOn(TreatmentRequest,'findOne').mockReturnValue(query(current) as never);const update=spyOn(TreatmentRequest,'findOneAndUpdate');quiet();
+        await expect(service.transition(userA,requestId,S.CONFIRMED,S.PREPARING,actor)).rejects.toMatchObject({status:409,code:'ACCEPTED_QUOTATION_REQUIRED'});expect(update).not.toHaveBeenCalled();
+    });
 });
 
 describe('Pharmacy account and privacy boundaries', () => {
+    test('request creation ActivityLog excludes prescription and delivery contents', async () => {
+        const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner),created={...request(S.OPEN,null,0,0),prescription_images:['private-key'],treatment_details:'sensitive treatment',delivery_address:{address_text:'private address',lat:33,lng:44},delivery_phone:'07700000000',notes:'private note'} as any;
+        spyOn(Counter,'findOneAndUpdate').mockReturnValue(query({sequence:1}) as never);spyOn(TreatmentRequest,'create').mockResolvedValue([created] as never);spyOn(TreatmentRequest,'findOne').mockReturnValue(query(created) as never);spyOn(History,'create').mockResolvedValue({} as never);const audit=spyOn(ActivityLogService,'logActivity').mockResolvedValue({} as never);
+        await service.create(patientId,{prescription_images:['private-key'],treatment_details:'sensitive treatment',delivery_address:{address_text:'private address',lat:33,lng:44},delivery_phone:'07700000000',notes:'private note',preferred_payment_method:'cash_on_delivery'},{user_id:userA,type:'PATIENT',endpoint:'/test'});
+        const entry=(audit.mock.calls[0] as any)[0];for(const target of [entry.new_data,entry.request_body])for(const key of ['prescription_images','treatment_details','delivery_address','delivery_phone','notes'])expect(target[key]).toBeUndefined();expect(entry.new_data.prescription_image_count).toBe(1);
+    });
     test('inactive, suspended, and non-accepting profiles cannot operate', async () => {
         spyOn(User,'findOne').mockReturnValue(query({_id:new mongoose.Types.ObjectId(userA)}) as never);
         for (const profile of [{status:'inactive',accepts_prescription_requests:true},{status:'suspended',accepts_prescription_requests:true},{status:'active',accepts_prescription_requests:false}]) {

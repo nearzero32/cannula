@@ -5,7 +5,7 @@ Kanona is a medical appointment scheduling REST API for patients, doctors, clini
 ## Requirements
 
 - Bun 1.3 or newer
-- MongoDB
+- MongoDB replica set or mongos deployment
 - Redis
 
 Copy `.env.example` to `.env` and provide the required MongoDB, Redis, JWT, and bootstrap administrator settings.
@@ -30,6 +30,8 @@ To run the test suite:
 ```bash
 bun test
 ```
+
+Transactional MongoDB integration tests run only when `MONGODB_TEST_URI` points to a safe test replica set or mongos deployment.
 
 ## Architecture
 
@@ -58,7 +60,9 @@ The application ensures a super administrator exists at startup. Always set `SUP
 docker compose up --build
 ```
 
-The Compose stack starts the API, MongoDB, and Redis. The API is bound to localhost on port `3001` by default.
+The Compose stack starts the API, Redis, and a single-node MongoDB replica set. The API is bound to localhost on port `3001` by default. A single-node replica set supports transactions but provides no database high availability; production deployments requiring failover should use a three-node replica set or a managed MongoDB service.
+
+See [the Pharmacy production runbook](src/docs/pharmacy-production-runbook.md) for topology checks, migration order, test commands, and rollback considerations.
 
 ## Project conventions
 

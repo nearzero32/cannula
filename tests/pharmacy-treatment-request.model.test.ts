@@ -7,6 +7,7 @@ import History from '../src/models/pharmacy-treatment-request-history.model';
 import { PharmacyDispatchModeEnum, PharmacyDispatchStatusEnum, PharmacyPaymentMethodEnum, PharmacyRequestStatusEnum } from '../src/interfaces/pharmacy-treatment-request.interface';
 import { SWAGGER_TAG_GROUPS, SWAGGER_TAGS } from '../src/constants/swagger-tags';
 import { PHARMACY_WORKFLOW_RULES, PharmacyWorkflowOperationEnum as Op } from '../src/services/pharmacy-treatment-request.workflow';
+import { supportsPharmacyTransactions } from '../src/services/pharmacy-transaction.service';
 
 describe('Pharmacy identity, persistence, and documentation', () => {
     test('adds Pharmacy to the existing dashboard identity flow', () => {
@@ -25,6 +26,12 @@ describe('Pharmacy identity, persistence, and documentation', () => {
         expect(PHARMACY_WORKFLOW_RULES[Op.ACCEPT_QUOTE]).toMatchObject({actor:'PATIENT',from:['waiting_customer_approval'],to:'confirmed'});
         expect(PHARMACY_WORKFLOW_RULES[Op.REJECT_QUOTE]).toMatchObject({actor:'PATIENT',to:'open'});
         expect(PHARMACY_WORKFLOW_RULES[Op.REASSIGN].from).not.toContain('confirmed');
+    });
+    test('accepts replica-set and mongos topology but rejects standalone MongoDB', () => {
+        expect(supportsPharmacyTransactions({setName:'rs0'})).toBe(true);
+        expect(supportsPharmacyTransactions({msg:'isdbgrid'})).toBe(true);
+        expect(supportsPharmacyTransactions({})).toBe(false);
+        expect(supportsPharmacyTransactions({setName:''})).toBe(false);
     });
     test('defines practical Pharmacy, pool, ownership, patient, and history indexes', () => {
         expect(Pharmacy.schema.indexes().some(([keys, options]) => keys.user_id === 1 && options.unique === true)).toBe(true);

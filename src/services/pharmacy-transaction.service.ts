@@ -20,10 +20,14 @@ export class MongoosePharmacyTransactionRunner implements PharmacyTransactionRun
 }
 
 export const directPharmacyTransactionRunner: PharmacyTransactionRunner = { run: work => work(null) };
+export type PharmacyMongoHello = { setName?: unknown; msg?: unknown };
+export function supportsPharmacyTransactions(hello: PharmacyMongoHello): boolean {
+    return (typeof hello.setName === 'string' && hello.setName.length > 0) || hello.msg === 'isdbgrid';
+}
 export async function assertPharmacyTransactionSupport():Promise<void>{
     const database=mongoose.connection.db;
     if(!database)throw new Error('MongoDB must be connected before checking Pharmacy transaction support');
     const hello=await database.admin().command({hello:1});
-    if(!hello.setName&&hello.msg!=='isdbgrid')throw new Error('Pharmacy Treatment Requests require MongoDB replica-set or mongos transaction support');
+    if(!supportsPharmacyTransactions(hello))throw new Error('Pharmacy Treatment Requests require MongoDB replica-set or mongos transaction support');
 }
 export default new MongoosePharmacyTransactionRunner();

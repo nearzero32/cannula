@@ -12,6 +12,8 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      mongo-init:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
     logging:
@@ -28,6 +30,8 @@ services:
     command:
       - mongod
       - --bind_ip_all
+      - --replSet
+      - ${MONGODB_REPLICA_SET_NAME:-rs0}
       - --wiredTigerCacheSizeGB
       - "0.75"
     volumes:
@@ -38,6 +42,26 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
+
+  mongo-init:
+    image: mongo:8
+    container_name: cannula-mongo-init
+    restart: "no"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    entrypoint:
+      - mongosh
+      - --host
+      - mongo:27017
+      - --quiet
+      - --eval
+      - |
+        const replicaSet = "${MONGODB_REPLICA_SET_NAME:-rs0}";
+        try { rs.status(); } catch (error) {
+          rs.initiate({_id: replicaSet, members: [{_id: 0, host: "mongo:27017"}]});
+        }
+        while (!db.hello().isWritablePrimary) { sleep(500); }
 
   redis:
     image: redis:7-alpine
