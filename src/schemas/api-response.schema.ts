@@ -14,6 +14,7 @@ export function errorResponse(description: string, message: string) {
     return t.Object({
         error: t.Literal(true),
         message: t.String(),
+        code: t.Optional(t.String({ description: 'رمز خطأ ثابت قابل للاستهلاك برمجياً عند توفره' })),
     }, {
         description,
         examples: [{ error: true, message }],

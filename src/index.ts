@@ -18,11 +18,14 @@ import { RATE_LIMIT_RESPONSE } from './schemas/api-response.schema';
 import { ApiErrorPlugin } from './middleware/api-error.middleware';
 import { backfillHealthProfiles } from './migrations/backfill-health-profiles.migration';
 import { repairAppointmentSlotIndex } from './migrations/repair-appointment-slot-index.migration';
+import { backfillPharmacyWorkflow } from './migrations/backfill-pharmacy-workflow.migration';
+import { assertPharmacyTransactionSupport } from './services/pharmacy-transaction.service';
 
 async function bootstrap() {
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
+    await assertPharmacyTransactionSupport();
     await ensureSuperAdminExists();
     await migratePasswordsToArgon2();
     await seedChronicConditions();
@@ -30,6 +33,7 @@ async function bootstrap() {
     await seedHomeCareCategories();
     await backfillHealthProfiles();
     await repairAppointmentSlotIndex();
+    await backfillPharmacyWorkflow();
 
     // Connect Redis
     await RedisClient.getInstance().connect();
