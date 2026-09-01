@@ -7,10 +7,10 @@ import ChildHealthProfile from '../src/models/child-health-profile.model';
 import PatientChild from '../src/models/patient-child.model';
 import {
     normalizeHealthStringList,
+    normalizeAllergies,
     prepareHealthProfileUpdate,
-    validateMedicalNotes,
 } from '../src/services/health-profile.service';
-import { healthProfileBodySchema } from '../src/controller/mobile/profile-health.controller';
+import { patientManagedHealthProfileBodySchema } from '../src/controller/mobile/profile-health.controller';
 import { IPatientGenderEnum } from '../src/interfaces/patient.interface';
 import ChronicCondition from '../src/models/chronic-conditions.model';
 
@@ -22,9 +22,7 @@ describe('Health profile validation and persistence shape', () => {
             .toEqual(['Penicillin', 'Dust']);
     });
 
-    test('rejects non-positive measurements and malformed chronic condition IDs', async () => {
-        await expect(prepareHealthProfileUpdate({ weight: 0 })).rejects.toThrow('الوزن');
-        await expect(prepareHealthProfileUpdate({ height: -1 })).rejects.toThrow('الطول');
+    test('rejects malformed chronic condition IDs', async () => {
         await expect(prepareHealthProfileUpdate({ chronic_condition_ids: ['invalid'] }))
             .rejects.toThrow('غير صالح');
     });
@@ -36,16 +34,50 @@ describe('Health profile validation and persistence shape', () => {
         })).rejects.toThrow('غير موجود');
     });
 
-    test('bounds medical notes and turns whitespace-only notes into null', () => {
-        expect(validateMedicalNotes('   ')).toBeNull();
-        expect(() => validateMedicalNotes('x'.repeat(4001))).toThrow('4000');
+    test('deduplicates chronic conditions and accepts only active supported records', async () => {
+        const id1 = new mongoose.Types.ObjectId();
+        const id2 = new mongoose.Types.ObjectId();
+        const countDocuments = spyOn(ChronicCondition, 'countDocuments')
+            .mockReturnValue({ exec: async () => 2 } as never);
+        const update = await prepareHealthProfileUpdate({
+            chronic_condition_ids: [id1.toString(), id1.toString(), id2.toString()],
+        });
+        expect(update.chronic_condition_ids?.map(String)).toEqual([id1.toString(), id2.toString()]);
+        expect(countDocuments).toHaveBeenCalledWith({
+            _id: { $in: [id1, id2] },
+            status: 'active',
+        });
     });
 
-    test('health request rejects ownership mass assignment', () => {
-        expect(Value.Check(healthProfileBodySchema, {
-            weight: 20,
-            patient_id: new mongoose.Types.ObjectId().toString(),
-        })).toBe(false);
+    test('supports replacement clearing and blood-type clearing without touching legacy fields', async () => {
+        spyOn(ChronicCondition, 'countDocuments').mockReturnValue({ exec: async () => 0 } as never);
+        const update = await prepareHealthProfileUpdate({
+            blood_type: null,
+            chronic_condition_ids: [],
+            allergies: [],
+        });
+        expect(update).toEqual({ blood_type: null, allergies: [], chronic_condition_ids: [] });
+        expect(update).not.toHaveProperty('current_medications');
+        expect(update).not.toHaveProperty('weight');
+        expect(update).not.toHaveProperty('height');
+        expect(update).not.toHaveProperty('medical_notes');
+    });
+
+    test('rejects empty and overlong allergies and normalizes duplicates', () => {
+        expect(() => normalizeAllergies(['   '])).toThrow('فارغة');
+        expect(() => normalizeAllergies(['x'.repeat(121)])).toThrow('120');
+        expect(normalizeAllergies([' Penicillin ', 'penicillin', 'Peanuts']))
+            .toEqual(['Penicillin', 'Peanuts']);
+    });
+
+    test('patient health request rejects system-managed and ownership fields', () => {
+        for (const forbidden of ['weight', 'height', 'current_medications', 'medical_notes', 'patient_id']) {
+            expect(Value.Check(patientManagedHealthProfileBodySchema, { [forbidden]: 'value' })).toBe(false);
+        }
+        expect(Value.Check(patientManagedHealthProfileBodySchema, { blood_type: 'O-' })).toBe(true);
+        expect(Value.Check(patientManagedHealthProfileBodySchema, { blood_type: null })).toBe(true);
+        expect(Value.Check(patientManagedHealthProfileBodySchema, { allergies: [] })).toBe(true);
+        expect(Value.Check(patientManagedHealthProfileBodySchema, { chronic_condition_ids: [] })).toBe(true);
     });
 
     test('schemas enforce blood type, positive units, and one-to-one indexes', async () => {
@@ -56,6 +88,8 @@ describe('Health profile validation and persistence shape', () => {
             .rejects.toThrow();
         expect(PatientHealthProfile.schema.indexes().some(([fields, options]) => fields.patient_id === 1 && options.unique === true)).toBe(true);
         expect(ChildHealthProfile.schema.indexes().some(([fields, options]) => fields.child_id === 1 && options.unique === true)).toBe(true);
+        expect(PatientHealthProfile.schema.path('current_medications')).toBeDefined();
+        expect(PatientHealthProfile.schema.path('medical_notes')).toBeDefined();
     });
 
     test('patient identity no longer duplicates health fields and child has no account fields', () => {

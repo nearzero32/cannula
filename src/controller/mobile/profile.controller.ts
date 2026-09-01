@@ -13,11 +13,15 @@ import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, InternalServerErrorResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 import {
+    ALLERGY_MAX_LENGTH,
+    MAX_ALLERGIES,
+    MAX_CHRONIC_CONDITIONS,
     patientHealthProfileService,
-    type HealthProfileInput,
+    type PatientManagedHealthProfileInput,
 } from '../../services/health-profile.service';
 import type { PatientHealthProfileDocument } from '../../models/patient-health-profile.model';
 import { DomainError } from '../../services/domain-error';
+import { calculateAge, formatDateOfBirth, parseDateOfBirth } from '../../services/date-of-birth';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -25,12 +29,17 @@ const completeProfileBodySchema = t.Object({
     full_name: t.Optional(t.String({ minLength: 2, maxLength: 120 })),
     email: t.Optional(t.Nullable(t.String())),
     gender: t.Optional(t.Nullable(t.Enum(IPatientGenderEnum))),
-    date_of_birth: t.Optional(t.Nullable(t.String())),
+    date_of_birth: t.Optional(t.Nullable(t.String({
+        format: 'date',
+        description: 'تاريخ ميلاد ISO بصيغة YYYY-MM-DD؛ العمر مشتق وللقراءة فقط',
+    }))),
     address: t.Optional(t.Nullable(t.String({ maxLength: 300 }))),
     profile_photo: t.Optional(t.Nullable(t.String())),
     blood_group: t.Optional(t.Nullable(t.Enum(IPatientBloodGroupEnum))),
-    allergies: t.Optional(t.Array(t.String())),
-    chronic_condition_ids: t.Optional(t.Array(t.String())),
+    allergies: t.Optional(t.Array(t.String({ minLength: 1, maxLength: ALLERGY_MAX_LENGTH }), {
+        maxItems: MAX_ALLERGIES,
+    })),
+    chronic_condition_ids: t.Optional(t.Array(t.String(), { maxItems: MAX_CHRONIC_CONDITIONS })),
 });
 
 function isProfileComplete(patient: IPatient): boolean {
@@ -44,7 +53,8 @@ function formatPatientResponse(patient: IPatient, health: PatientHealthProfileDo
         full_name: patient.full_name,
         phone: patient.phone,
         gender: patient.gender,
-        date_of_birth: patient.date_of_birth,
+        date_of_birth: formatDateOfBirth(patient.date_of_birth),
+        age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
         address: patient.address,
         profile_photo: patient.profile_photo,
         blood_group: health.blood_type ?? null,
@@ -102,10 +112,23 @@ export const mobileProfileController = new Elysia({
                 return { error: true, message: 'الملف الشخصي غير موجود' };
             }
 
+            let parsedDateOfBirth: Date | null | undefined;
+            if (body.date_of_birth !== undefined) {
+                try {
+                    parsedDateOfBirth = body.date_of_birth ? parseDateOfBirth(body.date_of_birth) : null;
+                } catch (error) {
+                    if (error instanceof DomainError) {
+                        set.status = error.status;
+                        return { error: true, message: error.message };
+                    }
+                    throw error;
+                }
+            }
+
             let healthProfile = await patientHealthProfileService.getOrCreate(
                 new ObjectId(patient._id.toString())
             );
-            const healthInput: HealthProfileInput = {};
+            const healthInput: PatientManagedHealthProfileInput = {};
             if (body.blood_group !== undefined) healthInput.blood_type = body.blood_group;
             if (body.allergies !== undefined) healthInput.allergies = body.allergies;
             if (body.chronic_condition_ids !== undefined) {
@@ -129,7 +152,7 @@ export const mobileProfileController = new Elysia({
             if (body.full_name !== undefined) patientPayload.full_name = body.full_name;
             if (body.gender !== undefined) patientPayload.gender = body.gender;
             if (body.date_of_birth !== undefined) {
-                patientPayload.date_of_birth = body.date_of_birth ? new Date(body.date_of_birth) : null;
+                patientPayload.date_of_birth = parsedDateOfBirth;
             }
             if (body.address !== undefined) patientPayload.address = body.address;
             if (body.profile_photo !== undefined) patientPayload.profile_photo = body.profile_photo;
@@ -169,6 +192,9 @@ export const mobileProfileController = new Elysia({
         },
         {
             body: completeProfileBodySchema,
+            detail: {
+                description: 'يُعدّل تاريخ الميلاد هنا بصيغة YYYY-MM-DD. العمر مشتق ديناميكياً ولا يُخزّن.',
+            },
             response: {
                 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
                 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema,

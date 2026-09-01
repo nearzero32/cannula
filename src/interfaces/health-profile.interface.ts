@@ -34,8 +34,8 @@ export interface IChildHealthProfile extends IBaseDocument, HealthProfileFields 
     child_id: mongoose.Types.ObjectId;
 }
 
-export type HealthProfileUpdate = Partial<Pick<
+/** Fields a patient or guardian may manage in the current MVP. */
+export type PatientManagedHealthProfileUpdate = Partial<Pick<
     HealthProfileFields,
-    'blood_type' | 'weight' | 'height' | 'allergies' | 'chronic_condition_ids' |
-    'current_medications' | 'medical_notes'
+    'blood_type' | 'allergies' | 'chronic_condition_ids'
 >>;

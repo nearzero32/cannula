@@ -4,7 +4,10 @@ import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
 import {
+    ALLERGY_MAX_LENGTH,
     formatHealthProfile,
+    MAX_ALLERGIES,
+    MAX_CHRONIC_CONDITIONS,
     patientHealthProfileService,
 } from '../../services/health-profile.service';
 import { DomainError } from '../../services/domain-error';
@@ -18,15 +21,18 @@ import {
     ValidationErrorResponseSchema,
 } from '../../schemas/api-response.schema';
 import { HealthProfileResponseSchema } from '../../schemas/patient-health-response.schema';
+import { calculateAge, formatDateOfBirth } from '../../services/date-of-birth';
 
-export const healthProfileBodySchema = t.Object({
+export const patientManagedHealthProfileBodySchema = t.Object({
     blood_type: t.Optional(t.Nullable(t.Enum(BloodTypeEnum))),
-    weight: t.Optional(t.Nullable(t.Number({ exclusiveMinimum: 0, description: 'الوزن بالكيلوغرام' }))),
-    height: t.Optional(t.Nullable(t.Number({ exclusiveMinimum: 0, description: 'الطول بالسنتيمتر' }))),
-    allergies: t.Optional(t.Array(t.String())),
-    chronic_condition_ids: t.Optional(t.Array(t.String())),
-    current_medications: t.Optional(t.Array(t.String())),
-    medical_notes: t.Optional(t.Nullable(t.String({ maxLength: 4000 }))),
+    allergies: t.Optional(t.Array(t.String({ minLength: 1, maxLength: ALLERGY_MAX_LENGTH }), {
+        maxItems: MAX_ALLERGIES,
+        description: 'حساسيات يبلّغ عنها المريض؛ تُزال التكرارات دون اعتبار لحالة الأحرف',
+    })),
+    chronic_condition_ids: t.Optional(t.Array(t.String(), {
+        maxItems: MAX_CHRONIC_CONDITIONS,
+        description: 'معرفات حالات مزمنة نشطة ومدعومة؛ تستخدم القائمة البديلة و[] للمسح',
+    })),
 }, { additionalProperties: false });
 
 async function authenticatedPatient(phrase: { _id: string; role: string }) {
@@ -54,7 +60,15 @@ export const mobileProfileHealthController = new Elysia({
         const profile = await patientHealthProfileService.getOrCreate(
             new mongoose.Types.ObjectId(patient._id.toString())
         );
-        return { error: false, message: 'تم جلب الملف الصحي بنجاح', data: await formatHealthProfile(profile) };
+        return {
+            error: false,
+            message: 'تم جلب الملف الصحي بنجاح',
+            data: {
+                date_of_birth: formatDateOfBirth(patient.date_of_birth),
+                age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
+                ...await formatHealthProfile(profile),
+            },
+        };
     }, {
         response: {
             200: HealthProfileResponseSchema,
@@ -70,7 +84,15 @@ export const mobileProfileHealthController = new Elysia({
                 new mongoose.Types.ObjectId(patient._id.toString()),
                 body
             );
-            return { error: false, message: 'تم تحديث الملف الصحي بنجاح', data: await formatHealthProfile(profile) };
+            return {
+                error: false,
+                message: 'تم تحديث الملف الصحي بنجاح',
+                data: {
+                    date_of_birth: formatDateOfBirth(patient.date_of_birth),
+                    age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
+                    ...await formatHealthProfile(profile),
+                },
+            };
         } catch (error) {
             if (error instanceof DomainError) {
                 set.status = error.status;
@@ -79,7 +101,10 @@ export const mobileProfileHealthController = new Elysia({
             throw error;
         }
     }, {
-        body: healthProfileBodySchema,
+        body: patientManagedHealthProfileBodySchema,
+        detail: {
+            description: 'يعدّل المريض فصيلة الدم والحساسيات والحالات المزمنة فقط. تاريخ الميلاد يُعدّل عبر الملف الشخصي، والعمر مشتق للقراءة فقط. الأدوية والقياسات والملاحظات السريرية غير قابلة للكتابة من المريض.',
+        },
         response: {
             200: HealthProfileResponseSchema,
             400: BadRequestResponseSchema,

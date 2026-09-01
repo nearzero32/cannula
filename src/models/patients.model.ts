@@ -28,6 +28,14 @@ const patientSchema = new Schema(
         date_of_birth: {
             type: Date,
             default: null,
+            validate: {
+                validator: (value: Date | null) => value === null || (
+                    !Number.isNaN(value.getTime()) &&
+                    value.toISOString().slice(0, 10) >= '1900-01-01' &&
+                    value.toISOString().slice(0, 10) <= new Date().toISOString().slice(0, 10)
+                ),
+                message: 'تاريخ الميلاد غير صالح أو خارج النطاق المسموح',
+            },
         },
 
         phone: {

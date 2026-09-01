@@ -1,6 +1,6 @@
 import mongoose, { Schema, model, models } from 'mongoose';
 import type { IPatientChild } from '../interfaces/patient-child.interface';
-import { PatientChildStatusEnum } from '../interfaces/patient-child.interface';
+import { PatientChildRelationshipEnum, PatientChildStatusEnum } from '../interfaces/patient-child.interface';
 import { IPatientGenderEnum } from '../interfaces/patient.interface';
 
 export type PatientChildDocument = mongoose.Document & IPatientChild;
@@ -22,13 +22,21 @@ const patientChildSchema = new Schema(
             type: Date,
             required: true,
             validate: {
-                validator: (value: Date) => value.getTime() <= Date.now(),
-                message: 'تاريخ الميلاد لا يمكن أن يكون في المستقبل',
+                validator: (value: Date) => !Number.isNaN(value.getTime()) &&
+                    value.toISOString().slice(0, 10) >= '1900-01-01' &&
+                    value.toISOString().slice(0, 10) <= new Date().toISOString().slice(0, 10),
+                message: 'تاريخ الميلاد غير صالح أو قديم جداً أو في المستقبل',
             },
         },
         gender: {
             type: String,
             enum: Object.values(IPatientGenderEnum),
+            required: true,
+        },
+        relationship: {
+            type: String,
+            enum: Object.values(PatientChildRelationshipEnum),
+            default: PatientChildRelationshipEnum.OTHER,
             required: true,
         },
         photo: {

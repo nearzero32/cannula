@@ -6,20 +6,15 @@ import type {
     PatientChildStatus,
     PatientChildUpdateInput,
 } from '../interfaces/patient-child.interface';
-import { PatientChildStatusEnum } from '../interfaces/patient-child.interface';
+import { PatientChildRelationshipEnum, PatientChildStatusEnum } from '../interfaces/patient-child.interface';
 import { DomainError } from './domain-error';
 import {
     childHealthProfileService,
-    type HealthProfileInput,
+    type PatientManagedHealthProfileInput,
 } from './health-profile.service';
+import { calculateAge, formatDateOfBirth } from './date-of-birth';
 
-export function calculateAge(dateOfBirth: Date, now = new Date()): number {
-    let age = now.getUTCFullYear() - dateOfBirth.getUTCFullYear();
-    const beforeBirthday = now.getUTCMonth() < dateOfBirth.getUTCMonth() ||
-        (now.getUTCMonth() === dateOfBirth.getUTCMonth() && now.getUTCDate() < dateOfBirth.getUTCDate());
-    if (beforeBirthday) age -= 1;
-    return Math.max(0, age);
-}
+export { calculateAge } from './date-of-birth';
 
 export function validateChildDateOfBirth(dateOfBirth: Date): void {
     if (Number.isNaN(dateOfBirth.getTime())) throw new DomainError('تاريخ الميلاد غير صالح', 400);
@@ -37,9 +32,10 @@ export function formatPatientChild(child: PatientChildDocument) {
     return {
         _id: child._id.toString(),
         full_name: child.full_name,
-        date_of_birth: child.date_of_birth.toISOString().slice(0, 10),
+        date_of_birth: formatDateOfBirth(child.date_of_birth),
         age: calculateAge(child.date_of_birth),
         gender: child.gender,
+        relationship: child.relationship ?? PatientChildRelationshipEnum.OTHER,
         photo: child.photo ?? null,
         status: child.status,
         createdAt: child.createdAt,
@@ -76,6 +72,7 @@ export class PatientChildService {
             full_name: fullName,
             date_of_birth: input.date_of_birth,
             gender: input.gender,
+            relationship: input.relationship,
             photo: input.photo?.trim() || null,
             status: PatientChildStatusEnum.ACTIVE,
         });
@@ -101,6 +98,7 @@ export class PatientChildService {
             update.date_of_birth = input.date_of_birth;
         }
         if (input.gender !== undefined) update.gender = input.gender;
+        if (input.relationship !== undefined) update.relationship = input.relationship;
         if (input.photo !== undefined) update.photo = input.photo?.trim() || null;
         return await PatientChild.findOneAndUpdate(
             { _id: current._id, patient_id: patientId },
@@ -133,7 +131,7 @@ export class PatientChildService {
     async updateOwnedHealthProfile(
         patientId: mongoose.Types.ObjectId,
         childId: string,
-        input: HealthProfileInput
+        input: PatientManagedHealthProfileInput
     ) {
         const child = await this.requireOwnedChild(patientId, childId);
         const profile = await childHealthProfileService.update(
