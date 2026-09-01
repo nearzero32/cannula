@@ -55,13 +55,25 @@ describeWithMongo('Appointment slot unique index against MongoDB', () => {
         });
     }
 
+    async function expectDuplicateKey(operation: Promise<unknown>) {
+        let failure: unknown;
+        try {
+            await operation;
+        } catch (error) {
+            failure = error;
+        }
+        expect(failure).toMatchObject({ code: 11000 });
+    }
+
+    async function expectInsertSuccess(operation: Promise<unknown>) {
+        expect(await operation).toBeDefined();
+    }
+
     for (const status of APPOINTMENT_BLOCKING_STATUSES) {
         test(`${status} blocks a new pending appointment in the same slot`, async () => {
             await collection.deleteMany({});
             await insert({ status });
-            await expect(insert({ status: IAppointmentStatusEnum.PENDING })).rejects.toMatchObject({
-                code: 11000,
-            });
+            await expectDuplicateKey(insert({ status: IAppointmentStatusEnum.PENDING }));
         });
     }
 
@@ -74,35 +86,35 @@ describeWithMongo('Appointment slot unique index against MongoDB', () => {
         test(`${status} releases the slot`, async () => {
             await collection.deleteMany({});
             await insert({ status });
-            await expect(insert({ status: IAppointmentStatusEnum.PENDING })).resolves.toBeDefined();
+            await expectInsertSuccess(insert({ status: IAppointmentStatusEnum.PENDING }));
         });
     }
 
     test('allows the same date and time for a different doctor', async () => {
         await collection.deleteMany({});
         await insert({ status: IAppointmentStatusEnum.PENDING });
-        await expect(insert({
+        await expectInsertSuccess(insert({
             status: IAppointmentStatusEnum.PENDING,
             doctor_id: otherDoctor,
-        })).resolves.toBeDefined();
+        }));
     });
 
     test('allows a different time for the same doctor and date', async () => {
         await collection.deleteMany({});
         await insert({ status: IAppointmentStatusEnum.PENDING });
-        await expect(insert({
+        await expectInsertSuccess(insert({
             status: IAppointmentStatusEnum.PENDING,
             starts_at: '09:30',
-        })).resolves.toBeDefined();
+        }));
     });
 
     test('allows a different date for the same doctor and time', async () => {
         await collection.deleteMany({});
         await insert({ status: IAppointmentStatusEnum.PENDING });
-        await expect(insert({
+        await expectInsertSuccess(insert({
             status: IAppointmentStatusEnum.PENDING,
             appointmentDate: new Date('2099-01-02T00:00:00.000Z'),
-        })).resolves.toBeDefined();
+        }));
     });
 
     test('allows exactly one of ten simultaneous active bookings', async () => {
