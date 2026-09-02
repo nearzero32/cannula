@@ -10,9 +10,12 @@ import homeCareServiceService from '../src/services/home-care-service.service';
 import homeCarePolicyService from '../src/services/home-care-policy.service';
 import { HomeCareValidationError } from '../src/services/home-care.validation';
 import RedisClient from '../src/databases/redis';
-import { signAccessToken } from '../src/constants/jwt';
+import { signAccessToken, TokenAudienceEnum } from '../src/constants/jwt';
+import sessionService from '../src/services/session.service';
 import { IUserRoleEnum } from '../src/interfaces/user.interface';
 import { IHomeCareStatusEnum } from '../src/interfaces/home-care.interface';
+import Admin from '../src/models/admins.model';
+import { IAdminPermissionEnum } from '../src/interfaces/admin.interface';
 import {
     BadRequestResponseSchema,
     ConflictResponseSchema,
@@ -30,6 +33,7 @@ import {
 } from '../src/schemas/home-care-response.schema';
 
 const adminId = '507f1f77bcf86cd799439011';
+const query = <T>(value: T) => ({ select() { return this; }, lean() { return this; }, exec: async () => value });
 
 function categoryDocument() {
     const now = new Date('2026-08-28T12:00:00.000Z');
@@ -48,7 +52,7 @@ function categoryDocument() {
 }
 
 function authorizedRequest(path: string, init?: RequestInit): Request {
-    const token = signAccessToken({ _id: adminId, role: IUserRoleEnum.ADMIN });
+    const token = signAccessToken({ _id: adminId, role: IUserRoleEnum.ADMIN, sid: '12345678-1234-4234-8234-123456789012', audience: TokenAudienceEnum.DASHBOARD });
     const headers = new Headers(init?.headers);
     headers.set('authorization', `Bearer ${token}`);
     if (init?.body) headers.set('content-type', 'application/json');
@@ -60,7 +64,8 @@ async function json(response: Response): Promise<Record<string, unknown>> {
 }
 
 beforeEach(() => {
-    spyOn(RedisClient, 'getInstance').mockReturnValue({ get: async () => '1' } as never);
+    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+    spyOn(Admin, 'findOne').mockReturnValue(query({ is_active: true, super_admin: false, permissions: [IAdminPermissionEnum.MANAGE_HOME_CARE] }) as never);
 });
 
 afterEach(() => mock.restore());
@@ -104,7 +109,7 @@ describe('Home Care runtime response contracts', () => {
     });
 
     test('403 normal admin mutation matches the forbidden schema', async () => {
-        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('read');
+        (Admin.findOne as any).mockReturnValue(query({ is_active: true, super_admin: false, permissions: [] }));
         const response = await homeCareAdminController.handle(authorizedRequest('/home-care/categories/', {
             method: 'POST', body: JSON.stringify({ name: 'تمريض' }),
         }));

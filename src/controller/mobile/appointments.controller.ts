@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
 import patientService from '../../services/patient.service';
 import mobileAppointmentService, { formatMobileAppointment } from '../../services/mobile-appointment.service';
 import { DomainError } from '../../services/domain-error';
@@ -32,7 +33,7 @@ export const mobileAppointmentsController = new Elysia({
     prefix: '/appointments',
     detail: { tags: [SWAGGER_TAGS.MOBILE.APPOINTMENTS] },
 })
-    .use(AuthPlugin())
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
     .post('/', async ({ body, phrase, set }) => {
         if (phrase.role !== IUserRoleEnum.PATIENT) {
             set.status = 403;

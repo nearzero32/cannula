@@ -7,6 +7,7 @@ import { IUserRoleEnum } from '../interfaces/user.interface';
 import { DomainError } from './domain-error';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import sessionService from './session.service';
 
 export interface NurseWriteActor { user_id: string; endpoint: string }
 
@@ -66,6 +67,7 @@ export class NurseService {
             throw new DomainError('إحدى خدمات الرعاية المنزلية غير موجودة', 422);
         }
         const nurse = await Nurse.create({ ...input, user_id: new mongoose.Types.ObjectId(input.user_id), qualified_service_ids: serviceIds });
+        if (nurse.status !== INurseStatusEnum.ACTIVE) await sessionService.revokeAll(String(nurse.user_id), { reasonCode: 'NURSE_STATUS_DISABLED' });
         await this.audit('POST', IActivityLogActionEnum.CREATE, nurse, null, input, actor);
         return nurse;
     }
@@ -82,6 +84,9 @@ export class NurseService {
         }
         const updated = await Nurse.findByIdAndUpdate(id, { $set: payload }, { returnDocument: 'after', runValidators: true }).exec();
         if (!updated) throw new DomainError('الممرض غير موجود', 404);
+        if (input.status !== undefined && input.status !== INurseStatusEnum.ACTIVE) {
+            await sessionService.revokeAll(String(updated.user_id), { reasonCode: 'NURSE_STATUS_DISABLED' });
+        }
         await this.audit('PATCH', IActivityLogActionEnum.UPDATE, updated, current, input, actor);
         return await this.getById(id) ?? updated;
     }

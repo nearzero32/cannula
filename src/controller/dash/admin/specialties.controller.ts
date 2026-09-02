@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import specialtyService from '../../../services/specialty.service';
 import { ISpecialtyStatusEnum } from '../../../interfaces/specialty.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -21,6 +23,7 @@ export const specialtiesController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.SPECIALTIES] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SPECIALTIES))
 
     .get(
         '/',

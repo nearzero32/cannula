@@ -3,6 +3,8 @@ import type { IDoctor } from '../interfaces/doctor.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import sessionService from './session.service';
+import { IDoctorStatusEnum } from '../interfaces/doctor.interface';
 
 class DoctorService {
     private model = Doctor;
@@ -77,6 +79,7 @@ class DoctorService {
 
     public async create(payload: Partial<IDoctor>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<DoctorDocument> {
         const doc = await this.model.create(payload);
+        if (doc.status !== IDoctorStatusEnum.ACTIVE) await sessionService.revokeAll(String(doc.user_id), { reasonCode: 'DOCTOR_STATUS_DISABLED' });
         try {
             await this.activityLog.logActivity({
                 user_id: meta?.user_id,
@@ -98,6 +101,9 @@ class DoctorService {
     public async update(id: string, payload: Partial<IDoctor>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<DoctorDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if (doc && payload.status !== undefined && payload.status !== IDoctorStatusEnum.ACTIVE) {
+            await sessionService.revokeAll(String(doc.user_id), { reasonCode: 'DOCTOR_STATUS_DISABLED' });
+        }
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

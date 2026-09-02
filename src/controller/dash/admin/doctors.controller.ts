@@ -9,6 +9,8 @@ import {
     IDoctorVerificationStatusEnum,
 } from '../../../interfaces/doctor.interface';
 import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -95,6 +97,9 @@ export const doctorsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.DOCTORS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin((request) => new URL(request.url).pathname.endsWith('/verification')
+        ? IAdminPermissionEnum.VERIFY_DOCTORS
+        : IAdminPermissionEnum.MANAGE_DOCTORS))
 
     .get(
         '/',

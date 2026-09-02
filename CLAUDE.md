@@ -55,13 +55,13 @@ Cannula is a **medical appointment scheduling REST API** built with [Elysia](htt
 ```
 HTTP Request → Elysia router → AuthPlugin middleware → Controller → Service → Mongoose model → MongoDB
                                         ↕
-                                   Redis cache (auth session, 1h TTL)
+                                   Redis logical session (7d rolling TTL)
 ```
 
 Every protected route passes through `src/middleware/auth.middleware.ts`, which:
 1. Extracts the Bearer token from the `Authorization` header
-2. Verifies the JWT signature via `verifyTokenInJwt()`
-3. Looks up the SHA256-hashed token in Redis; falls back to the `AccountAuth` MongoDB collection on cache miss
+2. Verifies the typed access JWT signature, expiry, subject, and explicit Mobile/Dashboard audience
+3. Requires the matching `session:{userId}:{sid}` logical session in Redis and fails closed on a miss
 
 ### Layer Responsibilities
 
@@ -119,7 +119,7 @@ QI_UAT_PAYMENT_BASE_URL=, QI_PAYMENT_BASE_URL=
 
 ### Key Conventions
 
-- Passwords are hashed with **Argon2id** via `Bun.password`; the startup migration re-hashes legacy records from their unchanged `password_show` value
+- Passwords and Patient PINs are stored only as **Argon2id** hashes via `Bun.password`; startup removes the retired recoverable credential field
 - Auth tokens are stored in Redis as their **SHA-256 hash** (not the raw token) for cache lookups
 - Swagger docs are auto-generated and served via `@elysiajs/swagger`
 - TypeScript target is ES2021; Bun handles transpilation natively (no build step needed for dev)

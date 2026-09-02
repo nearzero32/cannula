@@ -16,6 +16,8 @@ import { mobileAppointmentsController } from './appointments.controller';
 import { mobileHomeCareRequestsController } from './home-care-requests.controller';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { mobilePharmacyRequestsController } from './pharmacy-requests.controller';
+import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
+import { IUserRoleEnum } from '../../interfaces/user.interface';
 
 /** Public mobile routes — no authentication required */
 const mobilePublicController = new Elysia()
@@ -27,8 +29,9 @@ const mobilePublicController = new Elysia()
     .use(mobileSpecialtiesController)
     .use(mobileHomeCareController);
 
-/** Protected mobile routes — each controller applies AuthPlugin() */
+/** Protected mobile routes — each controller explicitly applies the mobile AuthPlugin audience. */
 const mobileProtectedController = new Elysia()
+    .use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))
     .use(mobileProfileController)
     .use(mobileProfileHealthController)
     .use(mobileChildrenController)
@@ -37,7 +40,7 @@ const mobileProtectedController = new Elysia()
     .use(mobilePharmacyRequestsController)
     .use(mobileSuggestionsController)
     .use(mobileDoctorFavoritesController)
-    .use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE));
+    .use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT]));
 
 export const mobileController = new Elysia({
     prefix: '/mobile',

@@ -6,10 +6,12 @@ import { homeCareRequestsAdminController } from '../src/controller/dash/admin/ho
 import homeCareRequestService from '../src/services/home-care-request.service';
 import homeCarePolicyService from '../src/services/home-care-policy.service';
 import patientService from '../src/services/patient.service';
-import RedisClient from '../src/databases/redis';
-import { signAccessToken } from '../src/constants/jwt';
+import { signAccessToken, TokenAudienceEnum } from '../src/constants/jwt';
+import sessionService from '../src/services/session.service';
 import { IUserRoleEnum } from '../src/interfaces/user.interface';
 import { IHomeCareRequestStatusEnum } from '../src/interfaces/home-care-request.interface';
+import Admin from '../src/models/admins.model';
+import { IAdminPermissionEnum } from '../src/interfaces/admin.interface';
 import {
     DashboardHomeCareRequestListResponseSchema,
     DashboardHomeCareRequestResponseSchema,
@@ -24,6 +26,7 @@ import {
 const userId = '507f1f77bcf86cd799439011';
 const patientId = new mongoose.Types.ObjectId('507f191e810c19729de860e1');
 const requestId = new mongoose.Types.ObjectId('507f191e810c19729de860e2');
+const query = <T>(value: T) => ({ select() { return this; }, lean() { return this; }, exec: async () => value });
 
 function requestDocument(overrides: Record<string, unknown> = {}) {
     const now = new Date('2026-08-31T12:00:00.000Z');
@@ -59,7 +62,8 @@ function requestDocument(overrides: Record<string, unknown> = {}) {
 }
 
 function authorizedRequest(path: string, role: 'patient' | 'admin', init?: RequestInit) {
-    const token = signAccessToken({ _id: userId, role });
+    const audience = role === IUserRoleEnum.PATIENT ? TokenAudienceEnum.MOBILE : TokenAudienceEnum.DASHBOARD;
+    const token = signAccessToken({ _id: userId, role, sid: '12345678-1234-4234-8234-123456789012', audience });
     const headers = new Headers(init?.headers);
     headers.set('authorization', `Bearer ${token}`);
     if (init?.body) headers.set('content-type', 'application/json');
@@ -71,7 +75,8 @@ async function body(response: Response) {
 }
 
 beforeEach(() => {
-    spyOn(RedisClient, 'getInstance').mockReturnValue({ get: async () => '1' } as never);
+    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+    spyOn(Admin, 'findOne').mockReturnValue(query({ is_active: true, super_admin: false, permissions: [IAdminPermissionEnum.MANAGE_HOME_CARE] }) as never);
 });
 
 afterEach(() => mock.restore());
@@ -163,7 +168,7 @@ describe('Mobile Home Care request response contracts', () => {
 
 describe('Dashboard Home Care request response contracts', () => {
     test('active normal admin can list operational requests with pagination', async () => {
-        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('read');
+        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('manage');
         spyOn(homeCareRequestService, 'listForDashboard').mockResolvedValue({
             data: [requestDocument()], count: 1,
         });
@@ -178,7 +183,7 @@ describe('Dashboard Home Care request response contracts', () => {
     });
 
     test('status update and internal note responses match dashboard contracts', async () => {
-        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('read');
+        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('manage');
         spyOn(homeCareRequestService, 'updateStatus').mockResolvedValue(requestDocument({
             status: IHomeCareRequestStatusEnum.CONFIRMED,
         }));
@@ -191,8 +196,9 @@ describe('Dashboard Home Care request response contracts', () => {
         expect(Value.Check(DashboardHomeCareRequestResponseSchema, await body(statusResponse))).toBe(true);
 
         mock.restore();
-        spyOn(RedisClient, 'getInstance').mockReturnValue({ get: async () => '1' } as never);
-        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('read');
+        spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+        spyOn(Admin, 'findOne').mockReturnValue(query({ is_active: true, super_admin: false, permissions: [IAdminPermissionEnum.MANAGE_HOME_CARE] }) as never);
+        spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('manage');
         spyOn(homeCareRequestService, 'updateInternalNote').mockResolvedValue(requestDocument({
             internal_notes: 'تم التواصل مع المريض',
         }));

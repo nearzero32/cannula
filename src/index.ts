@@ -12,7 +12,7 @@ import { ActivityLogPlugin } from './middleware/activity-log.middleware';
 import { ensureSuperAdminExists } from './migrations/ensure-super-admin.migration';
 import { seedChronicConditions } from './migrations/seed-chronic-conditions.migration';
 import { seedSuggestions } from './migrations/seed-suggestions.migration';
-import { migratePasswordsToArgon2 } from './migrations/migrate-passwords-to-argon2.migration';
+import { removePasswordShow } from './migrations/remove-password-show.migration';
 import { seedHomeCareCategories } from './migrations/seed-home-care-categories.migration';
 import { RATE_LIMIT_RESPONSE } from './schemas/api-response.schema';
 import { ApiErrorPlugin } from './middleware/api-error.middleware';
@@ -21,15 +21,17 @@ import { repairAppointmentSlotIndex } from './migrations/repair-appointment-slot
 import { backfillPharmacyWorkflow } from './migrations/backfill-pharmacy-workflow.migration';
 import { assertPharmacyTransactionSupport } from './services/pharmacy-transaction.service';
 import { assertOtpDebugConfiguration } from './config/otp-debug.config';
+import { assertProductionSecurityConfiguration } from './config/security.config';
 
 async function bootstrap() {
+    assertProductionSecurityConfiguration();
     assertOtpDebugConfiguration();
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
     await assertPharmacyTransactionSupport();
+    await removePasswordShow();
     await ensureSuperAdminExists();
-    await migratePasswordsToArgon2();
     await seedChronicConditions();
     await seedSuggestions();
     await seedHomeCareCategories();

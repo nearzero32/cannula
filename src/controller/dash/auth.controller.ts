@@ -1,36 +1,18 @@
 import Elysia, { t } from 'elysia';
-import crypto from 'crypto';
-import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../constants/jwt';
-import { AuthPlugin, storeAccessSession, revokeAccessSession } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
+import { AuthPlugin } from '../../middleware/auth.middleware';
 import userService from '../../services/user.service';
 import ActivityLogService from '../../services/activity-log.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
-import RedisClient from '../../databases/redis';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
-import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, PublicApiErrorResponses, SuccessDataWithoutMessageSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
+import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, PublicApiErrorResponses, ServiceUnavailableResponseSchema, SuccessDataWithoutMessageSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
+import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
+import sessionService from '../../services/session.service';
+import { DomainError } from '../../services/domain-error';
 
 export const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR, IUserRoleEnum.NURSE, IUserRoleEnum.PHARMACY];
-const ACCESS_TTL = 60 * 15;       // 15 minutes
-const REFRESH_TTL = 60 * 60 * 24 * 7; // 7 days
-
-function buildRefreshKey(user_id: string, token: string): string {
-    const hash = crypto.createHash('sha256').update(token).digest('hex');
-    return `refresh:${user_id}:${hash}`;
-}
-
-async function storeRefreshSession(user_id: string, token: string): Promise<void> {
-    await RedisClient.getInstance().set(buildRefreshKey(user_id, token), '1', REFRESH_TTL);
-}
-
-async function revokeRefreshSession(user_id: string, token: string): Promise<void> {
-    await RedisClient.getInstance().del(buildRefreshKey(user_id, token));
-}
-
-async function isRefreshSessionValid(user_id: string, token: string): Promise<boolean> {
-    const result = await RedisClient.getInstance().get(buildRefreshKey(user_id, token));
-    return result === '1';
-}
+const requestIp = (headers: Record<string, string | undefined>) => headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || '';
 
 export const authController = new Elysia({
     prefix: '/auth',
@@ -57,13 +39,7 @@ export const authController = new Elysia({
             }
 
             const user_id = (user._id as any).toString();
-            const accessToken = signAccessToken({ _id: user_id, role: user.role });
-            const refreshToken = signRefreshToken({ _id: user_id });
-
-            await Promise.all([
-                storeAccessSession(user_id, accessToken, ACCESS_TTL),
-                storeRefreshSession(user_id, refreshToken),
-            ]);
+            const tokens = await sessionService.create(user, TokenAudienceEnum.DASHBOARD);
 
             try {
                 await ActivityLogService.logActivity({
@@ -84,8 +60,7 @@ export const authController = new Elysia({
                 error: false,
                 message: 'تم تسجيل الدخول بنجاح',
                 data: {
-                    accessToken,
-                    refreshToken,
+                    ...tokens,
                     user: {
                         _id: user_id,
                         full_name: user.full_name,
@@ -110,40 +85,14 @@ export const authController = new Elysia({
 
     .post(
         '/refresh',
-        async ({ body, set }) => {
-            const payload = verifyRefreshToken(body.refreshToken);
-            if (!payload) {
-                set.status = 401;
-                return { error: true, message: 'رمز التحديث غير صالح' };
+        async ({ body, headers, set }) => {
+            try {
+                return { error: false, data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.DASHBOARD, { ip: requestIp(headers) }) };
+            } catch (error) {
+                if (!(error instanceof DomainError)) throw error;
+                set.status = error.status;
+                return { error: true, message: error.message };
             }
-
-            const isValid = await isRefreshSessionValid(payload._id, body.refreshToken);
-            if (!isValid) {
-                set.status = 401;
-                return { error: true, message: 'تم إلغاء رمز التحديث' };
-            }
-
-            const user = await userService.getById(payload._id);
-            if (!user || user.status !== 'active') {
-                set.status = 401;
-                return { error: true, message: 'الحساب غير موجود أو غير مفعّل' };
-            }
-
-            // Rotate both tokens
-            await revokeRefreshSession(payload._id, body.refreshToken);
-
-            const accessToken = signAccessToken({ _id: payload._id, role: user.role });
-            const refreshToken = signRefreshToken({ _id: payload._id });
-
-            await Promise.all([
-                storeAccessSession(payload._id, accessToken, ACCESS_TTL, user.must_change_pin === true),
-                storeRefreshSession(payload._id, refreshToken),
-            ]);
-
-            return {
-                error: false,
-                data: { accessToken, refreshToken, mustChangePin: user.must_change_pin === true },
-            };
         },
         {
             body: t.Object({
@@ -151,16 +100,14 @@ export const authController = new Elysia({
             }),
             response: {
                 200: SuccessDataWithoutMessageSchema, 400: BadRequestResponseSchema, 401: UnauthorizedResponseSchema,
-                422: ValidationErrorResponseSchema, ...PublicApiErrorResponses,
+                422: ValidationErrorResponseSchema, 503: ServiceUnavailableResponseSchema, ...PublicApiErrorResponses,
             },
         }
     )
 
     .group('', (app) =>
-        app.use(AuthPlugin()).post('/logout', async ({ phrase, headers }) => {
-            const raw = headers.authorization ?? '';
-            const token = raw.trim().toLowerCase().startsWith('bearer ') ? raw.trim().slice(7).trim() : raw.trim();
-            await revokeAccessSession(phrase._id, token);
+        app.use(AuthPlugin()).use(RoleGuardPlugin(DASHBOARD_ROLES)).post('/logout', async ({ phrase }) => {
+            await sessionService.revoke(phrase._id, phrase.sid, { reasonCode: 'USER_LOGOUT' });
 
             try {
                 await ActivityLogService.logActivity({
@@ -178,5 +125,9 @@ export const authController = new Elysia({
             } catch {}
 
             return { error: false, message: 'تم تسجيل الخروج بنجاح' };
-        }, { response: { 200: SuccessResponseWithoutDataSchema, ...ProtectedApiErrorResponses } })
+        }, { response: { 200: SuccessResponseWithoutDataSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
+        .post('/logout-all', async ({ phrase }) => {
+            await sessionService.revokeAll(phrase._id, { reasonCode: 'USER_LOGOUT_ALL' });
+            return { error: false, message: 'تم تسجيل الخروج من جميع الأجهزة بنجاح' };
+        }, { response: { 200: SuccessResponseWithoutDataSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
     );

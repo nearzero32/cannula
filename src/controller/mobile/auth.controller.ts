@@ -2,11 +2,13 @@ import Elysia, { t } from 'elysia';
 import patientAuthService from '../../services/patient-auth.service';
 import authEventService from '../../services/auth-event.service';
 import { DomainError } from '../../services/domain-error';
-import { AuthPlugin, revokeAccessSession } from '../../middleware/auth.middleware';
-import { AuthEventTypeEnum } from '../../interfaces/auth-flow.interface';
+import { AuthPlugin } from '../../middleware/auth.middleware';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ProtectedApiErrorResponses, ServiceUnavailableResponseSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema, successResponse } from '../../schemas/api-response.schema';
+import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
+import sessionService from '../../services/session.service';
+import { TokenAudienceEnum } from '../../constants/jwt';
 
 const phoneSchema = t.String({ minLength: 7, maxLength: 30 });
 const flowSchema = t.String({ minLength: 20, maxLength: 100 });
@@ -61,16 +63,22 @@ export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags
         try { return { error: false, message: 'تم تسجيل الدخول بنجاح', data: await patientAuthService.login(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, ip(headers)) }; }
         catch (error) { return fail(error, set); }
     }, { body: pinLoginBodySchema, detail: { description: 'يسجل دخول المريض برمز PIN مكون من 6 أرقام.' }, response: { 200: GenericDataResponseSchema, ...errors } })
-    .group('', (app) => app.use(AuthPlugin())
+    .post('/refresh', async ({ body, headers, set }) => {
+        try { return { error: false, message: 'تم تحديث الجلسة بنجاح', data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.MOBILE, { ip: ip(headers) }) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: t.Object({ refreshToken: t.String({ minLength: 1 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, ...errors } })
+    .group('', (app) => app.use(AuthPlugin(TokenAudienceEnum.MOBILE)).use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))
         .post('/pin/change-required', async ({ body, phrase, set }) => {
             if (phrase.role !== IUserRoleEnum.PATIENT) { set.status = 403; return { error: true, message: 'غير مصرح لك بالوصول' }; }
             try { return { error: false, message: 'تم تغيير الرمز السري بنجاح', data: await patientAuthService.changeRequiredPin(phrase._id, body.pin) }; }
             catch (error) { return fail(error, set); }
         }, { body: t.Object({ pin: pinCreateSchema }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
-        .post('/logout', async ({ phrase, headers }) => {
-            const raw = headers.authorization ?? '', token = raw.toLowerCase().startsWith('bearer ') ? raw.slice(7).trim() : raw.trim();
-            await revokeAccessSession(phrase._id, token);
-            await authEventService.record({ user_id: phrase._id, type: AuthEventTypeEnum.SESSION_REVOKED, success: true });
+        .post('/logout', async ({ phrase }) => {
+            await sessionService.revoke(phrase._id, phrase.sid, { reasonCode: 'USER_LOGOUT' });
             return { error: false, message: 'تم تسجيل الخروج بنجاح' };
-        }, { response: { 200: SuccessResponseWithoutDataSchema, ...ProtectedApiErrorResponses } })
+        }, { response: { 200: SuccessResponseWithoutDataSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
+        .post('/logout-all', async ({ phrase }) => {
+            await sessionService.revokeAll(phrase._id, { reasonCode: 'USER_LOGOUT_ALL' });
+            return { error: false, message: 'تم تسجيل الخروج من جميع الأجهزة بنجاح' };
+        }, { response: { 200: SuccessResponseWithoutDataSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
     );

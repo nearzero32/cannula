@@ -4,6 +4,8 @@ import { UploadFolderEnum } from '../../constants/r2.config';
 import storageService from '../../services/storage.service';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, ServiceUnavailableResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
+import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
+import type { IUserRole } from '../../interfaces/user.interface';
 
 const presignBodySchema = t.Object({
     folder: t.Enum(UploadFolderEnum),
@@ -16,9 +18,10 @@ const presignBodySchema = t.Object({
     fileName: t.Optional(t.String({ maxLength: 120 })),
 });
 
-export function createUploadController(tag: string) {
+export function createUploadController(tag: string, allowedRoles: readonly IUserRole[]) {
     return new Elysia({ prefix: '/upload', detail: { tags: [tag] } })
     .use(AuthPlugin())
+    .use(RoleGuardPlugin(allowedRoles))
 
     .post(
         '/presign',
@@ -54,5 +57,3 @@ export function createUploadController(tag: string) {
         }
     );
 }
-
-export const uploadController = createUploadController(SWAGGER_TAGS.DASHBOARD.SHARED);

@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
 import patientService from '../../services/patient.service';
 import {
     ALLERGY_MAX_LENGTH,
@@ -59,7 +60,7 @@ export const mobileProfileHealthController = new Elysia({
     prefix: '/profile/health',
     detail: { tags: [SWAGGER_TAGS.MOBILE.HEALTH_PROFILE] },
 })
-    .use(AuthPlugin())
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
     .get('/', async ({ phrase, set }) => {
         if (phrase.role !== IUserRoleEnum.PATIENT) {
             set.status = 403;

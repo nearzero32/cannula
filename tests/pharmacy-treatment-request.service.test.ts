@@ -114,7 +114,7 @@ describe('Pharmacy account and privacy boundaries', () => {
         const service=new PharmacyService(), pharmacy={_id:pharmacyA,user_id:new mongoose.Types.ObjectId(userA),name:'صيدلية',display_name:'صيدلية',phone:'07700000000',license_verified:false,address:{address_text:'بغداد'},accepts_prescription_requests:true,status:'active',toObject(){return this}} as any;
         spyOn(User,'findOne').mockReturnValue(query(null) as never); const createUser=spyOn(User,'create').mockResolvedValue({_id:new mongoose.Types.ObjectId(userA)} as never); spyOn(Pharmacy,'create').mockResolvedValue(pharmacy as never); const audit=spyOn(ActivityLogService,'logActivity').mockResolvedValue({} as never);
         await service.createAccount({name:'صيدلية',phone:'07700000000',password:'very-secret',address:{address_text:'بغداد'}},'507f191e810c19729de86109');
-        const userInput=(createUser.mock.calls[0] as any)[0]; expect(userInput.role).toBe('pharmacy'); expect(userInput.password_hash).not.toContain('very-secret'); expect(userInput.password_show).toBe('[redacted]');
+        const userInput=(createUser.mock.calls[0] as any)[0]; expect(userInput.role).toBe('pharmacy'); expect(userInput.password_hash).not.toContain('very-secret'); expect(userInput).not.toHaveProperty('password_show');
         expect((audit.mock.calls[0] as any)[0].request_body.password).toBeUndefined();
     });
     test('available formatter withholds prescription URLs while the owner formatter includes them', () => {

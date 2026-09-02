@@ -8,6 +8,8 @@ import { DomainError } from '../../../services/domain-error';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 import { NurseListResponseSchema, NurseResponseSchema } from '../../../schemas/nurse-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const fields = {
     full_name: t.String({ minLength: 2, maxLength: 120 }), gender: t.Optional(t.Nullable(t.Enum(INurseGenderEnum))),
@@ -22,7 +24,7 @@ function pageInfo(page: number, limit: number, total: number) { const pages = Ma
 function requireAdmin(role: string) { if (role !== IUserRoleEnum.ADMIN) throw new DomainError('غير مصرح لك بالوصول', 403); }
 
 export const nursesAdminController = new Elysia({ prefix: '/nurses', detail: { tags: [SWAGGER_TAGS.ADMIN.NURSES] } })
-    .use(AuthPlugin()).onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message }; } })
+    .use(AuthPlugin()).use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_USERS)).onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message }; } })
     .get('/', async ({ query, phrase }) => {
         requireAdmin(phrase.role); const page = Math.max(1, Number(query.page) || 1), limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
         const { data, count } = await nurseService.list({ page, limit, status: query.status, search: query.search });

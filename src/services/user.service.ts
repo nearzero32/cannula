@@ -4,6 +4,8 @@ import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import { verifyPassword } from '../constants/hashing';
+import sessionService from './session.service';
+import { IUserStatusEnum } from '../interfaces/user.interface';
 
 class UserService {
     private model = User;
@@ -36,6 +38,7 @@ class UserService {
                         { $limit: safeLimit },
                         ...additional_pipeline,
                         ...(projection ? [{ $project: projection } as PipelineStage.Project] : []),
+                        { $project: { password_hash: 0 } },
                     ],
                     count: [{ $count: 'count' }],
                 },
@@ -62,6 +65,7 @@ class UserService {
             main_match,
             ...additional_pipeline,
             ...(projection ? [{ $project: projection } as PipelineStage.Project] : []),
+            { $project: { password_hash: 0 } },
             { $limit: 1 },
         ];
         const [doc] = await this.model.aggregate(pipeline).exec();
@@ -117,6 +121,9 @@ class UserService {
     public async update(id: string, payload: Partial<IUser>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<UserDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if (doc && (payload.role !== undefined || (payload.status !== undefined && payload.status !== IUserStatusEnum.ACTIVE))) {
+            await sessionService.revokeAll(String(doc._id), { reasonCode: payload.role !== undefined ? 'USER_ROLE_CHANGED' : 'USER_STATUS_DISABLED' });
+        }
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

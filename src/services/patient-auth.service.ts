@@ -14,9 +14,8 @@ import { IUserRoleEnum, IUserStatusEnum } from '../interfaces/user.interface';
 import { IPatientStatusEnum } from '../interfaces/patient.interface';
 import { DomainError } from './domain-error';
 import { hashPassword, verifyPassword } from '../constants/hashing';
-import { signAccessToken, signRefreshToken } from '../constants/jwt';
-import { revokeAllUserSessions, storeAccessSession } from '../middleware/auth.middleware';
-import RedisClient from '../databases/redis';
+import { TokenAudienceEnum } from '../constants/jwt';
+import sessionService from './session.service';
 import { isOtpDebugReturnEnabled } from '../config/otp-debug.config';
 
 const FLOW_TTL_MS = 10 * 60_000, OTP_TTL_MS = 5 * 60_000, SUPPORT_TTL_MS = 3 * 60_000;
@@ -33,18 +32,6 @@ function codeHash(value: string): string {
     const secret = process.env.OTP_HASH_SECRET || process.env.ACCESS_TOKEN_SECRET;
     if (!secret) throw new Error('OTP_HASH_SECRET or ACCESS_TOKEN_SECRET is required');
     return crypto.createHmac('sha256', secret).update(value).digest('hex');
-}
-function refreshKey(userId: string, token: string) {
-    return `refresh:${userId}:${crypto.createHash('sha256').update(token).digest('hex')}`;
-}
-async function session(user: { _id: unknown; role: any; must_change_pin?: boolean }) {
-    const userId = String(user._id), accessToken = signAccessToken({ _id: userId, role: user.role });
-    const refreshToken = signRefreshToken({ _id: userId });
-    await Promise.all([
-        storeAccessSession(userId, accessToken, 900, user.must_change_pin === true),
-        RedisClient.getInstance().set(refreshKey(userId, refreshToken), '1', 604800),
-    ]);
-    return { accessToken, refreshToken, mustChangePin: user.must_change_pin === true };
 }
 
 class PatientAuthService {
@@ -106,17 +93,17 @@ class PatientAuthService {
         await authEventService.record({ flow_id: flowId, phone: flow.phone, type: E.ACCOUNT_CREATION_STARTED, success: true });
         let user: any, patient: any;
         try {
-            user = await userService.create({ full_name: flow.phone, phone: flow.phone, password_hash: await hashPassword(pin), password_show: '[redacted]', role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE, is_phone_verified: true, is_email_verified: false, must_change_pin: false });
+            user = await userService.create({ full_name: flow.phone, phone: flow.phone, password_hash: await hashPassword(pin), role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE, is_phone_verified: true, is_email_verified: false, must_change_pin: false });
             patient = await patientService.create({ user_id: user._id as mongoose.Types.ObjectId, full_name: flow.phone, phone: flow.phone, status: IPatientStatusEnum.ACTIVE });
             await AuthFlow.updateOne({ _id: flow._id }, { $set: { step: S.COMPLETED, user_id: user._id, patient_id: patient._id } }).exec();
             await authEventService.record({ flow_id: flowId, phone: flow.phone, user_id: user._id, patient_id: patient._id, type: E.ACCOUNT_CREATED, success: true });
             await authEventService.record({ flow_id: flowId, phone: flow.phone, user_id: user._id, patient_id: patient._id, type: E.PIN_CREATED, success: true });
-            const tokens = await session(user);
+            const tokens = await sessionService.create(user, TokenAudienceEnum.MOBILE, device, ip);
             await authEventService.record({ flow_id: flowId, phone: flow.phone, user_id: user._id, patient_id: patient._id, type: E.LOGIN_SUCCESS, success: true, metadata: device, ip_address: ip });
             return { ...tokens, user: { _id: String(user._id), phone: user.phone, role: user.role, status: user.status }, patient: { _id: String(patient._id), profile_completed: false } };
         } catch (error) {
             if (patient?._id) await PatientHealthProfile.deleteOne({ patient_id: patient._id }).exec();
-            if (user?._id) { await Patient.deleteOne({ user_id: user._id }).exec(); await User.deleteOne({ _id: user._id }).exec(); }
+            if (user?._id) { await sessionService.revokeAll(String(user._id), { reasonCode: 'ACCOUNT_CREATION_ROLLBACK' }); await Patient.deleteOne({ user_id: user._id }).exec(); await User.deleteOne({ _id: user._id }).exec(); }
             await AuthFlow.updateOne({ _id: flow._id, step: { $ne: S.COMPLETED } }, { $set: { consumed_at: null } }).exec();
             if ((error as any)?.code === 11000) throw new DomainError('رقم الهاتف مسجل مسبقاً', 409);
             throw error;
@@ -135,7 +122,7 @@ class PatientAuthService {
             await authEventService.record({ flow_id: flowId, phone: flow!.phone, user_id: flow!.user_id, type: E.LOGIN_FAILED, success: false, reason_code: 'INVALID_PIN', metadata: device, ip_address: ip });
             throw new DomainError('رقم الهاتف أو الرمز السري غير صحيح', 401);
         }
-        user.last_login_at = new Date(); await user.save(); const tokens = await session(user);
+        user.last_login_at = new Date(); await user.save(); const tokens = await sessionService.create(user, TokenAudienceEnum.MOBILE, device, ip);
         const patient = await Patient.findOne({ user_id: user._id }).select('_id').lean().exec();
         await AuthFlow.updateOne({ _id: flow!._id }, { $set: { step: S.COMPLETED, consumed_at: new Date(), patient_id: patient?._id } }).exec();
         await authEventService.record({ flow_id: flowId, phone: flow!.phone, user_id: user._id, patient_id: patient?._id, type: E.LOGIN_SUCCESS, success: true, metadata: device, ip_address: ip });
@@ -146,9 +133,9 @@ class PatientAuthService {
         if (!PIN_PATTERN.test(pin)) throw new DomainError('الرمز السري يجب أن يتكون من 6 أرقام', 400);
         const user = await User.findOne({ _id: userId, role: IUserRoleEnum.PATIENT, must_change_pin: true }).select('+password_hash').exec();
         if (!user) throw new DomainError('تغيير الرمز السري غير مطلوب', 409);
-        await revokeAllUserSessions(userId); user.password_hash = await hashPassword(pin); user.password_show = '[redacted]'; user.must_change_pin = false; await user.save();
+        await sessionService.revokeAll(userId, { phone: user.phone, reasonCode: 'REQUIRED_PIN_CHANGED' }); user.password_hash = await hashPassword(pin); user.must_change_pin = false; await user.save();
         await authEventService.record({ phone: user.phone, user_id: user._id, type: E.PATIENT_FORCED_PIN_CHANGED, success: true });
-        return await session(user);
+        return await sessionService.create(user, TokenAudienceEnum.MOBILE);
     }
 
     async issueSupportOtp(flowId: string, reason: string, actorUserId: string, ip?: string) {
@@ -167,11 +154,10 @@ class PatientAuthService {
         const patient = await Patient.findById(patientId).exec();
         if (!patient) throw new DomainError('المريض غير موجود', 404);
         const temporaryPin = code(), hash = await hashPassword(temporaryPin);
-        const user = await User.findOneAndUpdate({ _id: patient.user_id, role: IUserRoleEnum.PATIENT }, { $set: { password_hash: hash, password_show: '[redacted]', must_change_pin: true } }, { returnDocument: 'after' }).exec();
+        const user = await User.findOneAndUpdate({ _id: patient.user_id, role: IUserRoleEnum.PATIENT }, { $set: { password_hash: hash, must_change_pin: true } }, { returnDocument: 'after' }).exec();
         if (!user) throw new DomainError('حساب المريض غير موجود', 404);
-        await revokeAllUserSessions(String(user._id));
+        await sessionService.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient._id), actorType: 'admin', actorUserId, reasonCode: 'ADMIN_PIN_RESET', ip });
         await authEventService.record({ phone: user.phone, user_id: user._id, patient_id: patient._id as any, type: E.ADMIN_PATIENT_PIN_RESET, success: true, actor_type: 'admin', actor_user_id: actorUserId, ip_address: ip, metadata: { reason } });
-        await authEventService.record({ phone: user.phone, user_id: user._id, patient_id: patient._id as any, type: E.ALL_SESSIONS_REVOKED, success: true, actor_type: 'admin', actor_user_id: actorUserId, ip_address: ip });
         return { temporaryPin, mustChangePin: true };
     }
 
@@ -181,8 +167,7 @@ class PatientAuthService {
         if (!patient) throw new DomainError('المريض غير موجود', 404);
         const user = await User.findById(patient.user_id).exec();
         if (!user) throw new DomainError('حساب المريض غير موجود', 404);
-        const revoked = await revokeAllUserSessions(String(user._id));
-        await authEventService.record({ phone: user.phone, user_id: user._id, patient_id: patient._id as any, type: E.ALL_SESSIONS_REVOKED, success: true, actor_type: 'admin', actor_user_id: actorUserId, ip_address: ip, metadata: { reason, revokedSessionKeys: revoked } });
+        const revoked = await sessionService.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient._id), actorType: 'admin', actorUserId, reasonCode: 'ADMIN_SESSION_REVOCATION', ip });
         return { revoked };
     }
 
@@ -195,7 +180,7 @@ class PatientAuthService {
         const [lastSuccess, lastFailed, sessions] = await Promise.all([
             AuthEvent.findOne({ user_id: user._id, type: E.LOGIN_SUCCESS }).sort({ createdAt: -1 }).select('createdAt').lean().exec(),
             AuthEvent.findOne({ user_id: user._id, type: E.LOGIN_FAILED }).sort({ createdAt: -1 }).select('createdAt').lean().exec(),
-            RedisClient.getInstance().countByPattern(`access:${String(user._id)}:*`),
+            sessionService.count(String(user._id)),
         ]);
         return { phone: user.phone, accountStatus: user.status, phoneVerified: user.is_phone_verified, mustChangePin: user.must_change_pin, createdAt: user.createdAt, lastSuccessfulLogin: lastSuccess?.createdAt ?? null, lastFailedLogin: lastFailed?.createdAt ?? null, activeSessionCount: sessions };
     }

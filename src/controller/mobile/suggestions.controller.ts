@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
 import suggestionService from '../../services/suggestion.service';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
@@ -22,7 +23,7 @@ export const mobileSuggestionsController = new Elysia({
     prefix: '/suggestions',
     detail: { tags: [SWAGGER_TAGS.MOBILE.SUGGESTIONS] },
 })
-    .use(AuthPlugin())
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
 
     .get(
         '/',

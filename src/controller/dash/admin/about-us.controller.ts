@@ -3,6 +3,8 @@ import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import aboutUsService from '../../../services/about-us.service';
 import { BadRequestResponseSchema, GenericDataResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const aboutUsBodySchema = t.Object({
     name: t.Optional(t.String({ minLength: 1, maxLength: 150 })),
@@ -20,6 +22,7 @@ export const aboutUsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.ABOUT_US] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SETTINGS))
 
     .get('/', async ({ set }) => {
         const data = await aboutUsService.get();

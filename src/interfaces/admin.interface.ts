@@ -17,6 +17,8 @@ export const IAdminPermissionEnum = {
     ISSUE_SUPPORT_OTP: 'issue_support_otp',
     RESET_PATIENT_PIN: 'reset_patient_pin',
     REVOKE_PATIENT_SESSIONS: 'revoke_patient_sessions',
+    MANAGE_HOME_CARE: 'manage_home_care',
+    MANAGE_PHARMACY_REQUESTS: 'manage_pharmacy_requests',
 } as const;
 
 export type IAdminPermission = (typeof IAdminPermissionEnum)[keyof typeof IAdminPermissionEnum];

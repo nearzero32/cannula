@@ -32,11 +32,6 @@ const userSchema = new Schema(
             required: true,
             select: false,
         },
-        password_show: {
-            type: String,
-            required: true,
-            trim: true,
-        },
 
         role: {
             type: String,
@@ -69,6 +64,16 @@ const userSchema = new Schema(
     {
         timestamps: true,
         versionKey: false,
+        toJSON: {
+            transform: (_document, result) => {
+                delete (result as Record<string, unknown>).password_hash;
+            },
+        },
+        toObject: {
+            transform: (_document, result) => {
+                delete (result as Record<string, unknown>).password_hash;
+            },
+        },
     }
 );
 

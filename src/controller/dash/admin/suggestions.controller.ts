@@ -5,6 +5,8 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import suggestionService from '../../../services/suggestion.service';
 import { IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -75,6 +77,7 @@ export const suggestionsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.SUGGESTIONS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SETTINGS))
 
     .get(
         '/',

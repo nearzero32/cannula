@@ -72,12 +72,12 @@ Use long, random secrets in production. Rotating a secret immediately invalidate
 |---|---|
 | Signed with | `ACCESS_TOKEN_SECRET` |
 | JWT expiry | `15m` |
-| Redis TTL | 15 minutes (`ACCESS_TTL`) |
-| Redis key | `access:{user_id}:{sha256(token)}` |
+| Redis lifetime | Bound to the logical session (up to 7 days) |
+| Redis key | `session:{user_id}:{sid}` |
 | Sent via | `Authorization: Bearer <accessToken>` |
-| Payload | `{ _id, role }` |
+| Payload | `{ _id, role, sid, jti, sub, aud, tokenType: "access" }` |
 
-Used for all protected dashboard routes. After 15 minutes the JWT may still decode, but Redis will no longer have the session and the request is rejected.
+Used for protected routes. The JWT expires after 15 minutes, and every request also requires the corresponding logical Redis session to exist.
 
 ### Refresh Token
 
@@ -85,12 +85,12 @@ Used for all protected dashboard routes. After 15 minutes the JWT may still deco
 |---|---|
 | Signed with | `REFRESH_TOKEN_SECRET` |
 | JWT expiry | `7d` |
-| Redis TTL | 7 days (`REFRESH_TTL`) |
-| Redis key | `refresh:{user_id}:{sha256(token)}` |
+| Redis lifetime | 7 days |
+| Redis state | SHA-256 hash of the current refresh `jti` in the logical session |
 | Sent via | Request body on `POST /refresh` only — never as a Bearer header |
-| Payload | `{ _id }` |
+| Payload | `{ _id, role, sid, jti, sub, aud, tokenType: "refresh" }` |
 
-Used exclusively to rotate tokens. On each successful refresh, the **old refresh token is revoked** and a new pair is issued (refresh token rotation).
+Used exclusively to rotate tokens. Lua atomically consumes the current `jti`, records a one-way consumed marker, and installs the replacement. Reuse revokes only that logical session family.
 
 ---
 
@@ -101,37 +101,51 @@ Defined in `src/constants/jwt.ts`:
 ```ts
 // Access token
 interface AccessTokenPayload {
-    _id: string;   // MongoDB User ObjectId (24-char hex)
-    role: 'admin' | 'doctor' | 'patient';
+    _id: string;
+    role: 'admin' | 'doctor' | 'nurse' | 'pharmacy' | 'patient';
+    sid: string;
+    jti: string;
+    sub: string;
+    aud: 'mobile' | 'dashboard';
+    tokenType: 'access';
 }
 
 // Refresh token
 interface RefreshTokenPayload {
-    _id: string;   // MongoDB User ObjectId
+    _id: string;
+    role: 'admin' | 'doctor' | 'nurse' | 'pharmacy' | 'patient';
+    sid: string;
+    jti: string;
+    sub: string;
+    aud: 'mobile' | 'dashboard';
+    tokenType: 'refresh';
 }
 ```
 
-The access token carries `role` so protected routes can authorize by role without an extra DB lookup. The refresh token carries only `_id`; role is re-read from the database on refresh.
+Patient sessions use the `mobile` audience. Admin, Doctor, Nurse, and Pharmacy sessions use `dashboard`. Refresh re-reads the User and verifies active status, role, audience, and restricted state.
 
 ---
 
 ## Session Storage (Redis)
 
-Raw tokens are **never** stored in Redis. Only a SHA-256 hash of the token is used in the key:
+Raw tokens are **never** stored in Redis. Each login/device has one logical session:
 
 ```text
-access:{user_id}:{sha256(accessToken)}  →  "1"  (TTL: 15 min)
-refresh:{user_id}:{sha256(refreshToken)} →  "1"  (TTL: 7 days)
+session:{user_id}:{sid} → JSON session state (TTL: 7 days)
+refresh-used:{user_id}:{sid}:{sha256(jti)} → "1" (TTL: 7 days)
 ```
+
+Session state contains user, role, audience, restricted status, the current refresh-JTI hash, timestamps, and optional device metadata. Consumed markers contain neither a token nor a plaintext JTI.
 
 Validation flow for protected routes (`AuthPlugin`):
 
 ```text
 1. Read Authorization header
-2. Verify JWT signature + expiry (ACCESS_TOKEN_SECRET)
-3. Look up access:{user_id}:{sha256(token)} in Redis
-4. If missing → 401 "Session revoked"
-5. Attach { phrase: { _id, role } } to request context
+2. Verify access signature, expiry, subject, audience, session ID, and token type
+3. Look up session:{user_id}:{sid} in Redis
+4. Compare user, role, and audience; if missing/mismatched → 401
+5. Enforce the session's restricted state
+6. Attach { phrase: { _id, role, sid, audience, mustChangePin } } to request context
 ```
 
 ---
@@ -157,7 +171,7 @@ Client                          API                           Redis / MongoDB
 
 - Login is restricted to **`admin`** and **`doctor`** roles.
 - User `status` must be **`active`**.
-- Dashboard passwords are hashed and verified with **Argon2id** through `Bun.password` (see `src/constants/hashing.ts`). Legacy dashboard-only SHA-512 hashes are migrated at startup from the unchanged `password_show` value; patient accounts are excluded from this migration and use only the six-digit PIN flow.
+- Dashboard passwords and Patient PINs are stored only as **Argon2id** hashes through `Bun.password` (see `src/constants/hashing.ts`). Startup removes the retired recoverable credential field without reading its contents.
 
 ### Refresh (token rotation)
 

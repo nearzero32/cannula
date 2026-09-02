@@ -50,9 +50,9 @@ Requests pass through Elysia controllers, authentication middleware, services, a
 
 Access tokens expire after 15 minutes and refresh tokens after seven days. Active sessions are stored in Redis using SHA-256 token fingerprints.
 
-Passwords are hashed with Argon2id through `Bun.password`. On startup, the password migration converts legacy SHA-512 hashes to Argon2id using each account's existing `password_show` value. The visible password value is intentionally retained and is not changed by this migration.
+Passwords and Patient PINs are stored only as Argon2id hashes through `Bun.password`. A startup cleanup migration removes the retired recoverable credential field from existing development data without reading or logging its values.
 
-The application ensures a super administrator exists at startup. Always set `SUPER_ADMIN_PHONE` and `SUPER_ADMIN_PASSWORD` in production instead of relying on development defaults.
+The application creates an initial super administrator only when none exists and explicit `SUPER_ADMIN_PHONE` and `SUPER_ADMIN_PASSWORD` values are supplied. Production startup fails safely when initial bootstrap is required but those values are missing.
 
 ## Docker
 

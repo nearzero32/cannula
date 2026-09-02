@@ -22,7 +22,8 @@ import userService from '../src/services/user.service';
 import patientService from '../src/services/patient.service';
 import Elysia from 'elysia';
 import { AuthPlugin } from '../src/middleware/auth.middleware';
-import { signAccessToken } from '../src/constants/jwt';
+import { signAccessToken, TokenAudienceEnum } from '../src/constants/jwt';
+import sessionService from '../src/services/session.service';
 import { authStartBodySchema, authStartDataSchema, otpResendDataSchema, otpVerifyBodySchema, pinCreateBodySchema, pinLoginBodySchema } from '../src/controller/mobile/auth.controller';
 import { assertOtpDebugConfiguration, isOtpDebugReturnEnabled } from '../src/config/otp-debug.config';
 import ActivityLogService from '../src/services/activity-log.service';
@@ -223,7 +224,7 @@ describe('Patient authentication contracts and security', () => {
         const result = await patientAuthService.createPin('flow', '123456');
         expect(result.accessToken).toBeString(); expect(result.refreshToken).toBeString();
         const payload = (createUser.mock.calls[0] as any)[0];
-        expect(payload.full_name).toBe(flow.phone); expect(payload.password_show).toBe('[redacted]'); expect(payload.is_phone_verified).toBe(true);
+        expect(payload.full_name).toBe(flow.phone); expect(payload).not.toHaveProperty('password_show'); expect(payload.is_phone_verified).toBe(true);
         expect(payload.password_hash).toStartWith('$argon2id$');
         expect(await verifyPassword('123456', payload.password_hash)).toBe(true);
         await expect(patientAuthService.createPin('flow', '123456')).rejects.toThrow('مستخدم');
@@ -248,7 +249,7 @@ describe('Patient authentication contracts and security', () => {
     });
 
     test('generic audit sanitizer recursively redacts every credential family', () => {
-        const sanitized = sanitizeCredentialData({ password: 'p', nested: { pin: '1', temporaryPin: '2', otp: '3', debugOtp: '8', supportOtp: '4', accessToken: '5', refreshToken: '6', authorization: '7', safe: 'ok' } });
+        const sanitized = sanitizeCredentialData({ password: 'p', nested: { password_show: 'legacy', password_hash: 'hash', pin: '1', temporaryPin: '2', otp: '3', debugOtp: '8', supportOtp: '4', accessToken: '5', refreshToken: '6', authorization: '7', safe: 'ok' } });
         const serialized = JSON.stringify(sanitized);
         for (const secret of ['"p"', '"1"', '"2"', '"3"', '"4"', '"5"', '"6"', '"7"', '"8"']) expect(serialized).not.toContain(secret);
         expect((sanitized as any).nested.safe).toBe('ok');
@@ -260,6 +261,8 @@ describe('Patient authentication contracts and security', () => {
         expect(AuthFlow.schema.indexes().some(([fields, options]) => fields.expires_at === 1 && options.expireAfterSeconds === 0)).toBe(true);
         expect(AuthEvent.schema.indexes().some(([fields]) => fields.flow_id === 1 && fields.createdAt === 1)).toBe(true);
         expect(User.schema.path('must_change_pin')).toBeDefined();
+        expect(User.schema.path('password_show')).toBeUndefined();
+        expect((User.schema.path('password_hash') as any).options).toMatchObject({ required: true, select: false });
         expect(User.schema.indexes().some(([fields, options]) => fields.phone === 1 && options.unique === true)).toBe(true);
     });
 
@@ -302,13 +305,13 @@ describe('Patient authentication contracts and security', () => {
         const fields = (update.mock.calls[0] as any)[1].$set;
         expect(fields.password_hash).toStartWith('$argon2id$');
         expect(fields.password_hash).not.toBe(result.temporaryPin); expect(await verifyPassword(result.temporaryPin, fields.password_hash)).toBe(true);
-        expect(fields.password_show).toBe('[redacted]'); expect(fields.must_change_pin).toBe(true);
+        expect(fields).not.toHaveProperty('password_show'); expect(fields.must_change_pin).toBe(true);
         expect(JSON.stringify(event.mock.calls)).not.toContain(result.temporaryPin);
     });
 
     test('forced PIN change replaces temporary credential, clears restriction, and returns rotated tokens', async () => {
         const oldHash = await hashPassword('111111');
-        const user = { _id: objectId, phone: '07700000000', role: 'patient', status: 'active', password_hash: oldHash, password_show: '[redacted]', must_change_pin: true, save: mock(async () => {}) };
+        const user = { _id: objectId, phone: '07700000000', role: 'patient', status: 'active', password_hash: oldHash, must_change_pin: true, save: mock(async () => {}) };
         spyOn(User, 'findOne').mockReturnValue(query(user) as never);
         const redis = RedisClient.getInstance(); spyOn(redis, 'deleteByPattern').mockResolvedValue(1); spyOn(redis, 'set').mockResolvedValue();
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
@@ -316,12 +319,13 @@ describe('Patient authentication contracts and security', () => {
         expect(result.mustChangePin).toBe(false); expect(user.must_change_pin).toBe(false);
         expect(await verifyPassword('222222', user.password_hash)).toBe(true);
         expect(await verifyPassword('111111', user.password_hash)).toBe(false);
+        expect(user).not.toHaveProperty('password_show');
     });
 
     test('restricted reset sessions can reach PIN change but not normal patient operations', async () => {
-        const token = signAccessToken({ _id: objectId.toString(), role: 'patient' });
-        spyOn(RedisClient.getInstance(), 'get').mockResolvedValue('restricted');
-        const app = new Elysia().use(AuthPlugin())
+        const token = signAccessToken({ _id: objectId.toString(), role: 'patient', sid: '12345678-1234-4234-8234-123456789012', audience: TokenAudienceEnum.MOBILE });
+        spyOn(sessionService, 'validateAccess').mockResolvedValue({ userId: objectId.toString(), role: 'patient', audience: TokenAudienceEnum.MOBILE, restricted: true, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' });
+        const app = new Elysia().use(AuthPlugin(TokenAudienceEnum.MOBILE))
             .get('/api/mobile/normal', () => ({ ok: true }))
             .get('/api/mobile/auth/pin/change-required', () => ({ ok: true }));
         const headers = { authorization: `Bearer ${token}` };

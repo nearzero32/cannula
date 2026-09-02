@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import mongoose from 'mongoose';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { AuthPlugin } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
 import patientService from '../../services/patient.service';
 import homeCareRequestService from '../../services/home-care-request.service';
 import { formatHomeCareRequestForMobile } from '../../services/home-care-request.formatter';
@@ -65,7 +66,7 @@ export const mobileHomeCareRequestsController = new Elysia({
     prefix: '/home-care/requests',
     detail: { tags: [SWAGGER_TAGS.MOBILE.HOME_CARE] },
 })
-    .use(AuthPlugin())
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
     .onError(({ code, error, set }) => {
         if (error instanceof DomainError) {
             set.status = error.status;

@@ -10,6 +10,8 @@ import {
     IAppointmentCancelledByModelEnum,
 } from '../../../interfaces/appointment.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -26,6 +28,7 @@ export const appointmentsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.APPOINTMENTS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_APPOINTMENTS))
 
     // List appointments with filters
     .get(

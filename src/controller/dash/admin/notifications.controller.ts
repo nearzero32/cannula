@@ -9,6 +9,8 @@ import {
     INotificationRecipientModelEnum,
 } from '../../../interfaces/notification.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -17,6 +19,7 @@ export const notificationsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.NOTIFICATIONS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SETTINGS))
 
     // List all notifications with filters
     .get(

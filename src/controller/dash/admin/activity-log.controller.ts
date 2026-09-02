@@ -6,6 +6,8 @@ import { ActivityLoggerPlugin } from '../../../middleware/logger.middleware';
 import activityLogService from '../../../services/activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../../interfaces/activity-log.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -14,6 +16,7 @@ export const activityLogController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.ACTIVITY_LOGS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.VIEW_AUDIT_LOGS))
     .use(ActivityLoggerPlugin)
 
     .get(

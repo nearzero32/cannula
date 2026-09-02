@@ -96,6 +96,10 @@ class RedisClient {
         return await this.client.exists(key);
     }
 
+    public async eval(script: string, keys: string[], args: string[]): Promise<unknown> {
+        return await this.client.eval(script, { keys, arguments: args });
+    }
+
     public async flushAll(): Promise<string> {
         return await this.client.flushAll();
     }

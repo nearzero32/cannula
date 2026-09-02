@@ -4,6 +4,8 @@ import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import PatientHealthProfile from '../models/patient-health-profile.model';
+import sessionService from './session.service';
+import { IPatientStatusEnum } from '../interfaces/patient.interface';
 
 class PatientService {
     private model = Patient;
@@ -105,6 +107,9 @@ class PatientService {
     public async update(id: string, payload: Partial<IPatient>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<PatientDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if (doc && payload.status !== undefined && payload.status !== IPatientStatusEnum.ACTIVE) {
+            await sessionService.revokeAll(String(doc.user_id), { reasonCode: 'PATIENT_STATUS_DISABLED' });
+        }
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

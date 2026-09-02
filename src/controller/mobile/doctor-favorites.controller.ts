@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
 import doctorFavoriteService from '../../services/doctor-favorite.service';
 import patientService from '../../services/patient.service';
 import doctorService from '../../services/doctor.service';
@@ -60,7 +61,7 @@ export const mobileDoctorFavoritesController = new Elysia({
     prefix: '/doctor-favorites',
     detail: { tags: [SWAGGER_TAGS.MOBILE.FAVORITES] },
 })
-    .use(AuthPlugin())
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
 
     .get(
         '/',

@@ -6,6 +6,8 @@ import patientService from '../../../services/patient.service';
 import { IPatientStatusEnum, IPatientGenderEnum, IPatientBloodGroupEnum } from '../../../interfaces/patient.interface';
 import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 import { patientHealthProfileService } from '../../../services/health-profile.service';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -25,6 +27,7 @@ export const patientsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.PATIENTS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_PATIENTS))
 
     .get(
         '/',

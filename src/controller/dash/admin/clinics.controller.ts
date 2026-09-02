@@ -5,6 +5,8 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import clinicService from '../../../services/clinic.service';
 import { IClinicStatusEnum } from '../../../interfaces/clinic.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -29,6 +31,7 @@ export const clinicsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.CLINICS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_CLINICS))
 
     .get(
         '/',

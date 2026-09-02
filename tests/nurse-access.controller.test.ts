@@ -6,16 +6,20 @@ import userService from '../src/services/user.service';
 import ActivityLogService from '../src/services/activity-log.service';
 import dispatchService from '../src/services/home-care-dispatch.service';
 import nurseService from '../src/services/nurse.service';
-import { signAccessToken } from '../src/constants/jwt';
+import { signAccessToken, TokenAudienceEnum } from '../src/constants/jwt';
+import sessionService from '../src/services/session.service';
 import { IUserRoleEnum } from '../src/interfaces/user.interface';
 import { DomainError } from '../src/services/domain-error';
 
 const userId = '507f191e810c19729de86401';
 function request(path: string, role: 'admin' | 'doctor' | 'nurse' | 'patient') {
-    const headers = { authorization: `Bearer ${signAccessToken({ _id: userId, role })}` };
+    const headers = { authorization: `Bearer ${signAccessToken({ _id: userId, role, sid: '12345678-1234-4234-8234-123456789012', audience: TokenAudienceEnum.DASHBOARD })}` };
     return new Request(`http://localhost${path}`, { headers });
 }
-beforeEach(() => spyOn(RedisClient, 'getInstance').mockReturnValue({ get: async () => '1', set: async () => {}, del: async () => {} } as never));
+beforeEach(() => {
+    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+    spyOn(sessionService, 'create').mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', mustChangePin: false, sessionId: '12345678-1234-4234-8234-123456789012' });
+});
 afterEach(() => mock.restore());
 
 describe('Nurse dashboard identity and authorization', () => {
@@ -43,7 +47,7 @@ describe('Nurse dashboard identity and authorization', () => {
             const response = await nurseHomeCareController.handle(request('/home-care/available', IUserRoleEnum.NURSE));
             expect(response.status).toBe(403);
             mock.restore();
-            spyOn(RedisClient, 'getInstance').mockReturnValue({ get: async () => '1' } as never);
+            spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
         }
     });
 

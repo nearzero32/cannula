@@ -15,8 +15,11 @@ import { nursesAdminController } from './nurses.controller';
 import { pharmaciesAdminController } from './pharmacies.controller';
 import { pharmacyRequestsAdminController } from './pharmacy-requests.controller';
 import { authSecurityController } from './auth-security.controller';
+import { RoleGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IUserRoleEnum } from '../../../interfaces/user.interface';
 
 export const adminController = new Elysia({ prefix: '/admin' })
+    .use(RoleGuardPlugin([IUserRoleEnum.ADMIN]))
     .use(clinicsController)
     .use(activityLogController)
     .use(aboutUsController)

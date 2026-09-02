@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import User from '../models/users.model';
 import Suggestion from '../models/suggestions.model';
 import { IUserRoleEnum } from '../interfaces/user.interface';
+import Admin from '../models/admins.model';
 
 const SUGGESTIONS_SEED: string[] = [
     'أقترح إضافة تذكير بالمواعيد عبر رسائل SMS قبل الموعد بـ 24 ساعة.',
@@ -25,9 +26,8 @@ async function resolveSeedUserId(): Promise<mongoose.Types.ObjectId | null> {
     const patient = await User.findOne({ role: IUserRoleEnum.PATIENT }).select('_id').lean();
     if (patient?._id) return new mongoose.Types.ObjectId(patient._id);
 
-    const fallbackPhone = process.env.SUPER_ADMIN_PHONE || '07000000000';
-    const adminUser = await User.findOne({ phone: fallbackPhone }).select('_id').lean();
-    if (adminUser?._id) return new mongoose.Types.ObjectId(adminUser._id);
+    const superAdmin = await Admin.findOne({ super_admin: true, is_active: true }).select('user_id').lean();
+    if (superAdmin?.user_id) return new mongoose.Types.ObjectId(superAdmin.user_id);
 
     return null;
 }

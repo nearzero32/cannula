@@ -24,6 +24,8 @@ import {
     DashboardHomeCareRequestResponseSchema,
 } from '../../../schemas/home-care-request-response.schema';
 import { HomeCareHistoryListResponseSchema } from '../../../schemas/nurse-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 function pagination(page: number, limit: number, total: number) {
     const pages = Math.ceil(total / limit);
@@ -72,6 +74,7 @@ export const homeCareRequestsAdminController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.HOME_CARE] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_HOME_CARE))
     .onError(({ code, error, set }) => {
         if (error instanceof DomainError) {
             set.status = error.status;

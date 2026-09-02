@@ -2,6 +2,7 @@ import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../middleware/auth.middleware';
+import { TokenAudienceEnum } from '../../constants/jwt';
 import patientService from '../../services/patient.service';
 import patientChildService, { formatPatientChild } from '../../services/patient-child.service';
 import { formatHealthProfile } from '../../services/health-profile.service';
@@ -53,7 +54,7 @@ export const mobileChildrenController = new Elysia({
     prefix: '/children',
     detail: { tags: [SWAGGER_TAGS.MOBILE.CHILDREN] },
 })
-    .use(AuthPlugin())
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
     .get('/', async ({ query, phrase, set }) => {
         try {
             const patientId = await requirePatient(phrase);

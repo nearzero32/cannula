@@ -24,7 +24,6 @@ export interface IUser extends IBaseDocument {
     email?: string;
     phone: string;
     password_hash: string;
-    password_show: string;
     role: IUserRole;
     status: IUserStatus;
     is_phone_verified: boolean;

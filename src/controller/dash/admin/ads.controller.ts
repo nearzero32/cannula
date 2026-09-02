@@ -5,6 +5,8 @@ import mongoose from 'mongoose';
 import adsService from '../../../services/ads.service';
 import { IAdsStatusEnum } from '../../../interfaces/ads.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -35,6 +37,7 @@ export const adsController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.ADS] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SETTINGS))
 
     .get(
         '/',

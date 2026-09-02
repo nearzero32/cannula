@@ -27,6 +27,8 @@ import {
 import { homeCareRequestsAdminController } from './home-care-requests.controller';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import type { IUserRole } from '../../../interfaces/user.interface';
+import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
+import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -128,6 +130,7 @@ const categoriesController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.HOME_CARE] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_HOME_CARE))
     .onError(({ code, error, set }) => {
         if (error instanceof HomeCareValidationError) {
             set.status = error.statusCode;
@@ -244,6 +247,7 @@ const servicesController = new Elysia({
     detail: { tags: [SWAGGER_TAGS.ADMIN.HOME_CARE] },
 })
     .use(AuthPlugin())
+    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_HOME_CARE))
     .onError(({ code, error, set }) => {
         if (error instanceof HomeCareValidationError) {
             set.status = error.statusCode;
