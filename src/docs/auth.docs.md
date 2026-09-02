@@ -9,7 +9,32 @@ Kanona uses a **dual-token JWT** model for dashboard authentication (admin and d
 
 Both tokens are signed JWTs **and** tracked in **Redis**. A token is valid only when its signature verifies **and** its session key exists in Redis. This allows immediate revocation (logout) without waiting for JWT expiry.
 
-Patient mobile auth is planned but not implemented yet. Public mobile routes under `/api/mobile` do not require authentication today.
+Patient mobile authentication uses a server-owned phone/OTP/PIN flow. Registration requires only verified phone ownership and a six-digit PIN; profile completion happens later.
+
+## Patient Mobile Authentication
+
+1. `POST /api/mobile/auth/start` with `{ phone }` returns `{ flowId, nextStep: "PIN" | "OTP" }`.
+2. New phones verify the delivered OTP with `POST /api/mobile/auth/otp/verify`.
+3. After verification, `POST /api/mobile/auth/pin/create` creates the User/Patient and returns access and refresh tokens immediately.
+4. Existing patients use `POST /api/mobile/auth/pin/login` with exactly six numeric digits.
+5. An administrator reset produces a one-time temporary PIN, revokes all sessions, and sets `mustChangePin`. The resulting restricted login can access only logout and `POST /api/mobile/auth/pin/change-required`.
+
+OTP and support-OTP hashes live only in short-lived `AuthFlow` documents. `AuthEvent` retains non-secret journey events for authorized Dashboard monitoring. No endpoint lists OTP/PIN/hash/token values.
+
+Production OTP delivery requires `OTP_DELIVERY_WEBHOOK_URL`. Development permits a no-op provider so automated tests can inject a delivery implementation; it must not be treated as real delivery.
+
+For temporary frontend development, setting `OTP_DEBUG_RETURN_CODE=true` outside production adds an optional `debugOtp` field only to the immediate OTP generation response:
+
+```json
+{
+  "flowId": "...",
+  "nextStep": "OTP",
+  "expiresAt": "2026-09-02T12:00:00.000Z",
+  "debugOtp": "483921"
+}
+```
+
+The resend response uses the same fields and contains the newly generated code. With the flag disabled, `debugOtp` is omitted. Existing-account `nextStep: "PIN"` responses never include it. Production startup rejects `OTP_DEBUG_RETURN_CODE=true`, and the runtime condition independently suppresses the field whenever `NODE_ENV=production`.
 
 ---
 
@@ -19,6 +44,7 @@ Patient mobile auth is planned but not implemented yet. Public mobile routes und
 |---|---|---|
 | `ACCESS_TOKEN_SECRET` | Yes | Secret used to sign and verify access JWTs (`jsonwebtoken`). |
 | `REFRESH_TOKEN_SECRET` | Yes | Secret used to sign and verify refresh JWTs. Must be different from `ACCESS_TOKEN_SECRET`. |
+| `OTP_DEBUG_RETURN_CODE` | No | Development/test only. Exact value `true` returns `debugOtp` outside production; defaults to disabled. Forbidden with `NODE_ENV=production`. |
 | `REDIS_HOST` | Yes | Redis host for session storage. |
 | `REDIS_PORT` | Yes | Redis port (default `6379`). |
 | `REDIS_PASSWORD` | No | Redis password when auth is enabled. |
@@ -131,7 +157,7 @@ Client                          API                           Redis / MongoDB
 
 - Login is restricted to **`admin`** and **`doctor`** roles.
 - User `status` must be **`active`**.
-- Passwords are hashed and verified with **Argon2id** through `Bun.password` (see `src/constants/hashing.ts`). Legacy SHA-512 hashes are migrated at startup from the unchanged `password_show` value.
+- Dashboard passwords are hashed and verified with **Argon2id** through `Bun.password` (see `src/constants/hashing.ts`). Legacy dashboard-only SHA-512 hashes are migrated at startup from the unchanged `password_show` value; patient accounts are excluded from this migration and use only the six-digit PIN flow.
 
 ### Refresh (token rotation)
 

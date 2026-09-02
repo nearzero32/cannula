@@ -20,8 +20,10 @@ import { backfillHealthProfiles } from './migrations/backfill-health-profiles.mi
 import { repairAppointmentSlotIndex } from './migrations/repair-appointment-slot-index.migration';
 import { backfillPharmacyWorkflow } from './migrations/backfill-pharmacy-workflow.migration';
 import { assertPharmacyTransactionSupport } from './services/pharmacy-transaction.service';
+import { assertOtpDebugConfiguration } from './config/otp-debug.config';
 
 async function bootstrap() {
+    assertOtpDebugConfiguration();
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();

@@ -1,5 +1,6 @@
 import User from '../models/users.model';
 import { hashPassword, isArgon2Hash } from '../constants/hashing';
+import { IUserRoleEnum } from '../interfaces/user.interface';
 
 /**
  * Re-hashes legacy user passwords from the existing password_show value.
@@ -7,6 +8,7 @@ import { hashPassword, isArgon2Hash } from '../constants/hashing';
  */
 export async function migratePasswordsToArgon2(): Promise<void> {
     const users = User.find({
+        role: { $ne: IUserRoleEnum.PATIENT },
         password_hash: { $not: /^\$argon2/ },
         password_show: { $type: 'string', $ne: '' },
     }).select('+password_hash').cursor();

@@ -2,13 +2,14 @@
 
 ## Purpose
 
-The `Patient` model stores a patient's core profile and basic medical context used for appointments.
+The `Patient` model stores a patient's core identity and profile data used for appointments.
 
 It is used to:
 
 - link a patient profile to a base `User` account
 - support booking and lookup by patient identity
-- keep basic health context (blood group, allergies, chronic conditions)
+- keep date of birth as the source for a dynamically calculated age
+- compose health context from the separate `PatientHealthProfile` model when needed
 - track operational patient state (`active`, `inactive`, `blocked`)
 
 ## Schema Overview
@@ -16,7 +17,6 @@ It is used to:
 ```ts
 import mongoose, { Schema, model, models } from "mongoose";
 import {
-  IPatientBloodGroupEnum,
   IPatientGenderEnum,
   IPatientStatusEnum,
 } from "../interfaces/patient.interface";
@@ -63,19 +63,6 @@ const patientSchema = new Schema(
       type: String,
       default: null,
     },
-    blood_group: {
-      type: String,
-      enum: Object.values(IPatientBloodGroupEnum),
-      default: null,
-    },
-    allergies: {
-      type: [String],
-      default: [],
-    },
-    chronic_condition_ids: {
-      type: [String],
-      default: [],
-    },
     status: {
       type: String,
       enum: Object.values(IPatientStatusEnum),
@@ -115,9 +102,6 @@ export default Patient;
 | `phone`                 | `String`   | No       | Optional patient phone number.                                           |
 | `address`               | `String`   | No       | Optional address, max 300 chars.                                         |
 | `profile_photo`         | `String`   | No       | Optional profile image URL/path.                                         |
-| `blood_group`           | `String`   | No       | Optional blood group (`A+`, `A-`, `B+`, `B-`, `AB+`, `AB-`, `O+`, `O-`). |
-| `allergies`             | `String[]` | No       | List of known allergy tags/notes.                                        |
-| `chronic_condition_ids` | `String[]` | No       | IDs of `ChronicCondition` catalog entries.                               |
 | `status`                | `String`   | Yes      | Operational state: `active`, `inactive`, `blocked`. Default: `active`.   |
 | `notes_internal`        | `String`   | No       | Internal notes for staff/admin use.                                      |
 | `createdAt`             | `Date`     | Auto     | Auto-generated create timestamp (`timestamps: true`).                    |
@@ -128,8 +112,26 @@ export default Patient;
 Values are centralized in `src/interfaces/patient.interface.ts`.
 
 - `IPatientGenderEnum`: `male`, `female`
-- `IPatientBloodGroupEnum`: `A+`, `A-`, `B+`, `B-`, `AB+`, `AB-`, `O+`, `O-`
 - `IPatientStatusEnum`: `active`, `inactive`, `blocked`
+
+## Mobile Write Ownership
+
+`PATCH /api/mobile/profile/complete-profile` writes identity/profile fields only:
+
+- `full_name`
+- `email`
+- `gender`
+- `date_of_birth`
+- `address`
+- `profile_photo`
+
+`PATCH /api/mobile/profile/health` is the only patient endpoint that writes health-profile fields:
+
+- `blood_type`
+- `allergies`
+- `chronic_condition_ids`
+
+For read compatibility, `GET /api/mobile/profile` still composes health data and exposes the blood type under the legacy `blood_group` response name. Age is derived from `Patient.date_of_birth` and is never persisted.
 
 ## Indexes
 

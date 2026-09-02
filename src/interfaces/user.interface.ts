@@ -30,4 +30,5 @@ export interface IUser extends IBaseDocument {
     is_phone_verified: boolean;
     is_email_verified: boolean;
     last_login_at?: Date;
+    must_change_pin: boolean;
 }

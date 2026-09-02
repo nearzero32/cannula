@@ -19,6 +19,7 @@ export const SWAGGER_TAGS = {
         CHRONIC_CONDITIONS: 'Admin - Chronic Conditions',
         SUGGESTIONS: 'Admin - Suggestions',
         ABOUT_US: 'Admin - About Us',
+        AUTH_SECURITY: 'Admin - Auth Security',
     },
     DOCTOR: {
         PROFILE: 'Doctor - Profile',
@@ -71,6 +72,7 @@ export const SWAGGER_TAG_DEFINITIONS = [
     { name: SWAGGER_TAGS.ADMIN.CHRONIC_CONDITIONS, 'x-displayName': 'Chronic Conditions', description: 'إدارة الأمراض المزمنة' },
     { name: SWAGGER_TAGS.ADMIN.SUGGESTIONS, 'x-displayName': 'Suggestions', description: 'إدارة الاقتراحات' },
     { name: SWAGGER_TAGS.ADMIN.ABOUT_US, 'x-displayName': 'About Us', description: 'إدارة محتوى من نحن' },
+    { name: SWAGGER_TAGS.ADMIN.AUTH_SECURITY, 'x-displayName': 'Auth Security', description: 'مراقبة تدفقات المصادقة ودعم OTP وإدارة PIN وجلسات المرضى' },
     { name: SWAGGER_TAGS.DOCTOR.PROFILE, 'x-displayName': 'Profile', description: 'إدارة الملف الشخصي للطبيب' },
     { name: SWAGGER_TAGS.DOCTOR.APPOINTMENTS, 'x-displayName': 'Appointments', description: 'إدارة مواعيد الطبيب' },
     { name: SWAGGER_TAGS.DOCTOR.SECRETARIES, 'x-displayName': 'Secretaries', description: 'إدارة سكرتارية الطبيب' },
@@ -116,6 +118,7 @@ export const SWAGGER_TAG_GROUPS = [
             SWAGGER_TAGS.ADMIN.CHRONIC_CONDITIONS,
             SWAGGER_TAGS.ADMIN.SUGGESTIONS,
             SWAGGER_TAGS.ADMIN.ABOUT_US,
+            SWAGGER_TAGS.ADMIN.AUTH_SECURITY,
         ],
     },
     {

@@ -5,27 +5,20 @@ import { AuthPlugin } from '../../middleware/auth.middleware';
 import patientService from '../../services/patient.service';
 import userService from '../../services/user.service';
 import {
-    IPatientBloodGroupEnum,
     IPatientGenderEnum,
     type IPatient,
 } from '../../interfaces/patient.interface';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, InternalServerErrorResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
-import {
-    ALLERGY_MAX_LENGTH,
-    MAX_ALLERGIES,
-    MAX_CHRONIC_CONDITIONS,
-    patientHealthProfileService,
-    type PatientManagedHealthProfileInput,
-} from '../../services/health-profile.service';
+import { patientHealthProfileService } from '../../services/health-profile.service';
 import type { PatientHealthProfileDocument } from '../../models/patient-health-profile.model';
 import { DomainError } from '../../services/domain-error';
 import { calculateAge, formatDateOfBirth, parseDateOfBirth } from '../../services/date-of-birth';
 
 const ObjectId = mongoose.Types.ObjectId;
 
-const completeProfileBodySchema = t.Object({
+export const completeProfileBodySchema = t.Object({
     full_name: t.Optional(t.String({ minLength: 2, maxLength: 120 })),
     email: t.Optional(t.Nullable(t.String())),
     gender: t.Optional(t.Nullable(t.Enum(IPatientGenderEnum))),
@@ -35,18 +28,13 @@ const completeProfileBodySchema = t.Object({
     }))),
     address: t.Optional(t.Nullable(t.String({ maxLength: 300 }))),
     profile_photo: t.Optional(t.Nullable(t.String())),
-    blood_group: t.Optional(t.Nullable(t.Enum(IPatientBloodGroupEnum))),
-    allergies: t.Optional(t.Array(t.String({ minLength: 1, maxLength: ALLERGY_MAX_LENGTH }), {
-        maxItems: MAX_ALLERGIES,
-    })),
-    chronic_condition_ids: t.Optional(t.Array(t.String(), { maxItems: MAX_CHRONIC_CONDITIONS })),
-});
+}, { additionalProperties: false });
 
 function isProfileComplete(patient: IPatient): boolean {
     return Boolean(patient.gender && patient.date_of_birth);
 }
 
-function formatPatientResponse(patient: IPatient, health: PatientHealthProfileDocument) {
+export function formatPatientIdentityResponse(patient: IPatient) {
     return {
         _id: patient._id.toString(),
         user_id: patient.user_id.toString(),
@@ -57,11 +45,17 @@ function formatPatientResponse(patient: IPatient, health: PatientHealthProfileDo
         age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
         address: patient.address,
         profile_photo: patient.profile_photo,
+        status: patient.status,
+        profile_completed: isProfileComplete(patient),
+    };
+}
+
+export function formatPatientResponse(patient: IPatient, health: PatientHealthProfileDocument) {
+    return {
+        ...formatPatientIdentityResponse(patient),
         blood_group: health.blood_type ?? null,
         allergies: health.allergies,
         chronic_condition_ids: health.chronic_condition_ids.map((id) => id.toString()),
-        status: patient.status,
-        profile_completed: isProfileComplete(patient),
     };
 }
 
@@ -125,29 +119,6 @@ export const mobileProfileController = new Elysia({
                 }
             }
 
-            let healthProfile = await patientHealthProfileService.getOrCreate(
-                new ObjectId(patient._id.toString())
-            );
-            const healthInput: PatientManagedHealthProfileInput = {};
-            if (body.blood_group !== undefined) healthInput.blood_type = body.blood_group;
-            if (body.allergies !== undefined) healthInput.allergies = body.allergies;
-            if (body.chronic_condition_ids !== undefined) {
-                healthInput.chronic_condition_ids = body.chronic_condition_ids;
-            }
-            if (Object.keys(healthInput).length > 0) {
-                try {
-                    healthProfile = await patientHealthProfileService.update(
-                        new ObjectId(patient._id.toString()), healthInput
-                    );
-                } catch (error) {
-                    if (error instanceof DomainError) {
-                        set.status = error.status;
-                        return { error: true, message: error.message };
-                    }
-                    throw error;
-                }
-            }
-
             const patientPayload: Record<string, unknown> = {};
             if (body.full_name !== undefined) patientPayload.full_name = body.full_name;
             if (body.gender !== undefined) patientPayload.gender = body.gender;
@@ -187,13 +158,13 @@ export const mobileProfileController = new Elysia({
             return {
                 error: false,
                 message: 'تم إكمال الملف الشخصي بنجاح',
-                data: formatPatientResponse(updated, healthProfile),
+                data: formatPatientIdentityResponse(updated),
             };
         },
         {
             body: completeProfileBodySchema,
             detail: {
-                description: 'يُعدّل تاريخ الميلاد هنا بصيغة YYYY-MM-DD. العمر مشتق ديناميكياً ولا يُخزّن.',
+                description: 'يعدّل بيانات هوية المريض فقط: الاسم والبريد والجنس وتاريخ الميلاد والعنوان وصورة الملف. العمر مشتق ولا يُخزّن. فصيلة الدم والحساسيات والحالات المزمنة تُعدّل حصراً عبر /profile/health.',
             },
             response: {
                 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,

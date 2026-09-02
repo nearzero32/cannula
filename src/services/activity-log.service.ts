@@ -1,6 +1,7 @@
 import ActivityLog, { ActivityLogDocument } from '../models/activity-log.model';
 import type { IActivityLog } from '../interfaces/activity-log.interface';
 import mongoose, { type PipelineStage } from 'mongoose';
+import { sanitizeCredentialData } from './credential-sanitizer';
 
 class ActivityLogService {
     private model = ActivityLog;
@@ -50,7 +51,7 @@ class ActivityLogService {
     }
 
     public async create(payload: Partial<IActivityLog>): Promise<ActivityLogDocument> {
-        return await this.model.create(payload);
+        return await this.model.create(sanitizeCredentialData(payload) as Partial<IActivityLog>);
     }
 
     public async logActivity({
@@ -95,10 +96,10 @@ class ActivityLogService {
             action,
             collection_name,
             document_id: document_id ? new mongoose.Types.ObjectId(document_id) : null,
-            old_data,
-            new_data,
+            old_data: sanitizeCredentialData(old_data),
+            new_data: sanitizeCredentialData(new_data),
             changed_fields,
-            request_body,
+            request_body: sanitizeCredentialData(request_body),
             response_status,
             ip_address: ip_address || '',
             source,

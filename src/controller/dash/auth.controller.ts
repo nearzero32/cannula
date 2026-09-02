@@ -136,13 +136,13 @@ export const authController = new Elysia({
             const refreshToken = signRefreshToken({ _id: payload._id });
 
             await Promise.all([
-                storeAccessSession(payload._id, accessToken, ACCESS_TTL),
+                storeAccessSession(payload._id, accessToken, ACCESS_TTL, user.must_change_pin === true),
                 storeRefreshSession(payload._id, refreshToken),
             ]);
 
             return {
                 error: false,
-                data: { accessToken, refreshToken },
+                data: { accessToken, refreshToken, mustChangePin: user.must_change_pin === true },
             };
         },
         {

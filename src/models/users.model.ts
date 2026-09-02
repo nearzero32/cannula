@@ -64,6 +64,7 @@ const userSchema = new Schema(
             type: Date,
             default: null,
         },
+        must_change_pin: { type: Boolean, default: false },
     },
     {
         timestamps: true,
@@ -72,6 +73,7 @@ const userSchema = new Schema(
 );
 
 userSchema.index({ role: 1, status: 1 });
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { role: IUserRoleEnum.PATIENT } });
 
 export const User = (models.User as mongoose.Model<UserDocument>) || model<UserDocument>('User', userSchema);
 export default User;

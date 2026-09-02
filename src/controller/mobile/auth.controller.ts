@@ -1,155 +1,76 @@
 import Elysia, { t } from 'elysia';
-import crypto from 'crypto';
-import mongoose from 'mongoose';
-import User from '../../models/users.model';
-import { hashPassword } from '../../constants/hashing';
-import { signAccessToken, signRefreshToken } from '../../constants/jwt';
-import { storeAccessSession } from '../../middleware/auth.middleware';
-import userService from '../../services/user.service';
-import patientService from '../../services/patient.service';
-import ActivityLogService from '../../services/activity-log.service';
-import { IUserRoleEnum, IUserStatusEnum } from '../../interfaces/user.interface';
-import { IPatientStatusEnum } from '../../interfaces/patient.interface';
-import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
-import RedisClient from '../../databases/redis';
+import patientAuthService from '../../services/patient-auth.service';
+import authEventService from '../../services/auth-event.service';
+import { DomainError } from '../../services/domain-error';
+import { AuthPlugin, revokeAccessSession } from '../../middleware/auth.middleware';
+import { AuthEventTypeEnum } from '../../interfaces/auth-flow.interface';
+import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
-import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, InternalServerErrorResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
+import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ProtectedApiErrorResponses, ServiceUnavailableResponseSchema, SuccessResponseWithoutDataSchema, UnauthorizedResponseSchema, ValidationErrorResponseSchema, successResponse } from '../../schemas/api-response.schema';
 
-const ACCESS_TTL = 60 * 15;
-const REFRESH_TTL = 60 * 60 * 24 * 7;
-
-function buildRefreshKey(user_id: string, token: string): string {
-    const hash = crypto.createHash('sha256').update(token).digest('hex');
-    return `refresh:${user_id}:${hash}`;
+const phoneSchema = t.String({ minLength: 7, maxLength: 30 });
+const flowSchema = t.String({ minLength: 20, maxLength: 100 });
+const otpSchema = t.String({ pattern: '^\\d{6}$' });
+const pinCreateSchema = t.String({ pattern: '^\\d{6}$' });
+const deviceFields = { deviceId: t.Optional(t.String({ maxLength: 200 })), deviceName: t.Optional(t.String({ maxLength: 200 })), platform: t.Optional(t.String({ maxLength: 100 })) };
+export const authStartBodySchema = t.Object({ phone: phoneSchema }, { additionalProperties: false });
+export const otpVerifyBodySchema = t.Object({ flowId: flowSchema, otp: otpSchema }, { additionalProperties: false });
+export const pinCreateBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
+export const pinLoginBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
+const debugOtpSchema = t.Optional(t.String({
+    pattern: '^\\d{6}$',
+    description: 'Development/testing only. Returned only when NODE_ENV is not production and OTP_DEBUG_RETURN_CODE=true; never returned in production.',
+}));
+export const authStartDataSchema = t.Union([
+    t.Object({ flowId: flowSchema, nextStep: t.Literal('PIN') }, { additionalProperties: false }),
+    t.Object({ flowId: flowSchema, nextStep: t.Literal('OTP'), expiresAt: t.String({ format: 'date-time' }), debugOtp: debugOtpSchema }, { additionalProperties: false }),
+]);
+export const otpResendDataSchema = t.Object({
+    flowId: flowSchema,
+    nextStep: t.Literal('OTP'),
+    expiresAt: t.String({ format: 'date-time' }),
+    debugOtp: debugOtpSchema,
+}, { additionalProperties: false });
+const AuthStartResponseSchema = successResponse(authStartDataSchema);
+const OtpResendResponseSchema = successResponse(otpResendDataSchema);
+const errors = { 400: BadRequestResponseSchema, 401: UnauthorizedResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, 503: ServiceUnavailableResponseSchema, ...PublicApiErrorResponses };
+const ip = (headers: Record<string, string | undefined>) => headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || '';
+function fail(error: unknown, set: { status?: number | string }) {
+    if (!(error instanceof DomainError)) throw error;
+    set.status = error.status; return { error: true as const, message: error.message };
 }
 
-async function storeRefreshSession(user_id: string, token: string): Promise<void> {
-    await RedisClient.getInstance().set(buildRefreshKey(user_id, token), '1', REFRESH_TTL);
-}
-
-const registerBodySchema = t.Object({
-    full_name: t.String({ minLength: 2, maxLength: 120 }),
-    phone: t.String({ minLength: 1 }),
-    password: t.String({ minLength: 6 }),
-    email: t.Optional(t.Nullable(t.String())),
-});
-
-export const mobileAuthController = new Elysia({
-    prefix: '/auth',
-    detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH] },
-})
-
-    .post(
-        '/register',
-        async ({ body, set }) => {
-            const existingUser = await userService.findByPhone(body.phone);
-            if (existingUser) {
-                set.status = 409;
-                return { error: true, message: 'رقم الهاتف مسجل مسبقاً' };
-            }
-
-            let user_id: string | undefined;
-
-            try {
-                const user = await userService.create(
-                    {
-                        full_name: body.full_name,
-                        phone: body.phone,
-                        email: body.email ?? undefined,
-                        password_hash: await hashPassword(body.password),
-                        password_show: body.password,
-                        role: IUserRoleEnum.PATIENT,
-                        status: IUserStatusEnum.ACTIVE,
-                        is_phone_verified: false,
-                        is_email_verified: false,
-                    },
-                    {
-                        endpoint: '/mobile/auth/register',
-                        source: IActivityLogSourceEnum.MOBILE,
-                    }
-                );
-
-                user_id = (user._id as mongoose.Types.ObjectId).toString();
-
-                const patient = await patientService.create(
-                    {
-                        user_id: user._id as mongoose.Types.ObjectId,
-                        full_name: body.full_name,
-                        phone: body.phone,
-                        status: IPatientStatusEnum.ACTIVE,
-                    },
-                    {
-                        user_id,
-                        user_name: IUserRoleEnum.PATIENT + '_' + user_id,
-                        user_type: IUserRoleEnum.PATIENT,
-                        endpoint: '/mobile/auth/register',
-                        source: IActivityLogSourceEnum.MOBILE,
-                    }
-                );
-
-                const accessToken = signAccessToken({ _id: user_id, role: IUserRoleEnum.PATIENT });
-                const refreshToken = signRefreshToken({ _id: user_id });
-
-                await Promise.all([
-                    storeAccessSession(user_id, accessToken, ACCESS_TTL),
-                    storeRefreshSession(user_id, refreshToken),
-                ]);
-
-                try {
-                    await ActivityLogService.logActivity({
-                        user_id,
-                        user_name: IUserRoleEnum.PATIENT + '_' + user_id,
-                        user_type: IUserRoleEnum.PATIENT,
-                        method: 'POST',
-                        endpoint: '/mobile/auth/register',
-                        action: IActivityLogActionEnum.OTHER,
-                        collection_name: 'users',
-                        document_id: user_id,
-                        request_body: { phone: body.phone, full_name: body.full_name },
-                        source: IActivityLogSourceEnum.MOBILE,
-                    });
-                } catch { }
-
-                set.status = 201;
-                return {
-                    error: false,
-                    message: 'تم إنشاء الحساب بنجاح',
-                    data: {
-                        accessToken,
-                        refreshToken,
-                        user: {
-                            _id: user_id,
-                            full_name: user.full_name,
-                            phone: user.phone,
-                            email: user.email,
-                            role: user.role,
-                            status: user.status,
-                        },
-                        patient: {
-                            _id: (patient._id as mongoose.Types.ObjectId).toString(),
-                            full_name: patient.full_name,
-                            status: patient.status,
-                            profile_completed: false,
-                        },
-                    },
-                };
-            } catch {
-                if (user_id) {
-                    await User.findByIdAndDelete(user_id);
-                }
-                set.status = 500;
-                return { error: true, message: 'فشل إنشاء الحساب، يرجى المحاولة لاحقاً' };
-            }
-        },
-        {
-            body: registerBodySchema,
-            response: {
-                201: GenericDataResponseSchema,
-                400: BadRequestResponseSchema,
-                409: ConflictResponseSchema,
-                422: ValidationErrorResponseSchema,
-                ...PublicApiErrorResponses,
-                500: InternalServerErrorResponseSchema,
-            },
-        }
+export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH] } })
+    .post('/start', async ({ body, headers, set }) => {
+        try { return { error: false, message: 'تم بدء المصادقة بنجاح', data: await patientAuthService.start(body.phone, { ip: ip(headers) }) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: authStartBodySchema, detail: { description: 'نقطة البداية الموحدة: تعيد PIN للحساب الموجود أو OTP للرقم الجديد دون كشف accountExists. debugOtp اختياري للتطوير/الاختبار فقط ولا يظهر في production.' }, response: { 200: AuthStartResponseSchema, ...errors } })
+    .post('/otp/resend', async ({ body, headers, set }) => {
+        try { return { error: false, message: 'تم إرسال رمز تحقق جديد', data: await patientAuthService.resend(body.flowId, ip(headers)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: t.Object({ flowId: flowSchema }, { additionalProperties: false }), detail: { description: 'يولد OTP جديداً. debugOtp اختياري للتطوير/الاختبار فقط ولا يظهر في production.' }, response: { 200: OtpResendResponseSchema, ...errors } })
+    .post('/otp/verify', async ({ body, headers, set }) => {
+        try { return { error: false, message: 'تم التحقق من رقم الهاتف', data: await patientAuthService.verifyOtp(body.flowId, body.otp, ip(headers)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: otpVerifyBodySchema, response: { 200: GenericDataResponseSchema, ...errors } })
+    .post('/pin/create', async ({ body, headers, set }) => {
+        try { set.status = 201; return { error: false, message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح', data: await patientAuthService.createPin(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, ip(headers)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: pinCreateBodySchema, detail: { description: 'ينشئ PIN من 6 أرقام بعد OTP، ثم ينشئ الحساب والجلسة تلقائياً. لا يتطلب اسماً أو DOB أو كلمة مرور.' }, response: { 201: GenericDataResponseSchema, ...errors } })
+    .post('/pin/login', async ({ body, headers, set }) => {
+        try { return { error: false, message: 'تم تسجيل الدخول بنجاح', data: await patientAuthService.login(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, ip(headers)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: pinLoginBodySchema, detail: { description: 'يسجل دخول المريض برمز PIN مكون من 6 أرقام.' }, response: { 200: GenericDataResponseSchema, ...errors } })
+    .group('', (app) => app.use(AuthPlugin())
+        .post('/pin/change-required', async ({ body, phrase, set }) => {
+            if (phrase.role !== IUserRoleEnum.PATIENT) { set.status = 403; return { error: true, message: 'غير مصرح لك بالوصول' }; }
+            try { return { error: false, message: 'تم تغيير الرمز السري بنجاح', data: await patientAuthService.changeRequiredPin(phrase._id, body.pin) }; }
+            catch (error) { return fail(error, set); }
+        }, { body: t.Object({ pin: pinCreateSchema }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
+        .post('/logout', async ({ phrase, headers }) => {
+            const raw = headers.authorization ?? '', token = raw.toLowerCase().startsWith('bearer ') ? raw.slice(7).trim() : raw.trim();
+            await revokeAccessSession(phrase._id, token);
+            await authEventService.record({ user_id: phrase._id, type: AuthEventTypeEnum.SESSION_REVOKED, success: true });
+            return { error: false, message: 'تم تسجيل الخروج بنجاح' };
+        }, { response: { 200: SuccessResponseWithoutDataSchema, ...ProtectedApiErrorResponses } })
     );

@@ -22,6 +22,8 @@ import {
 } from '../../schemas/api-response.schema';
 import { HealthProfileResponseSchema } from '../../schemas/patient-health-response.schema';
 import { calculateAge, formatDateOfBirth } from '../../services/date-of-birth';
+import type { IPatient } from '../../interfaces/patient.interface';
+import type { PatientHealthProfileDocument } from '../../models/patient-health-profile.model';
 
 export const patientManagedHealthProfileBodySchema = t.Object({
     blood_type: t.Optional(t.Nullable(t.Enum(BloodTypeEnum))),
@@ -40,6 +42,17 @@ async function authenticatedPatient(phrase: { _id: string; role: string }) {
     const patient = await patientService.getByUserId(phrase._id);
     if (!patient) throw new DomainError('الملف الشخصي غير موجود', 404);
     return patient;
+}
+
+export async function formatPatientHealthResponse(
+    patient: IPatient,
+    profile: PatientHealthProfileDocument
+) {
+    return {
+        date_of_birth: formatDateOfBirth(patient.date_of_birth),
+        age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
+        ...await formatHealthProfile(profile),
+    };
 }
 
 export const mobileProfileHealthController = new Elysia({
@@ -63,11 +76,7 @@ export const mobileProfileHealthController = new Elysia({
         return {
             error: false,
             message: 'تم جلب الملف الصحي بنجاح',
-            data: {
-                date_of_birth: formatDateOfBirth(patient.date_of_birth),
-                age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
-                ...await formatHealthProfile(profile),
-            },
+            data: await formatPatientHealthResponse(patient, profile),
         };
     }, {
         response: {
@@ -87,11 +96,7 @@ export const mobileProfileHealthController = new Elysia({
             return {
                 error: false,
                 message: 'تم تحديث الملف الصحي بنجاح',
-                data: {
-                    date_of_birth: formatDateOfBirth(patient.date_of_birth),
-                    age: patient.date_of_birth ? calculateAge(patient.date_of_birth) : null,
-                    ...await formatHealthProfile(profile),
-                },
+                data: await formatPatientHealthResponse(patient, profile),
             };
         } catch (error) {
             if (error instanceof DomainError) {

@@ -75,6 +75,23 @@ class RedisClient {
         return await this.client.del(key);
     }
 
+    public async deleteByPattern(pattern: string): Promise<number> {
+        let deleted = 0;
+        for await (const keys of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+            const batch = Array.isArray(keys) ? keys : [keys];
+            if (batch.length) deleted += await this.client.del(batch);
+        }
+        return deleted;
+    }
+
+    public async countByPattern(pattern: string): Promise<number> {
+        let count = 0;
+        for await (const keys of this.client.scanIterator({ MATCH: pattern, COUNT: 100 })) {
+            count += Array.isArray(keys) ? keys.length : 1;
+        }
+        return count;
+    }
+
     public async exists(key: string): Promise<number> {
         return await this.client.exists(key);
     }

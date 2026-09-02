@@ -13,6 +13,10 @@ export const IAdminPermissionEnum = {
     VIEW_REPORTS: 'view_reports',
     MANAGE_SETTINGS: 'manage_settings',
     VIEW_AUDIT_LOGS: 'view_audit_logs',
+    VIEW_AUTH_AUDIT: 'view_auth_audit',
+    ISSUE_SUPPORT_OTP: 'issue_support_otp',
+    RESET_PATIENT_PIN: 'reset_patient_pin',
+    REVOKE_PATIENT_SESSIONS: 'revoke_patient_sessions',
 } as const;
 
 export type IAdminPermission = (typeof IAdminPermissionEnum)[keyof typeof IAdminPermissionEnum];
