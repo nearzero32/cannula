@@ -215,8 +215,8 @@ type Doctor = {
   gender?: "male" | "female";
   profile_photo?: string;
   bio?: string;
-  specialty: string;
-  sub_specialties?: string[];
+  primary_specialty_id: string;
+  specialty_ids: string[];
   languages?: string[];
   experience_years?: number;
   license_number?: string;
@@ -232,6 +232,7 @@ type Doctor = {
   allow_reschedule: boolean;
   booking_lead_time_hours?: number;
   cancellation_window_hours?: number;
+  max_appointments_per_day: number;
   consultation_fee?: number;
   follow_up_fee?: number;
   currency?: string;

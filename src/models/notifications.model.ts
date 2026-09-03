@@ -10,6 +10,7 @@ export type NotificationDocument = mongoose.Document & INotification;
 
 const notificationSchema = new Schema<NotificationDocument>(
     {
+        dedupe_key: { type: String, trim: true, default: null },
         /**
          * Entities receiving the notification.
          * Resolved dynamically via recipient_model.
@@ -155,6 +156,7 @@ notificationSchema.index({ status: 1, scheduled_at: 1 });
  * Fetch all notifications for a recipient in chronological order.
  */
 notificationSchema.index({ recipient_ids: 1, createdAt: -1 });
+notificationSchema.index({ dedupe_key: 1 }, { unique: true, sparse: true });
 
 /**
  * Auto-delete notifications after 90 days.

@@ -9,6 +9,7 @@ import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/ac
 import ActivityLogService from './activity-log.service';
 import { assertLocalDate, timeToMinutes } from './appointment-time.service';
 import { DomainError } from './domain-error';
+import { DEFAULT_MAX_APPOINTMENTS_PER_DAY, MAX_MAX_APPOINTMENTS_PER_DAY } from '../interfaces/doctor.interface';
 
 const oid = (value: string, label = 'المعرف') => {
     if (!mongoose.Types.ObjectId.isValid(value)) throw new DomainError(`${label} غير صالح`, 400, 'AVAILABILITY_INVALID');
@@ -30,10 +31,11 @@ export interface BookingSettingsInput {
     appointment_duration?: number; slot_interval?: number; buffer_before?: number; buffer_after?: number;
     booking_lead_time_hours?: number; cancellation_window_hours?: number; accept_auto_booking?: boolean;
     allow_reschedule?: boolean; accepting_new_patients?: boolean;
+    max_appointments_per_day?: number;
 }
 const availabilityDto = (row: any) => ({ _id: String(row._id), doctorId: String(row.doctor_id), clinicId: String(row.clinic_id), dayOfWeek: row.day_of_week, periods: row.periods.map((period: any) => ({ start_time: period.start_time, end_time: period.end_time })), isActive: row.is_active, createdAt: row.createdAt, updatedAt: row.updatedAt });
 const exceptionDto = (row: any) => ({ _id: String(row._id), doctorId: String(row.doctor_id), clinicId: row.clinic_id ? String(row.clinic_id) : null, localDate: row.local_date, type: row.type, periods: row.periods.map((period: any) => ({ start_time: period.start_time, end_time: period.end_time })), reason: row.reason ?? null, createdByType: row.created_by_type, createdAt: row.createdAt, updatedAt: row.updatedAt });
-const settingsDto = (doctor: any) => ({ appointmentDuration: doctor.appointment_duration, slotInterval: doctor.slot_interval, bufferBefore: doctor.buffer_before, bufferAfter: doctor.buffer_after, bookingLeadTimeHours: doctor.booking_lead_time_hours, cancellationWindowHours: doctor.cancellation_window_hours, acceptAutoBooking: doctor.accept_auto_booking, allowReschedule: doctor.allow_reschedule, acceptingNewPatients: doctor.accepting_new_patients });
+const settingsDto = (doctor: any) => ({ appointmentDuration: doctor.appointment_duration, slotInterval: doctor.slot_interval, bufferBefore: doctor.buffer_before, bufferAfter: doctor.buffer_after, bookingLeadTimeHours: doctor.booking_lead_time_hours, cancellationWindowHours: doctor.cancellation_window_hours, maxAppointmentsPerDay: doctor.max_appointments_per_day ?? DEFAULT_MAX_APPOINTMENTS_PER_DAY, acceptAutoBooking: doctor.accept_auto_booking, allowReschedule: doctor.allow_reschedule, acceptingNewPatients: doctor.accepting_new_patients });
 
 export class DoctorAvailabilityService {
     async requireDoctorClinic(doctorId: string, clinicId: string) {
@@ -90,6 +92,7 @@ export class DoctorAvailabilityService {
         await this.audit(actor, doctorId, 'exception/delete', {}, exceptionId); return deleted;
     }
     async updateSettings(doctorId: string, input: BookingSettingsInput, actor: AppointmentActor) {
+        if (input.max_appointments_per_day !== undefined && (!Number.isInteger(input.max_appointments_per_day) || input.max_appointments_per_day < 1 || input.max_appointments_per_day > MAX_MAX_APPOINTMENTS_PER_DAY)) throw new DomainError('الحد اليومي للمواعيد يجب أن يكون بين 1 و200', 400, 'AVAILABILITY_INVALID');
         for (const [key, value] of Object.entries(input)) {
             if (typeof value === 'number' && (!Number.isFinite(value) || value < (key === 'appointment_duration' || key === 'slot_interval' ? 5 : 0))) throw new DomainError('إعدادات الحجز غير صالحة', 400, 'AVAILABILITY_INVALID');
         }

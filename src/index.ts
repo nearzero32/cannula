@@ -23,6 +23,8 @@ import { assertOtpDebugConfiguration } from './config/otp-debug.config';
 import { assertProductionSecurityConfiguration } from './config/security.config';
 import { rebuildAppointmentStorage } from './migrations/rebuild-appointments.migration';
 import { assertAppointmentTransactionSupport } from './services/appointment-transaction.service';
+import { normalizeDoctorBookingSettings } from './migrations/normalize-doctor-booking-settings.migration';
+import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
 
 async function bootstrap() {
     assertProductionSecurityConfiguration();
@@ -40,6 +42,8 @@ async function bootstrap() {
     await backfillHealthProfiles();
     await backfillPharmacyWorkflow();
     await rebuildAppointmentStorage();
+    await normalizeDoctorBookingSettings();
+    registerAppointmentNotificationHandler();
 
     // Connect Redis
     await RedisClient.getInstance().connect();

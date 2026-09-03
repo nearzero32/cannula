@@ -26,6 +26,9 @@ export const IDoctorStatusEnum = {
 
 export type IDoctorStatus = (typeof IDoctorStatusEnum)[keyof typeof IDoctorStatusEnum];
 
+export const DEFAULT_MAX_APPOINTMENTS_PER_DAY = 30;
+export const MAX_MAX_APPOINTMENTS_PER_DAY = 200;
+
 export interface IDoctorMapLocation {
     lat?: number | null;
     lng?: number | null;
@@ -38,8 +41,8 @@ export interface IDoctor extends IBaseDocument, IWithNotesInternal {
     gender?: IDoctorGender | null;
     profile_photo?: string | null;
     bio?: string | null;
-    specialty: string;
-    sub_specialties: string[];
+    primary_specialty_id: mongoose.Types.ObjectId;
+    specialty_ids: mongoose.Types.ObjectId[];
     languages: string[];
     experience_years?: number | null;
     license_number?: string | null;
@@ -55,6 +58,7 @@ export interface IDoctor extends IBaseDocument, IWithNotesInternal {
     allow_reschedule: boolean;
     booking_lead_time_hours: number;
     cancellation_window_hours: number;
+    max_appointments_per_day: number;
     consultation_fee?: number | null;
     follow_up_fee?: number | null;
     currency?: string | null;

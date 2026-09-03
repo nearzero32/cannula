@@ -38,6 +38,7 @@ export type INotificationRecipientModel =
     (typeof INotificationRecipientModelEnum)[keyof typeof INotificationRecipientModelEnum];
 
 export interface INotification extends IBaseDocument {
+    dedupe_key?: string | null;
     recipient_ids: mongoose.Types.ObjectId[];
     recipient_model: INotificationRecipientModel;
     type: INotificationType;

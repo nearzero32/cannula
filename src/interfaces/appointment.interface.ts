@@ -7,6 +7,23 @@ export const IAppointmentStatusEnum = {
     CANCELLED: 'cancelled', COMPLETED: 'completed', NO_SHOW: 'no_show', RESCHEDULED: 'rescheduled',
 } as const;
 export type IAppointmentStatus = (typeof IAppointmentStatusEnum)[keyof typeof IAppointmentStatusEnum];
+export const APPOINTMENT_DAILY_CAP_COUNTING_STATUSES: IAppointmentStatus[] = [
+    IAppointmentStatusEnum.PENDING,
+    IAppointmentStatusEnum.CONFIRMED,
+    IAppointmentStatusEnum.CHECKED_IN,
+    IAppointmentStatusEnum.IN_PROGRESS,
+    IAppointmentStatusEnum.COMPLETED,
+    IAppointmentStatusEnum.NO_SHOW,
+];
+export const AppointmentAvailabilityStatusEnum = {
+    AVAILABLE: 'AVAILABLE', DAILY_CAP_REACHED: 'DAILY_CAP_REACHED', FULLY_BOOKED: 'FULLY_BOOKED',
+    DOCTOR_CLOSED: 'DOCTOR_CLOSED', NO_WORKING_HOURS: 'NO_WORKING_HOURS', NO_VALID_SLOT: 'NO_VALID_SLOT',
+    NO_UPCOMING_AVAILABILITY: 'NO_UPCOMING_AVAILABILITY',
+} as const;
+export type AppointmentAvailabilityStatus = (typeof AppointmentAvailabilityStatusEnum)[keyof typeof AppointmentAvailabilityStatusEnum];
+export const DEFAULT_NEXT_AVAILABILITY_SEARCH_DAYS = 30;
+export const MAX_NEXT_AVAILABILITY_SEARCH_DAYS = 90;
+export const DEFAULT_NEXT_AVAILABILITY_OPTIONS = 3;
 export const IAppointmentBookingSourceEnum = { APP: 'app', ADMIN_PANEL: 'admin_panel', PHONE: 'phone' } as const;
 export type IAppointmentBookingSource = (typeof IAppointmentBookingSourceEnum)[keyof typeof IAppointmentBookingSourceEnum];
 export const IAppointmentPaymentStatusEnum = { UNPAID: 'unpaid', PAID: 'paid', REFUNDED: 'refunded', PARTIAL: 'partial' } as const;

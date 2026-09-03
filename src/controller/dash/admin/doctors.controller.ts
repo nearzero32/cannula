@@ -11,6 +11,7 @@ import {
 import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
 import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
+import { validateDoctorSpecialties } from '../../../services/doctor-specialty.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -21,8 +22,8 @@ const doctorBodySchema = t.Object({
     gender: t.Optional(t.Nullable(t.Enum(IDoctorGenderEnum))),
     profile_photo: t.Optional(t.Nullable(t.String())),
     bio: t.Optional(t.Nullable(t.String({ maxLength: 1500 }))),
-    specialty: t.String({ minLength: 1 }),
-    sub_specialties: t.Optional(t.Array(t.String())),
+    primary_specialty_id: t.String({ minLength: 1 }),
+    specialty_ids: t.Array(t.String(), { minItems: 1 }),
     languages: t.Optional(t.Array(t.String())),
     experience_years: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     license_number: t.Optional(t.Nullable(t.String({ maxLength: 100 }))),
@@ -51,8 +52,8 @@ const doctorUpdateSchema = t.Partial(
         gender: t.Nullable(t.Enum(IDoctorGenderEnum)),
         profile_photo: t.Nullable(t.String()),
         bio: t.Nullable(t.String({ maxLength: 1500 })),
-        specialty: t.String({ minLength: 1 }),
-        sub_specialties: t.Array(t.String()),
+        primary_specialty_id: t.String({ minLength: 1 }),
+        specialty_ids: t.Array(t.String(), { minItems: 1 }),
         languages: t.Array(t.String()),
         experience_years: t.Nullable(t.Number({ minimum: 0 })),
         license_number: t.Nullable(t.String({ maxLength: 100 })),
@@ -93,7 +94,7 @@ export const doctorsController = new Elysia({
 
             if (query.status) main_match.status = query.status;
             if (query.verification_status) main_match.verification_status = query.verification_status;
-            if (query.specialty) main_match.specialty = query.specialty;
+            if (query.specialty_id && ObjectId.isValid(query.specialty_id)) main_match.specialty_ids = new ObjectId(query.specialty_id);
             if (query.clinic_id && ObjectId.isValid(query.clinic_id))
                 main_match.clinic_ids = new ObjectId(query.clinic_id);
 
@@ -101,7 +102,6 @@ export const doctorsController = new Elysia({
                 main_match.$or = [
                     { full_name: { $regex: query.search, $options: 'i' } },
                     { display_name: { $regex: query.search, $options: 'i' } },
-                    { specialty: { $regex: query.search, $options: 'i' } },
                     { license_number: { $regex: query.search, $options: 'i' } },
                 ];
             }
@@ -122,7 +122,7 @@ export const doctorsController = new Elysia({
                 limit: t.Optional(t.String()),
                 status: t.Optional(t.Enum(IDoctorStatusEnum)),
                 verification_status: t.Optional(t.Enum(IDoctorVerificationStatusEnum)),
-                specialty: t.Optional(t.String()),
+                specialty_id: t.Optional(t.String()),
                 clinic_id: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
@@ -176,6 +176,7 @@ export const doctorsController = new Elysia({
                 return { error: true, message: 'معرف مساعد غير صالح' };
             }
 
+            const specialties = await validateDoctorSpecialties(body.primary_specialty_id, body.specialty_ids);
             const doctor = await doctorService.create(
                 {
                     user_id: new ObjectId(body.user_id),
@@ -184,8 +185,7 @@ export const doctorsController = new Elysia({
                     gender: body.gender,
                     profile_photo: body.profile_photo,
                     bio: body.bio,
-                    specialty: body.specialty,
-                    sub_specialties: body.sub_specialties ?? [],
+                    ...specialties,
                     languages: body.languages ?? [],
                     experience_years: body.experience_years,
                     license_number: body.license_number,
@@ -250,8 +250,11 @@ export const doctorsController = new Elysia({
             if (body.gender !== undefined) payload.gender = body.gender;
             if (body.profile_photo !== undefined) payload.profile_photo = body.profile_photo;
             if (body.bio !== undefined) payload.bio = body.bio;
-            if (body.specialty !== undefined) payload.specialty = body.specialty;
-            if (body.sub_specialties !== undefined) payload.sub_specialties = body.sub_specialties;
+            if (body.primary_specialty_id !== undefined || body.specialty_ids !== undefined) {
+                const primary = body.primary_specialty_id ?? String(doctor.primary_specialty_id);
+                const ids = body.specialty_ids ?? doctor.specialty_ids.map(String);
+                Object.assign(payload, await validateDoctorSpecialties(primary, ids));
+            }
             if (body.languages !== undefined) payload.languages = body.languages;
             if (body.experience_years !== undefined) payload.experience_years = body.experience_years;
             if (body.license_number !== undefined) payload.license_number = body.license_number;

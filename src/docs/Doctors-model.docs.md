@@ -22,8 +22,8 @@ To keep this model focused, fast-changing data (for example: generated slots, ap
 | `gender` | `String` | No | Optional display/filter value (`male` or `female`). |
 | `profile_photo` | `String` | No | Profile image URL or file path. |
 | `bio` | `String` | No | Short professional intro and focus areas. |
-| `specialty` | `String` | Yes | Primary specialty used for search and filtering. |
-| `sub_specialties` | `String[]` | No | Secondary specialty tags. |
+| `primary_specialty_id` | `ObjectId` | Yes | Primary `Specialty` reference. |
+| `specialty_ids` | `ObjectId[]` | Yes | Unique assigned Specialty references; includes the primary specialty. |
 | `languages` | `String[]` | No | Spoken languages for patient matching. |
 | `experience_years` | `Number` | No | Years of professional experience. |
 | `license_number` | `String` | No | Medical license or registration number. |
@@ -39,6 +39,7 @@ To keep this model focused, fast-changing data (for example: generated slots, ap
 | `allow_reschedule` | `Boolean` | Yes | If true, patients can reschedule appointments. |
 | `booking_lead_time_hours` | `Number` | No | Minimum hours required before booking. |
 | `cancellation_window_hours` | `Number` | No | Minimum hours required before cancellation. |
+| `max_appointments_per_day` | `Number` | Yes | Global Baghdad-day booking cap, default 30, range 1..200. |
 | `consultation_fee` | `Number` | No | Standard consultation price. |
 | `follow_up_fee` | `Number` | No | Follow-up/review appointment price. |
 | `currency` | `String` | No | Currency code (default: `IQD`). |
@@ -93,16 +94,8 @@ const doctorSchema = new Schema(
             default: null,
         },
 
-        specialty: {
-            type: String,
-            required: true,
-            trim: true,
-            index: true,
-        },
-        sub_specialties: {
-            type: [String],
-            default: [],
-        },
+        primary_specialty_id: { type: Schema.Types.ObjectId, ref: 'Specialty', required: true },
+        specialty_ids: [{ type: Schema.Types.ObjectId, ref: 'Specialty', required: true }],
         languages: {
             type: [String],
             default: [],
@@ -181,6 +174,7 @@ const doctorSchema = new Schema(
             default: 24,
             min: 0,
         },
+        max_appointments_per_day: { type: Number, required: true, default: 30, min: 1, max: 200 },
 
         consultation_fee: {
             type: Number,
@@ -233,7 +227,8 @@ const doctorSchema = new Schema(
     }
 );
 
-doctorSchema.index({ specialty: 1, status: 1 });
+doctorSchema.index({ specialty_ids: 1, status: 1 });
+doctorSchema.index({ primary_specialty_id: 1, status: 1 });
 doctorSchema.index({ verification_status: 1, status: 1 });
 doctorSchema.index({ clinic_ids: 1 });
 

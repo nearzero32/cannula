@@ -54,6 +54,7 @@ appointmentSchema.index({ clinic_id: 1, starts_at: 1 });
 appointmentSchema.index({ patient_id: 1, starts_at: -1 });
 appointmentSchema.index({ status: 1, starts_at: 1 });
 appointmentSchema.index({ doctor_id: 1, local_date: 1, blocked_starts_at: 1, blocked_ends_at: 1 });
+appointmentSchema.index({ doctor_id: 1, local_date: 1, status: 1 });
 
 export const Appointment = (models.Appointment as mongoose.Model<AppointmentDocument>) || model<AppointmentDocument>('Appointment', appointmentSchema);
 export default Appointment;

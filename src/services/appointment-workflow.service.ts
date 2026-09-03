@@ -57,7 +57,12 @@ export class AppointmentWorkflowService {
     constructor(private transactions: AppointmentTransactionRunner = transactionRunner, private slots: AppointmentSlotService = appointmentSlotService) {}
 
     async create(input: AppointmentBookingInput, actor: AppointmentActor, now = new Date()) {
-        const result = await this.transactions.run(async session => this.createInTransaction(input, actor, session, now));
+        let result: AppointmentDocument;
+        try {
+            result = await this.transactions.run(async session => this.createInTransaction(input, actor, session, now));
+        } catch (error) {
+            throw await this.withAvailabilitySuggestions(error, input, now, actor);
+        }
         await this.afterMutation(result, AppointmentHistoryEventEnum.CREATED, actor, input); return result;
     }
     private async lock(doctorId: string, date: string, session: ClientSession | null) {
@@ -70,8 +75,8 @@ export class AppointmentWorkflowService {
         const counter = await inSession(query, session).exec();
         return `APP-${year}-${String(counter!.sequence).padStart(6, '0')}`;
     }
-    private async createInTransaction(input: AppointmentBookingInput, actor: AppointmentActor, session: ClientSession | null, now: Date, rescheduledFrom?: string) {
-        const date = assertLocalDate(input.date); await this.lock(input.doctorId, date, session);
+    private async createInTransaction(input: AppointmentBookingInput, actor: AppointmentActor, session: ClientSession | null, now: Date, rescheduledFrom?: string, dayAlreadyLocked = false) {
+        const date = assertLocalDate(input.date); if (!dayAlreadyLocked) await this.lock(input.doctorId, date, session);
         const patient = await inSession(Patient.findById(oid(input.patientId)), session).exec();
         if (!patient || patient.status !== IPatientStatusEnum.ACTIVE) throw new DomainError('المريض غير متاح للحجز', 404, 'APPOINTMENT_NOT_OWNED');
         let child: any = null;
@@ -83,9 +88,9 @@ export class AppointmentWorkflowService {
         }
         let slotResult;
         try {
-            slotResult = await this.slots.requireSlot({ doctorId: input.doctorId, clinicId: input.clinicId, specialtyId: input.specialtyId, date, startsAt: input.startsAt }, { session, now, enforceLeadTime: actor.type === AppointmentActorTypeEnum.PATIENT });
+            slotResult = await this.slots.requireSlot({ doctorId: input.doctorId, clinicId: input.clinicId, specialtyId: input.specialtyId, date, startsAt: input.startsAt }, { session, now, enforceLeadTime: actor.type === AppointmentActorTypeEnum.PATIENT, excludeAppointmentId: rescheduledFrom });
         } catch (error) {
-            if (error instanceof DomainError && error.code === 'APPOINTMENT_SLOT_UNAVAILABLE') throw new DomainError('تعارض الموعد المختار مع حجز آخر أو لم يعد متاحاً', 409, 'APPOINTMENT_SLOT_CONFLICT');
+            if (error instanceof DomainError && error.code === 'APPOINTMENT_SLOT_UNAVAILABLE') throw new DomainError('تعارض الموعد المختار مع حجز آخر أو لم يعد متاحاً', 409, 'APPOINTMENT_SLOT_UNAVAILABLE');
             throw error;
         }
         const { doctor, clinic, specialty } = slotResult.context, slot = slotResult.slot;
@@ -104,7 +109,8 @@ export class AppointmentWorkflowService {
         return appointment;
     }
     private async owned(id: string, actor: AppointmentActor, session: ClientSession | null) {
-        const appointment = await inSession(Appointment.findById(oid(id)), session).exec();
+        const query = Appointment.findById(oid(id));
+        const appointment = session ? await query.session(session).exec() : await query.exec();
         if (!appointment) throw new DomainError('الموعد غير موجود', 404, 'APPOINTMENT_NOT_FOUND');
         if (actor.type === AppointmentActorTypeEnum.PATIENT && String(appointment.patient_id) !== actor.patientId) throw new DomainError('الموعد غير موجود', 404, 'APPOINTMENT_NOT_OWNED');
         if (actor.type === AppointmentActorTypeEnum.DOCTOR && String(appointment.doctor_id) !== actor.doctorId) throw new DomainError('غير مصرح بإدارة هذا الموعد', 403, 'APPOINTMENT_NOT_OWNED');
@@ -142,20 +148,41 @@ export class AppointmentWorkflowService {
         await this.afterMutation(result, AppointmentHistoryEventEnum.CANCELLED, actor, { reason }); return result;
     }
     async reschedule(id: string, input: AppointmentRescheduleInput, actor: AppointmentActor, now = new Date()) {
-        const result = await this.transactions.run(async session => {
+        const initial = await Appointment.findById(oid(id)).exec();
+        if (!initial) throw new DomainError('الموعد غير موجود', 404, 'APPOINTMENT_NOT_FOUND');
+        if (actor.type === AppointmentActorTypeEnum.PATIENT && String(initial.patient_id) !== actor.patientId) throw new DomainError('الموعد غير موجود', 404, 'APPOINTMENT_NOT_OWNED');
+        if (actor.type === AppointmentActorTypeEnum.DOCTOR && String(initial.doctor_id) !== actor.doctorId) throw new DomainError('غير مصرح بإدارة هذا الموعد', 403, 'APPOINTMENT_NOT_OWNED');
+        if (actor.type === AppointmentActorTypeEnum.PATIENT) {
+            const doctor = await Doctor.findById(initial.doctor_id).exec();
+            if (!doctor?.allow_reschedule) throw new DomainError('الطبيب لا يسمح بإعادة الجدولة', 409, 'APPOINTMENT_RESCHEDULE_NOT_ALLOWED');
+            if (minutesUntil(initial.starts_at, now) < doctor.cancellation_window_hours * 60) throw new DomainError('انتهت نافذة إعادة الجدولة', 409, 'APPOINTMENT_CANCELLATION_WINDOW_CLOSED');
+        }
+        const destinationDoctorId = input.doctorId ?? String(initial.doctor_id);
+        let result: { previous: AppointmentDocument; appointment: AppointmentDocument };
+        try {
+            result = await this.transactions.run(async session => {
+            await this.lock(destinationDoctorId, assertLocalDate(input.date), session);
             const current = await this.owned(id, actor, session);
             if (![IAppointmentStatusEnum.PENDING, IAppointmentStatusEnum.CONFIRMED].includes(current.status as any)) throw new DomainError('لا يمكن إعادة جدولة الموعد', 409, 'APPOINTMENT_INVALID_TRANSITION');
             const currentDoctor = await inSession(Doctor.findById(current.doctor_id), session).exec();
             if (actor.type === AppointmentActorTypeEnum.PATIENT && (!currentDoctor || !currentDoctor.allow_reschedule)) throw new DomainError('الطبيب لا يسمح بإعادة الجدولة', 409, 'APPOINTMENT_RESCHEDULE_NOT_ALLOWED');
             if (actor.type === AppointmentActorTypeEnum.PATIENT && minutesUntil(current.starts_at, now) < (currentDoctor?.cancellation_window_hours ?? Infinity) * 60) throw new DomainError('انتهت نافذة إعادة الجدولة', 409, 'APPOINTMENT_CANCELLATION_WINDOW_CLOSED');
             const booking: AppointmentBookingInput = { patientId: String(current.patient_id), doctorId: input.doctorId ?? String(current.doctor_id), clinicId: input.clinicId ?? String(current.clinic_id), specialtyId: input.specialtyId === undefined ? current.specialty_id ? String(current.specialty_id) : null : input.specialtyId, date: input.date, startsAt: input.startsAt, beneficiary: { type: current.beneficiary_type, childId: current.child_id ? String(current.child_id) : null }, reason: current.reason, source: current.booking_source, bookedByUserId: actor.userId ?? null };
-            const replacement = await this.createInTransaction(booking, actor, session, now, String(current._id));
+            const replacement = await this.createInTransaction(booking, actor, session, now, String(current._id), true);
             const updated = await inSession(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, workflow_version: current.workflow_version }, { $set: { status: IAppointmentStatusEnum.RESCHEDULED, rescheduled_to: replacement._id }, $inc: { workflow_version: 1 } }, { returnDocument: 'after' }), session).exec();
             if (!updated) throw new DomainError('تم تعديل الموعد بالتزامن', 409, 'APPOINTMENT_INVALID_TRANSITION');
             await this.history(updated, AppointmentHistoryEventEnum.RESCHEDULED_FROM, actor, current.status, IAppointmentStatusEnum.RESCHEDULED, input.reason, { rescheduledTo: String(replacement._id) }, session);
             await this.history(replacement, AppointmentHistoryEventEnum.RESCHEDULED_TO, actor, null, replacement.status, input.reason, { rescheduledFrom: String(current._id) }, session);
-            return { previous: updated, appointment: replacement };
-        });
+                return { previous: updated, appointment: replacement };
+            });
+        } catch (error) {
+            throw await this.withAvailabilitySuggestions(error, {
+                doctorId: destinationDoctorId,
+                clinicId: input.clinicId ?? String(initial.clinic_id),
+                specialtyId: input.specialtyId === undefined ? initial.specialty_id ? String(initial.specialty_id) : null : input.specialtyId,
+                date: input.date,
+            }, now, actor);
+        }
         await this.afterMutation(result.appointment, AppointmentHistoryEventEnum.RESCHEDULED_TO, actor, { previousId: id }); return result;
     }
     async updateInternalNotes(id: string, notes: string | null, actor: AppointmentActor) {
@@ -184,8 +211,15 @@ export class AppointmentWorkflowService {
     }
     private async afterMutation(appointment: AppointmentDocument, event: string, actor: AppointmentActor, body: unknown) {
         const domainEvent = event === AppointmentHistoryEventEnum.RESCHEDULED_FROM || event === AppointmentHistoryEventEnum.RESCHEDULED_TO ? 'APPOINTMENT_RESCHEDULED' : `APPOINTMENT_${event}`;
-        await appointmentDomainEventService.publish({ type: domainEvent, appointmentId: String(appointment._id), occurredAt: new Date().toISOString() });
+        await appointmentDomainEventService.publish({ type: domainEvent, appointmentId: String(appointment._id), occurredAt: new Date().toISOString(), data: { actorType: actor.type, workflowVersion: appointment.workflow_version } });
         if (actor.type !== AppointmentActorTypeEnum.PATIENT) try { await ActivityLogService.logActivity({ user_id: actor.userId, user_name: `${actor.type.toLowerCase()}_${actor.userId}`, user_type: actor.type.toLowerCase(), method: 'POST', endpoint: `/appointments/${String(appointment._id)}/${event.toLowerCase()}`, action: IActivityLogActionEnum.UPDATE, collection_name: 'appointments', document_id: appointment._id, request_body: body, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
+    }
+    private async withAvailabilitySuggestions(error: unknown, input: Pick<AppointmentBookingInput, 'doctorId' | 'clinicId' | 'specialtyId' | 'date'>, now: Date, actor: AppointmentActor) {
+        if (!(error instanceof DomainError) || !['APPOINTMENT_DAILY_CAP_REACHED', 'APPOINTMENT_SLOT_UNAVAILABLE'].includes(error.code ?? '')) return error;
+        try {
+            const availability = await this.slots.getAvailability(input, { now, enforceLeadTime: actor.type === AppointmentActorTypeEnum.PATIENT });
+            return new DomainError(error.message, error.status, error.code, { nextAvailable: availability.nextAvailable, nextAvailableOptions: availability.nextAvailableOptions });
+        } catch { return error; }
     }
 }
 export default new AppointmentWorkflowService();

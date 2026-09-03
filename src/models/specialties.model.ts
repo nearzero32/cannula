@@ -52,5 +52,5 @@ specialtySchema.index({ name: 1 });
 specialtySchema.index({ status: 1, sort_order: 1 });
 
 export const specialties =
-  (models.Specialty as mongoose.Model<SpecialtyDocument>) || model<SpecialtyDocument>('specialties', specialtySchema);
+  (models.Specialty as mongoose.Model<SpecialtyDocument>) || model<SpecialtyDocument>('Specialty', specialtySchema);
 export default specialties;

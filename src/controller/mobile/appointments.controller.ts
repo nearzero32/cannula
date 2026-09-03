@@ -21,10 +21,12 @@ const actor = (userId: string, patientId: string) => ({ type: AppointmentActorTy
 
 export const mobileAppointmentsController = new Elysia({ prefix: '/appointments', detail: { tags: [SWAGGER_TAGS.MOBILE.APPOINTMENTS] } })
     .use(AuthPlugin(TokenAudienceEnum.MOBILE))
-    .onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message, code: error.code }; } })
+    .onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message, code: error.code, ...error.details }; } })
     .get('/availability', async ({ query }) => {
-        const result = await appointmentSlotService.getSlots({ doctorId: query.doctorId, clinicId: query.clinicId, specialtyId: query.specialtyId, date: query.date });
-        return { error: false, message: 'تم جلب الأوقات المتاحة بنجاح', data: { doctorId: result.doctorId, clinicId: result.clinicId, date: result.date, timezone: result.timezone, slots: result.slots } };
+        const result = await appointmentSlotService.getAvailability({ doctorId: query.doctorId, clinicId: query.clinicId, specialtyId: query.specialtyId, date: query.date });
+        const baseMessage = result.availabilityStatus === 'DAILY_CAP_REACHED' ? 'اكتمل الحد الأقصى لحجوزات الطبيب لهذا اليوم' : result.availabilityStatus === 'DOCTOR_CLOSED' ? 'الطبيب غير متاح في هذا اليوم' : 'تم جلب الأوقات المتاحة بنجاح';
+        const message = result.nextAvailable ? `${baseMessage}. أقرب موعد متاح هو ${result.nextAvailable.date} الساعة ${result.nextAvailable.localStartsAt}` : baseMessage;
+        return { error: false, message, data: { doctorId: result.doctorId, clinicId: result.clinicId, date: result.date, timezone: result.timezone, availabilityStatus: result.availabilityStatus, dailyCapacity: result.dailyCapacity, slots: result.slots, nextAvailable: result.nextAvailable, nextAvailableOptions: result.nextAvailableOptions, ...(result.nextAvailabilityStatus ? { nextAvailabilityStatus: result.nextAvailabilityStatus } : {}) } };
     }, { query: t.Object({ doctorId: t.String(), clinicId: t.String(), specialtyId: t.Optional(t.String()), date: t.String({ format: 'date' }) }), response: { 200: SlotsResponseSchema, ...errors } })
     .get('/', async ({ query, phrase }) => {
         const patient = await patientFor(phrase._id);

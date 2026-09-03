@@ -27,6 +27,7 @@ const doctorLookupPipeline = [
         },
     },
     { $unwind: { path: '$doctor', preserveNullAndEmptyArrays: true } },
+    { $lookup: { from: 'specialties', localField: 'doctor.specialty_ids', foreignField: '_id', as: 'specialties' } },
     {
         $project: {
             _id: 1,
@@ -36,7 +37,8 @@ const doctorLookupPipeline = [
                 _id: '$doctor._id',
                 display_name: '$doctor.display_name',
                 profile_photo: '$doctor.profile_photo',
-                specialty: '$doctor.specialty',
+                primary_specialty_id: '$doctor.primary_specialty_id',
+                specialties: { $map: { input: '$specialties', as: 'item', in: { _id: '$$item._id', name: '$$item.name', icon: '$$item.icon' } } },
                 experience_years: '$doctor.experience_years',
                 consultation_fee: '$doctor.consultation_fee',
                 currency: '$doctor.currency',
@@ -133,7 +135,7 @@ export const mobileDoctorFavoritesController = new Elysia({
             }
 
             const existing = await doctorFavoriteService.findByPatientAndDoctor(
-                (patient._id as mongoose.Types.ObjectId).toString(),
+                String(patient._id),
                 body.doctor_id
             );
             if (existing) {
@@ -143,7 +145,7 @@ export const mobileDoctorFavoritesController = new Elysia({
 
             const item = await doctorFavoriteService.create(
                 {
-                    patient_id: patient._id as mongoose.Types.ObjectId,
+                    patient_id: new ObjectId(String(patient._id)),
                     doctor_id: new ObjectId(body.doctor_id),
                 },
                 activityMeta(phrase, '/mobile/doctor-favorites')
@@ -182,7 +184,7 @@ export const mobileDoctorFavoritesController = new Elysia({
             }
 
             const removed = await doctorFavoriteService.removeByPatientAndDoctor(
-                (patient._id as mongoose.Types.ObjectId).toString(),
+                String(patient._id),
                 params.doctor_id,
                 activityMeta(phrase, `/mobile/doctor-favorites/${params.doctor_id}`)
             );

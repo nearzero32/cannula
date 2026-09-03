@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 import Appointment, { type AppointmentDocument } from '../models/appointments.model';
 import AppointmentHistory from '../models/appointment-history.model';
 import Doctor from '../models/doctors.model';
-import { AppointmentActorTypeEnum, IAppointmentStatusEnum, type IAppointmentStatus } from '../interfaces/appointment.interface';
+import { APPOINTMENT_DAILY_CAP_COUNTING_STATUSES, AppointmentActorTypeEnum, IAppointmentStatusEnum, type IAppointmentStatus } from '../interfaces/appointment.interface';
+import { DEFAULT_MAX_APPOINTMENTS_PER_DAY } from '../interfaces/doctor.interface';
 import { minutesUntil, toBaghdadLocal } from './appointment-time.service';
 import { DomainError } from './domain-error';
 
@@ -22,7 +23,7 @@ export function appointmentCapabilities(appointment: AppointmentDocument, cancel
     const outsideWindow = minutesUntil(appointment.starts_at, now) >= cancellationWindowHours * 60;
     return { canCancel: active && outsideWindow, canReschedule: active && outsideWindow && allowReschedule };
 }
-export function formatAppointment(appointment: any, options: { includeInternal?: boolean; capabilities?: { canCancel: boolean; canReschedule: boolean } } = {}) {
+export function formatAppointment(appointment: any, options: { includeInternal?: boolean; capabilities?: { canCancel: boolean; canReschedule: boolean }; dailyCapacity?: { max: number; booked: number; remaining: number; reached: boolean } } = {}) {
     const start = toBaghdadLocal(new Date(appointment.starts_at)), end = toBaghdadLocal(new Date(appointment.ends_at));
     // Elysia validates this DTO against AppointmentSchema at the controller boundary.
     // Keep the return type open here because Mongoose's hydrated document fields are
@@ -39,11 +40,32 @@ export function formatAppointment(appointment: any, options: { includeInternal?:
         rescheduledTo: appointment.rescheduled_to ? String(appointment.rescheduled_to) : null, cancellation: appointment.cancellation ? { reason: appointment.cancellation.reason ?? null, actorType: appointment.cancellation.actor_type, at: appointment.cancellation.at } : null,
         capabilities: options.capabilities ?? undefined, createdAt: appointment.createdAt, updatedAt: appointment.updatedAt,
     };
+    if (options.dailyCapacity) data.dailyCapacity = options.dailyCapacity;
     if (options.includeInternal) data.notesInternal = appointment.notes_internal ?? null;
     return data;
 }
 
 export class AppointmentService {
+    async staffDtos(appointments: AppointmentDocument[]) {
+        if (!appointments.length) return [];
+        const doctorIds = [...new Set(appointments.map(item => String(item.doctor_id)))];
+        const dates = [...new Set(appointments.map(item => item.local_date))];
+        const objectIds = doctorIds.map(value => new mongoose.Types.ObjectId(value));
+        const [doctors, counts] = await Promise.all([
+            Doctor.find({ _id: { $in: objectIds } }).select('max_appointments_per_day').lean().exec(),
+            Appointment.aggregate<{ _id: { doctorId: mongoose.Types.ObjectId; date: string }; booked: number }>([
+                { $match: { doctor_id: { $in: objectIds }, local_date: { $in: dates }, status: { $in: APPOINTMENT_DAILY_CAP_COUNTING_STATUSES } } },
+                { $group: { _id: { doctorId: '$doctor_id', date: '$local_date' }, booked: { $sum: 1 } } },
+            ]).exec(),
+        ]);
+        const caps = new Map(doctors.map(doctor => [String(doctor._id), doctor.max_appointments_per_day ?? DEFAULT_MAX_APPOINTMENTS_PER_DAY]));
+        const countsByDay = new Map(counts.map(row => [`${String(row._id.doctorId)}:${row._id.date}`, row.booked]));
+        return appointments.map(appointment => {
+            const max = caps.get(String(appointment.doctor_id)) ?? DEFAULT_MAX_APPOINTMENTS_PER_DAY;
+            const booked = countsByDay.get(`${String(appointment.doctor_id)}:${appointment.local_date}`) ?? 0;
+            return formatAppointment(appointment, { includeInternal: true, dailyCapacity: { max, booked, remaining: Math.max(0, max - booked), reached: booked >= max } });
+        });
+    }
     async patientDtos(appointments: AppointmentDocument[], now = new Date()) {
         const doctorIds = [...new Set(appointments.map(item => String(item.doctor_id)))];
         const doctors = await Doctor.find({ _id: { $in: doctorIds } }).select('cancellation_window_hours allow_reschedule').exec();

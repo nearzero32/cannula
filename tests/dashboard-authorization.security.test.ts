@@ -64,7 +64,7 @@ describe('Dashboard cross-surface authorization', () => {
         const cases: Array<[string, string, unknown]> = [
             ['PATCH', `/dash/admin/patients/${objectId}/status`, { status: 'active' }],
             ['POST', '/dash/admin/clinics/', { name: 'Clinic', address: 'Baghdad' }],
-            ['POST', '/dash/admin/doctors/', { user_id: objectId, full_name: 'Doctor', display_name: 'Doctor', specialty: objectId }],
+            ['POST', '/dash/admin/doctors/', { user_id: objectId, full_name: 'Doctor', display_name: 'Doctor', primary_specialty_id: objectId, specialty_ids: [objectId] }],
             ['POST', '/dash/admin/nurses/', { user_id: objectId, full_name: 'Nurse', qualified_service_ids: [] }],
             ['POST', '/dash/admin/pharmacies/', { name: 'Pharmacy', phone: '07700000000', password: 'password1', address: { address_text: 'Baghdad address' } }],
         ];

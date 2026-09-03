@@ -153,6 +153,24 @@ class NotificationService {
         return this.dispatch((notification._id as any).toString());
     }
 
+    public async createAndDispatchOnce(payload: Partial<INotification>, dedupeKey: string): Promise<NotificationDocument | null> {
+        const { notification, created } = await this.createOnce(payload, dedupeKey);
+        return created ? this.dispatch(String(notification._id)) : notification;
+    }
+
+    public async createOnce(payload: Partial<INotification>, dedupeKey: string): Promise<{ notification: NotificationDocument; created: boolean }> {
+        try {
+            const notification = await this.create({ ...payload, dedupe_key: dedupeKey, status: INotificationStatusEnum.PENDING, is_read: false });
+            return { notification, created: true };
+        } catch (error: unknown) {
+            if (typeof error === 'object' && error !== null && 'code' in error && error.code === 11000) {
+                const notification = await this.model.findOne({ dedupe_key: dedupeKey }).exec();
+                if (notification) return { notification, created: false };
+            }
+            throw error;
+        }
+    }
+
     /**
      * Mark a failed or pending notification as sent (used by manual retry or external dispatcher).
      */

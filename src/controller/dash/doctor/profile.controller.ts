@@ -11,7 +11,6 @@ const profileBodySchema = t.Object({
     profile_photo: t.Optional(t.Nullable(t.String())),
     bio: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
     languages: t.Optional(t.Array(t.String())),
-    sub_specialties: t.Optional(t.Array(t.String())),
     experience_years: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     map_location: t.Optional(
         t.Nullable(
@@ -59,7 +58,6 @@ export const doctorProfileController = new Elysia({
             if (body.profile_photo !== undefined) payload.profile_photo = body.profile_photo;
             if (body.bio !== undefined) payload.bio = body.bio;
             if (body.languages !== undefined) payload.languages = body.languages;
-            if (body.sub_specialties !== undefined) payload.sub_specialties = body.sub_specialties;
             if (body.experience_years !== undefined) payload.experience_years = body.experience_years;
             if (body.map_location !== undefined) payload.map_location = body.map_location;
             if (body.consultation_fee !== undefined) payload.consultation_fee = body.consultation_fee;

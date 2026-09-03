@@ -7,9 +7,9 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedRe
 
 const ObjectId = mongoose.Types.ObjectId;
 
-function formatSpecialtyForMobile(specialty: ISpecialty & { _id: mongoose.Types.ObjectId }) {
+function formatSpecialtyForMobile(specialty: ISpecialty & { _id: unknown }) {
     return {
-        _id: specialty._id,
+        _id: String(specialty._id),
         name: specialty.name,
         description: specialty.description,
         icon: specialty.icon,

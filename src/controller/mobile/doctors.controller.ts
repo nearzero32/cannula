@@ -8,17 +8,19 @@ import {
     type IDoctor,
 } from '../../interfaces/doctor.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
+import { doctorSpecialtyMap } from '../../services/doctor-specialty.service';
+import Specialty from '../../models/specialties.model';
 
 const ObjectId = mongoose.Types.ObjectId;
 
-function formatDoctorForMobile(doctor: IDoctor & { _id: mongoose.Types.ObjectId }, detailed = false) {
+function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specialties: Map<string, { _id: string; name: string; icon: string | null }>, detailed = false) {
     const base = {
-        _id: doctor._id,
+        _id: String(doctor._id),
         display_name: doctor.display_name,
         profile_photo: doctor.profile_photo,
         gender: doctor.gender,
-        specialty: doctor.specialty,
-        sub_specialties: doctor.sub_specialties,
+        primary_specialty: specialties.get(String(doctor.primary_specialty_id)) ?? null,
+        specialties: (doctor.specialty_ids ?? []).map(id => specialties.get(String(id))).filter(Boolean),
         experience_years: doctor.experience_years,
         consultation_fee: doctor.consultation_fee,
         follow_up_fee: doctor.follow_up_fee,
@@ -61,7 +63,7 @@ export const mobileDoctorsController = new Elysia({
                 status: IDoctorStatusEnum.ACTIVE,
             };
 
-            if (query.specialty) main_match.specialty = query.specialty;
+            if (query.specialty_id && ObjectId.isValid(query.specialty_id)) main_match.specialty_ids = new ObjectId(query.specialty_id);
 
             if (query.gender) main_match.gender = query.gender;
 
@@ -72,20 +74,21 @@ export const mobileDoctorsController = new Elysia({
             }
 
             if (query.search) {
+                const matchingSpecialties = await Specialty.find({ name: { $regex: query.search, $options: 'i' } }).select('_id').lean().exec();
                 main_match.$or = [
                     { display_name: { $regex: query.search, $options: 'i' } },
-                    { specialty: { $regex: query.search, $options: 'i' } },
-                    { sub_specialties: { $regex: query.search, $options: 'i' } },
+                    ...(matchingSpecialties.length ? [{ specialty_ids: { $in: matchingSpecialties.map(item => item._id) } }] : []),
                 ];
             }
 
             const { data, count } = await doctorService.getPaginated({ main_match, page, limit });
             const totalPages = Math.ceil(count / limit);
 
+            const specialties = await doctorSpecialtyMap(data);
             return {
                 error: false,
                 message: 'تم جلب الأطباء بنجاح',
-                data: data.map((doctor) => formatDoctorForMobile(doctor)),
+                data: data.map((doctor) => formatDoctorForMobile(doctor, specialties)),
                 pagination: { page, limit, total: count, pages: totalPages, hasNext: page < totalPages, hasPrev: page > 1 },
             };
         },
@@ -93,7 +96,7 @@ export const mobileDoctorsController = new Elysia({
             query: t.Object({
                 page: t.Optional(t.String()),
                 limit: t.Optional(t.String()),
-                specialty: t.Optional(t.String()),
+                specialty_id: t.Optional(t.String()),
                 clinic_id: t.Optional(t.String()),
                 gender: t.Optional(t.Enum(IDoctorGenderEnum)),
                 is_featured: t.Optional(t.String()),
@@ -117,10 +120,11 @@ export const mobileDoctorsController = new Elysia({
                 return { error: true, message: 'الطبيب غير موجود' };
             }
 
+            const specialties = await doctorSpecialtyMap([doctor]);
             return {
                 error: false,
                 message: 'تم جلب الطبيب بنجاح',
-                data: formatDoctorForMobile(doctor, true),
+                data: formatDoctorForMobile(doctor, specialties, true),
             };
         },
         {

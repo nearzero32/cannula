@@ -154,7 +154,7 @@ describe('Patient authentication contracts and security', () => {
     test('OTP resend returns only the newly generated debug code and overwrites the stored hash', async () => {
         process.env.NODE_ENV = 'development'; process.env.OTP_DEBUG_RETURN_CODE = 'true';
         spyOn(crypto, 'randomInt').mockReturnValue(739204 as never);
-        const oldHash = crypto.createHmac('sha256', process.env.ACCESS_TOKEN_SECRET!).update('111111').digest('hex');
+        const oldHash = crypto.createHmac('sha256', process.env.OTP_HASH_SECRET || process.env.ACCESS_TOKEN_SECRET!).update('111111').digest('hex');
         const flow = { _id: objectId, flow_id: 'flow-id-12345678901234567890', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), resend_count: 0, otp_hash: oldHash };
         spyOn(AuthFlow, 'findOne').mockReturnValue(query(flow) as never);
         const update = spyOn(AuthFlow, 'updateOne').mockReturnValue(query({}) as never);
@@ -170,7 +170,7 @@ describe('Patient authentication contracts and security', () => {
 
     test('correct OTP verifies once and clears every challenge hash', async () => {
         const otp = '123456';
-        const hash = crypto.createHmac('sha256', process.env.ACCESS_TOKEN_SECRET!).update(otp).digest('hex');
+        const hash = crypto.createHmac('sha256', process.env.OTP_HASH_SECRET || process.env.ACCESS_TOKEN_SECRET!).update(otp).digest('hex');
         const flow = { _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: hash, otp_expires_at: new Date(Date.now() + 60_000), otp_attempts: 0 };
         spyOn(AuthFlow, 'findOne').mockReturnValue(query(flow) as never);
         const consume = spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query({ ...flow, step: S.CREATE_PIN }) as never);
@@ -178,7 +178,9 @@ describe('Patient authentication contracts and security', () => {
         expect(await patientAuthService.verifyOtp('flow', otp)).toEqual({ nextStep: S.CREATE_PIN });
         expect((consume.mock.calls[0] as any)[1].$unset).toEqual(expect.objectContaining({ otp_hash: 1, support_otp_hash: 1 }));
         consume.mockReturnValue(query(null) as never);
-        await expect(patientAuthService.verifyOtp('flow', otp)).rejects.toThrow('مسبقاً');
+        const replayError = await patientAuthService.verifyOtp('flow', otp).then(() => null, error => error);
+        expect(replayError).toBeInstanceOf(Error);
+        expect(replayError.message).toContain('مسبقاً');
     });
 
     test('wrong, expired, and attempt-limited OTPs are rejected', async () => {

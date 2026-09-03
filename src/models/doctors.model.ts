@@ -1,5 +1,7 @@
 import mongoose, { Schema, model, models } from 'mongoose';
 import {
+    DEFAULT_MAX_APPOINTMENTS_PER_DAY,
+    MAX_MAX_APPOINTMENTS_PER_DAY,
     IDoctorGenderEnum,
     IDoctorStatusEnum,
     IDoctorVerificationStatusEnum,
@@ -60,16 +62,11 @@ const doctorSchema = new Schema(
 
         // ── Professional info ────────────────────────────────────────────────────
 
-        /**
-         * Primary specialty label used for search/filter.
-         * Stored as plain text today; consider migrating to a Specialty ObjectId ref.
-         */
-        specialty: {
-            type: String,
+        primary_specialty_id: { type: Schema.Types.ObjectId, ref: 'Specialty', required: true },
+        specialty_ids: {
+            type: [{ type: Schema.Types.ObjectId, ref: 'Specialty', required: true }],
             required: true,
-            trim: true,
         },
-        sub_specialties: { type: [String], default: [] },
         languages: { type: [String], default: [] },
 
         experience_years: {
@@ -184,6 +181,14 @@ const doctorSchema = new Schema(
             min: 0,
             default: null,
         },
+
+        max_appointments_per_day: {
+            type: Number,
+            required: true,
+            default: DEFAULT_MAX_APPOINTMENTS_PER_DAY,
+            min: 1,
+            max: MAX_MAX_APPOINTMENTS_PER_DAY,
+        },
         currency: { type: String, trim: true, default: 'IQD', maxlength: 10 },
         accepting_new_patients: { type: Boolean, default: true },
         is_featured: { type: Boolean, default: false },
@@ -220,9 +225,14 @@ const doctorSchema = new Schema(
         timestamps: true,
     }
 );
+doctorSchema.pre('validate', function () {
+    const ids = (this.specialty_ids ?? []).map(String);
+    if (!this.primary_specialty_id || !ids.includes(String(this.primary_specialty_id)) || new Set(ids).size !== ids.length) this.invalidate('specialty_ids', 'specialty_ids must contain the unique primary_specialty_id');
+});
 
 // Listing/filter queries by specialty and operational state
-doctorSchema.index({ specialty: 1, status: 1 });
+doctorSchema.index({ specialty_ids: 1, status: 1 });
+doctorSchema.index({ primary_specialty_id: 1, status: 1 });
 // Admin verification queue
 doctorSchema.index({ verification_status: 1, status: 1 });
 // Find doctors assigned to a clinic
