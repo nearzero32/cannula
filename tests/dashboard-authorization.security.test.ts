@@ -102,13 +102,12 @@ describe('Dashboard cross-surface authorization', () => {
         expect(pharmacy.status).toBe(404); expect(pharmacyLookup).toHaveBeenCalled();
     });
 
-    test('Patient cannot access dashboard upload and dashboard roles can pass its role guard', async () => {
-        spyOn(storageService, 'isConfigured').mockReturnValue(false);
-        const body = { folder: 'patients', contentType: 'image/png' };
-        const denied = await dashboardController.handle(request('/dash/upload/presign', IUserRoleEnum.PATIENT, 'POST', body));
+    test('Patient cannot access dashboard upload and Doctor cannot request Admin media', async () => {
+        const body = { purpose: 'AD_IMAGE', contentType: 'image/png' };
+        const denied = await dashboardController.handle(request('/dash/upload/intents', IUserRoleEnum.PATIENT, 'POST', body));
         expect(denied.status).toBe(403);
-        const allowed = await dashboardController.handle(request('/dash/upload/presign', IUserRoleEnum.DOCTOR, 'POST', body));
-        expect(allowed.status).toBe(503);
+        const doctorDenied = await dashboardController.handle(request('/dash/upload/intents', IUserRoleEnum.DOCTOR, 'POST', body));
+        expect(doctorDenied.status).toBe(403);
     });
 
     test('unauthenticated remains 401 while authenticated wrong-role is 403', async () => {

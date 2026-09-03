@@ -147,7 +147,7 @@ describe('API response documentation coverage', () => {
 
         const expectedTags: Array<[string, string, string]> = [
             ['post', '/api/dash/auth/login', SWAGGER_TAGS.DASHBOARD.AUTH],
-            ['post', '/api/dash/upload/presign', SWAGGER_TAGS.DASHBOARD.SHARED],
+            ['post', '/api/dash/upload/intents', SWAGGER_TAGS.DASHBOARD.SHARED],
             ['get', '/api/dash/admin/clinics/', SWAGGER_TAGS.ADMIN.CLINICS],
             ['get', '/api/dash/admin/doctors/', SWAGGER_TAGS.ADMIN.DOCTORS],
             ['get', '/api/dash/admin/patients/', SWAGGER_TAGS.ADMIN.PATIENTS],

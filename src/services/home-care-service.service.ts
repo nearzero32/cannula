@@ -3,6 +3,7 @@ import HomeCareCategory from '../models/home-care-category.model';
 import HomeCareService, { type HomeCareServiceDocument } from '../models/home-care-service.model';
 import { IHomeCareStatusEnum, type IHomeCareService, type IHomeCareStatus } from '../interfaces/home-care.interface';
 import { HomeCareValidationError, normalizeHomeCareName, validateHomeCareServiceNumbers } from './home-care.validation';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 export interface HomeCareServiceInput {
     categoryId: string;
@@ -74,6 +75,7 @@ export class HomeCareServiceService {
     }
 
     public async create(input: HomeCareServiceInput): Promise<HomeCareServiceDocument> {
+        const media=input.image?await uploadPolicyService.requireReadyReference(input.image,UploadPurposeEnum.HOME_CARE_SERVICE_IMAGE,'HOME_CARE_SERVICE','000000000000000000000001'):null;
         const normalizedName = normalizeHomeCareName(input.name).name;
         const status = input.status ?? IHomeCareStatusEnum.ACTIVE;
         const displayOrder = input.displayOrder ?? 0;
@@ -84,7 +86,7 @@ export class HomeCareServiceService {
             displayOrder,
         });
         await this.ensureCategoryCanContainService(input.categoryId, status);
-        return HomeCareService.create({
+        const created=await HomeCareService.create({
             category_id: new mongoose.Types.ObjectId(input.categoryId),
             name: normalizedName,
             short_description: input.shortDescription ?? null,
@@ -96,11 +98,12 @@ export class HomeCareServiceService {
             status,
             display_order: displayOrder,
             created_by: input.createdBy ?? null,
-        });
+        });await uploadPolicyService.finalizeReplacement(media,null,String(created._id),'image');return created;
     }
 
     public async update(id: string, input: Partial<HomeCareServiceInput>): Promise<HomeCareServiceDocument> {
         const current = await this.getById(id);
+        const media=input.image?await uploadPolicyService.requireReadyReference(input.image,UploadPurposeEnum.HOME_CARE_SERVICE_IMAGE,'HOME_CARE_SERVICE',id):null;
         if (!current) throw new HomeCareValidationError('الخدمة غير موجودة', 404);
         const categoryId = input.categoryId ?? current.category_id.toString();
         const status = current.status;
@@ -124,6 +127,7 @@ export class HomeCareServiceService {
 
         const updated = await HomeCareService.findByIdAndUpdate(id, payload, { new: true, runValidators: true }).exec();
         if (!updated) throw new HomeCareValidationError('الخدمة غير موجودة', 404);
+        if(input.image!==undefined)await uploadPolicyService.finalizeReplacement(media,current.image,id,'image');
         return updated;
     }
 
@@ -146,4 +150,3 @@ export class HomeCareServiceService {
 }
 
 export default new HomeCareServiceService();
-

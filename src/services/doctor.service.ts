@@ -5,6 +5,8 @@ import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import sessionService from './session.service';
 import { IDoctorStatusEnum } from '../interfaces/doctor.interface';
+import uploadPolicyService from './upload-policy.service';
+import { UploadPurposeEnum } from '../constants/upload-policy';
 
 class DoctorService {
     private model = Doctor;
@@ -78,6 +80,7 @@ class DoctorService {
     }
 
     public async create(payload: Partial<IDoctor>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<DoctorDocument> {
+        if(payload.profile_photo)throw new (await import('./domain-error')).DomainError('أنشئ ملف الطبيب ثم ارفع صورته لغرضه المحدد',422,'UPLOAD_TARGET_NOT_FOUND');
         const doc = await this.model.create(payload);
         if (doc.status !== IDoctorStatusEnum.ACTIVE) await sessionService.revokeAll(String(doc.user_id), { reasonCode: 'DOCTOR_STATUS_DISABLED' });
         try {
@@ -100,10 +103,13 @@ class DoctorService {
 
     public async update(id: string, payload: Partial<IDoctor>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<DoctorDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
+        const media = payload.profile_photo !== undefined && payload.profile_photo !== null
+            ? await uploadPolicyService.requireReadyReference(payload.profile_photo, UploadPurposeEnum.DOCTOR_PROFILE_PHOTO, 'DOCTOR', id) : null;
         if (oldDoc && payload.status !== undefined && payload.status !== IDoctorStatusEnum.ACTIVE && payload.status !== oldDoc.status) {
             await sessionService.revokeAll(String(oldDoc.user_id), { reasonCode: 'DOCTOR_STATUS_DISABLED' });
         }
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if (doc && payload.profile_photo !== undefined) await uploadPolicyService.finalizeReplacement(media, oldDoc?.profile_photo, id, 'profile_photo');
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

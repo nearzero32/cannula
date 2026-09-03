@@ -11,6 +11,7 @@ import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import transactionRunner, { type PharmacyTransactionRunner } from './pharmacy-transaction.service';
 import { assertPharmacyTransition, PharmacyHistoryEventEnum as Event, PharmacyWorkflowOperationEnum as Op, type PharmacyWorkflowOperation } from './pharmacy-treatment-request.workflow';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 export interface RxActor { user_id:string; type:'PATIENT'|'PHARMACY'|'ADMIN'; pharmacy_id?:string; endpoint:string }
 export interface QuoteInput { items:{name:string;quantity:number;unit_price:number;note?:string|null}[]; unavailable_items?:{name:string;note?:string|null}[]; delivery_fee:number; discount:number; pharmacy_note?:string|null }
@@ -47,7 +48,9 @@ export class PharmacyTreatmentRequestService {
     ) {}
 
     async create(patientId:mongoose.Types.ObjectId,input:any,actor:RxActor){
-        const images=[...new Set<string>((input.prescription_images??[]).map((x:string)=>x.trim()).filter(Boolean))],details=clean(input.treatment_details,3000);
+        const requestedImages=[...new Set<string>((input.prescription_images??[]).map((x:string)=>x.trim()).filter(Boolean))];
+        const imageAssets=await Promise.all(requestedImages.map(reference=>uploadPolicyService.requireReadyReference(reference,UploadPurposeEnum.PRESCRIPTION_IMAGE,'PATIENT',String(patientId))));
+        const images=imageAssets.map(asset=>asset!.upload_id),details=clean(input.treatment_details,3000);
         if(images.length>5)throw new DomainError('الحد الأقصى خمس صور',400,'INVALID_PRESCRIPTION_IMAGES');
         if(!images.length&&!details)throw new DomainError('يجب إرفاق وصفة أو تفاصيل العلاج',422,'TREATMENT_CONTENT_REQUIRED');
         let child:null|mongoose.Types.ObjectId=null;
@@ -64,6 +67,7 @@ export class PharmacyTreatmentRequestService {
             }catch(error:any){if(error?.code!==11000||attempt===2)throw error;}
         }
         await this.audit(created,actor,'POST',input);
+        await Promise.all(imageAssets.map(asset=>uploadPolicyService.markAttached(asset,String(created._id),'prescription_images')));
         return await this.getPatient(patientId,String(created._id))??created;
     }
 

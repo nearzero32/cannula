@@ -3,6 +3,7 @@ import type { IClinic } from '../interfaces/clinic.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 class ClinicService {
     private model = Clinic;
@@ -72,7 +73,9 @@ class ClinicService {
     }
 
     public async create(payload: Partial<IClinic>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<ClinicDocument> {
+        const media=payload.icon?await uploadPolicyService.requireReadyReference(payload.icon,UploadPurposeEnum.CLINIC_ICON,'CLINIC','000000000000000000000001'):null;
         const doc = await this.model.create(payload);
+        await uploadPolicyService.finalizeReplacement(media,null,String(doc._id),'icon');
         try {
             await this.activityLog.logActivity({
                 user_id: meta?.user_id,
@@ -93,7 +96,9 @@ class ClinicService {
 
     public async update(id: string, payload: Partial<IClinic>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<ClinicDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
+        const media=payload.icon?await uploadPolicyService.requireReadyReference(payload.icon,UploadPurposeEnum.CLINIC_ICON,'CLINIC',id):null;
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if(doc&&payload.icon!==undefined)await uploadPolicyService.finalizeReplacement(media,oldDoc?.icon,id,'icon');
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

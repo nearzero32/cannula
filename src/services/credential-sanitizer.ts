@@ -2,6 +2,8 @@ const SECRET_KEYS = new Set([
     'password', 'password_hash', 'password_show', 'pin', 'pinhash', 'pin_hash', 'temporarypin',
     'otp', 'debugotp', 'debug_otp', 'otp_hash', 'supportotp', 'support_otp', 'support_otp_hash', 'accesstoken', 'refreshtoken',
     'access_token', 'refresh_token', 'authorization',
+    'uploadurl', 'upload_url', 'presignedurl', 'presigned_url', 'signature', 'x_amz_signature',
+    'x_amz_credential', 'x_amz_security_token', 'r2_secret_access_key', 'r2_access_key_id',
 ]);
 
 export function sanitizeCredentialData(value: unknown): unknown {

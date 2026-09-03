@@ -1,59 +1,11 @@
-import Elysia, { t } from 'elysia';
-import { AuthPlugin } from '../../middleware/auth.middleware';
-import { UploadFolderEnum } from '../../constants/r2.config';
-import storageService from '../../services/storage.service';
-import { SWAGGER_TAGS } from '../../constants/swagger-tags';
-import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorResponses, ServiceUnavailableResponseSchema, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
-import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
-import type { IUserRole } from '../../interfaces/user.interface';
-
-const presignBodySchema = t.Object({
-    folder: t.Enum(UploadFolderEnum),
-    contentType: t.Union([
-        t.Literal('image/jpeg'),
-        t.Literal('image/png'),
-        t.Literal('image/webp'),
-        t.Literal('image/gif'),
-    ]),
-    fileName: t.Optional(t.String({ maxLength: 120 })),
-});
-
-export function createUploadController(tag: string, allowedRoles: readonly IUserRole[]) {
-    return new Elysia({ prefix: '/upload', detail: { tags: [tag] } })
-    .use(AuthPlugin())
-    .use(RoleGuardPlugin(allowedRoles))
-
-    .post(
-        '/presign',
-        async ({ body, set }) => {
-            if (!storageService.isConfigured()) {
-                set.status = 503;
-                return { error: true, message: 'خدمة التخزين غير مهيأة' };
-            }
-
-            const result = await storageService.createPresignedUpload({
-                folder: body.folder,
-                contentType: body.contentType,
-                fileName: body.fileName,
-            });
-
-            if ('error' in result) {
-                set.status = 400;
-                return { error: true, message: result.error };
-            }
-
-            return {
-                error: false,
-                message: 'تم إنشاء رابط الرفع بنجاح',
-                data: result,
-            };
-        },
-        {
-            body: presignBodySchema,
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema,
-                503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    );
-}
+import Elysia,{t} from 'elysia';
+import {AuthPlugin} from '../../middleware/auth.middleware'; import {RoleGuardPlugin} from '../../middleware/authorization.middleware';
+import {UploadPurposeEnum} from '../../constants/upload-policy'; import {TokenAudienceEnum,type TokenAudience} from '../../constants/jwt';
+import uploadPolicyService from '../../services/upload-policy.service'; import {DomainError} from '../../services/domain-error'; import type {IUserRole} from '../../interfaces/user.interface';
+import {BadRequestResponseSchema,ConflictResponseSchema,ForbiddenResponseSchema,GenericDataResponseSchema,NotFoundResponseSchema,ProtectedApiErrorResponses,ServiceUnavailableResponseSchema,ValidationErrorResponseSchema} from '../../schemas/api-response.schema';
+const intentBody=t.Object({purpose:t.Enum(UploadPurposeEnum,{description:'Business purpose; the server selects storage paths and limits.'}),targetId:t.Optional(t.String({pattern:'^[0-9a-fA-F]{24}$'})),contentType:t.Union([t.Literal('image/jpeg'),t.Literal('image/png'),t.Literal('image/webp')])},{additionalProperties:false});
+export function createUploadController(tag:string,allowedRoles:readonly IUserRole[],audience:TokenAudience=TokenAudienceEnum.DASHBOARD){return new Elysia({prefix:'/upload',detail:{tags:[tag]}}).use(AuthPlugin(audience)).use(RoleGuardPlugin(allowedRoles))
+.onError(({error,set})=>{if(error instanceof DomainError){set.status=error.status;return{error:true,message:error.message,code:error.code}}})
+.post('/intents',async({body,phrase,set})=>{const data=await uploadPolicyService.initiate(body,{userId:phrase._id,role:phrase.role,audience:phrase.audience});set.status=201;return{error:false,message:'تم إنشاء طلب الرفع بنجاح',data}},{body:intentBody,response:{201:GenericDataResponseSchema,400:BadRequestResponseSchema,403:ForbiddenResponseSchema,404:NotFoundResponseSchema,422:ValidationErrorResponseSchema,503:ServiceUnavailableResponseSchema,...ProtectedApiErrorResponses},detail:{description:'Creates a short-lived purpose-bound upload intent; no trusted asset URL is returned.'}})
+.post('/intents/:uploadId/complete',async({params,phrase})=>({error:false,message:'تم التحقق من الملف بنجاح',data:await uploadPolicyService.complete(params.uploadId,{userId:phrase._id,role:phrase.role,audience:phrase.audience})}),{params:t.Object({uploadId:t.String({format:'uuid'})}),response:{200:GenericDataResponseSchema,403:ForbiddenResponseSchema,404:NotFoundResponseSchema,409:ConflictResponseSchema,422:ValidationErrorResponseSchema,503:ServiceUnavailableResponseSchema,...ProtectedApiErrorResponses},detail:{description:'Inspects authoritative R2 metadata and bounded bytes before returning a managed reference.'}})
+.get('/assets/:uploadId/access',async({params,phrase})=>({error:false,message:'تم إنشاء رابط الوصول بنجاح',data:await uploadPolicyService.privateAccess(params.uploadId,{userId:phrase._id,role:phrase.role,audience:phrase.audience})}),{params:t.Object({uploadId:t.String({format:'uuid'})}),response:{200:GenericDataResponseSchema,403:ForbiddenResponseSchema,404:NotFoundResponseSchema,503:ServiceUnavailableResponseSchema,...ProtectedApiErrorResponses},detail:{description:'Returns a five-minute signed GET only after ownership or assigned-pharmacy authorization.'}})}

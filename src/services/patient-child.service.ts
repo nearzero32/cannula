@@ -13,6 +13,7 @@ import {
     type PatientManagedHealthProfileInput,
 } from './health-profile.service';
 import { calculateAge, formatDateOfBirth } from './date-of-birth';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 export { calculateAge } from './date-of-birth';
 
@@ -67,6 +68,7 @@ export class PatientChildService {
         if (!fullName) throw new DomainError('اسم الطفل مطلوب', 400);
         validateChildDateOfBirth(input.date_of_birth);
 
+        if(input.photo) throw new DomainError('أنشئ سجل الطفل ثم ارفع صورته لغرضه المحدد',422,'UPLOAD_TARGET_NOT_FOUND');
         const child = await PatientChild.create({
             patient_id: patientId,
             full_name: fullName,
@@ -87,6 +89,7 @@ export class PatientChildService {
 
     async update(patientId: mongoose.Types.ObjectId, childId: string, input: PatientChildUpdateInput) {
         const current = await this.requireOwnedChild(patientId, childId);
+        const media=input.photo!==undefined&&input.photo!==null?await uploadPolicyService.requireReadyReference(input.photo,UploadPurposeEnum.PATIENT_CHILD_PHOTO,'PATIENT_CHILD',childId):null;
         const update: PatientChildUpdateInput = {};
         if (input.full_name !== undefined) {
             const fullName = input.full_name.trim();
@@ -100,11 +103,12 @@ export class PatientChildService {
         if (input.gender !== undefined) update.gender = input.gender;
         if (input.relationship !== undefined) update.relationship = input.relationship;
         if (input.photo !== undefined) update.photo = input.photo?.trim() || null;
-        return await PatientChild.findOneAndUpdate(
+        const updated=await PatientChild.findOneAndUpdate(
             { _id: current._id, patient_id: patientId },
             { $set: update },
             { returnDocument: 'after', runValidators: true }
         ).exec();
+        if(updated&&input.photo!==undefined)await uploadPolicyService.finalizeReplacement(media,current.photo,childId,'photo');return updated;
     }
 
     async updateStatus(

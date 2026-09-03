@@ -2,6 +2,7 @@ import type { FilterQuery } from 'mongoose';
 import HomeCareCategory, { type HomeCareCategoryDocument } from '../models/home-care-category.model';
 import { IHomeCareStatusEnum, type IHomeCareCategory, type IHomeCareStatus } from '../interfaces/home-care.interface';
 import { HomeCareValidationError, normalizeHomeCareName, validateDisplayOrder } from './home-care.validation';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 export interface HomeCareCategoryInput {
     name: string;
@@ -60,6 +61,8 @@ export class HomeCareCategoryService {
     }
 
     public async create(input: HomeCareCategoryInput): Promise<HomeCareCategoryDocument> {
+        const iconAsset=input.icon?await uploadPolicyService.requireReadyReference(input.icon,UploadPurposeEnum.HOME_CARE_CATEGORY_ICON,'HOME_CARE_CATEGORY','000000000000000000000001'):null;
+        const imageAsset=input.image?await uploadPolicyService.requireReadyReference(input.image,UploadPurposeEnum.HOME_CARE_CATEGORY_IMAGE,'HOME_CARE_CATEGORY','000000000000000000000001'):null;
         const normalized = normalizeHomeCareName(input.name);
         const displayOrder = input.displayOrder ?? 0;
         validateDisplayOrder(displayOrder);
@@ -69,7 +72,7 @@ export class HomeCareCategoryService {
             throw new HomeCareValidationError('يوجد نوع رعاية منزلية فعال بهذا الاسم', 409);
         }
         try {
-            return await HomeCareCategory.create({
+            const created=await HomeCareCategory.create({
                 name: normalized.name,
                 normalized_name: normalized.normalizedName,
                 description: input.description ?? null,
@@ -78,7 +81,7 @@ export class HomeCareCategoryService {
                 status,
                 display_order: displayOrder,
                 created_by: input.createdBy ?? null,
-            });
+            }); await uploadPolicyService.finalizeReplacement(iconAsset,null,String(created._id),'icon');await uploadPolicyService.finalizeReplacement(imageAsset,null,String(created._id),'image');return created;
         } catch (error) {
             if (isDuplicateKeyError(error)) {
                 throw new HomeCareValidationError('يوجد نوع رعاية منزلية فعال بهذا الاسم', 409);
@@ -89,6 +92,8 @@ export class HomeCareCategoryService {
 
     public async update(id: string, input: Partial<HomeCareCategoryInput>): Promise<HomeCareCategoryDocument> {
         const current = await this.getById(id);
+        const iconAsset=input.icon?await uploadPolicyService.requireReadyReference(input.icon,UploadPurposeEnum.HOME_CARE_CATEGORY_ICON,'HOME_CARE_CATEGORY',id):null;
+        const imageAsset=input.image?await uploadPolicyService.requireReadyReference(input.image,UploadPurposeEnum.HOME_CARE_CATEGORY_IMAGE,'HOME_CARE_CATEGORY',id):null;
         if (!current) throw new HomeCareValidationError('نوع الرعاية المنزلية غير موجود', 404);
         const payload: Record<string, unknown> = {};
         if (input.name !== undefined) {
@@ -111,6 +116,7 @@ export class HomeCareCategoryService {
         try {
             const updated = await HomeCareCategory.findByIdAndUpdate(id, payload, { new: true, runValidators: true }).exec();
             if (!updated) throw new HomeCareValidationError('نوع الرعاية المنزلية غير موجود', 404);
+            if(input.icon!==undefined)await uploadPolicyService.finalizeReplacement(iconAsset,current.icon,id,'icon');if(input.image!==undefined)await uploadPolicyService.finalizeReplacement(imageAsset,current.image,id,'image');
             return updated;
         } catch (error) {
             if (isDuplicateKeyError(error)) {

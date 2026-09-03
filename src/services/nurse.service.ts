@@ -8,6 +8,7 @@ import { DomainError } from './domain-error';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import sessionService from './session.service';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 export interface NurseWriteActor { user_id: string; endpoint: string }
 
@@ -57,6 +58,7 @@ export class NurseService {
         return { data, count };
     }
     public async create(input: Omit<Partial<INurse>, 'user_id' | 'qualified_service_ids'> & { user_id: string; qualified_service_ids: string[] }, actor: NurseWriteActor) {
+        if(input.profile_photo)throw new DomainError('أنشئ ملف الممرض ثم ارفع صورته لغرضه المحدد',422,'UPLOAD_TARGET_NOT_FOUND');
         if (!mongoose.Types.ObjectId.isValid(input.user_id)) throw new DomainError('معرف المستخدم غير صالح', 400);
         const [user, duplicate] = await Promise.all([User.findById(input.user_id).exec(), Nurse.findOne({ user_id: input.user_id }).exec()]);
         if (!user) throw new DomainError('المستخدم غير موجود', 404);
@@ -74,6 +76,7 @@ export class NurseService {
     public async update(id: string, input: Omit<Partial<INurse>, 'qualified_service_ids'> & { qualified_service_ids?: string[] }, actor: NurseWriteActor) {
         const current = await this.getById(id);
         if (!current) throw new DomainError('الممرض غير موجود', 404);
+        const media=input.profile_photo?await uploadPolicyService.requireReadyReference(input.profile_photo,UploadPurposeEnum.NURSE_PROFILE_PHOTO,'NURSE',id):null;
         const payload: Record<string, unknown> = { ...input };
         if (input.qualified_service_ids) {
             const serviceIds = ids(input.qualified_service_ids);
@@ -87,6 +90,7 @@ export class NurseService {
         }
         const updated = await Nurse.findByIdAndUpdate(id, { $set: payload }, { returnDocument: 'after', runValidators: true }).exec();
         if (!updated) throw new DomainError('الممرض غير موجود', 404);
+        if(input.profile_photo!==undefined)await uploadPolicyService.finalizeReplacement(media,current.profile_photo,id,'profile_photo');
         await this.audit('PATCH', IActivityLogActionEnum.UPDATE, updated, current, input, actor);
         return await this.getById(id) ?? updated;
     }

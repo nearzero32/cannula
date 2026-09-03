@@ -11,6 +11,7 @@ import { formatPharmacyRequestForAvailable, formatPharmacyRequestForPatient } fr
 import { PharmacyDispatchStatusEnum as DS, PharmacyRequestStatusEnum as S } from '../src/interfaces/pharmacy-treatment-request.interface';
 import { directPharmacyTransactionRunner } from '../src/services/pharmacy-transaction.service';
 import Counter from '../src/models/pharmacy-treatment-request-counter.model';
+import uploadPolicyService from '../src/services/upload-policy.service';
 
 afterEach(() => mock.restore());
 const requestId='507f191e810c19729de86101', pharmacyA=new mongoose.Types.ObjectId('507f191e810c19729de86102'), pharmacyB=new mongoose.Types.ObjectId('507f191e810c19729de86103'), patientId=new mongoose.Types.ObjectId('507f191e810c19729de86104'), userA='507f191e810c19729de86105';
@@ -99,6 +100,7 @@ describe('Pharmacy atomic dispatch and quotation CAS', () => {
 describe('Pharmacy account and privacy boundaries', () => {
     test('request creation ActivityLog excludes prescription and delivery contents', async () => {
         const service=new PharmacyTreatmentRequestService(directPharmacyTransactionRunner),created={...request(S.OPEN,null,0,0),prescription_images:['private-key'],treatment_details:'sensitive treatment',delivery_address:{address_text:'private address',lat:33,lng:44},delivery_phone:'07700000000',notes:'private note'} as any;
+        spyOn(uploadPolicyService,'requireReadyReference').mockResolvedValue({upload_id:'private-key'} as never);spyOn(uploadPolicyService,'markAttached').mockResolvedValue();
         spyOn(Counter,'findOneAndUpdate').mockReturnValue(query({sequence:1}) as never);spyOn(TreatmentRequest,'create').mockResolvedValue([created] as never);spyOn(TreatmentRequest,'findOne').mockReturnValue(query(created) as never);spyOn(History,'create').mockResolvedValue({} as never);const audit=spyOn(ActivityLogService,'logActivity').mockResolvedValue({} as never);
         await service.create(patientId,{prescription_images:['private-key'],treatment_details:'sensitive treatment',delivery_address:{address_text:'private address',lat:33,lng:44},delivery_phone:'07700000000',notes:'private note',preferred_payment_method:'cash_on_delivery'},{user_id:userA,type:'PATIENT',endpoint:'/test'});
         const entry=(audit.mock.calls[0] as any)[0];for(const target of [entry.new_data,entry.request_body])for(const key of ['prescription_images','treatment_details','delivery_address','delivery_phone','notes'])expect(target[key]).toBeUndefined();expect(entry.new_data.prescription_image_count).toBe(1);

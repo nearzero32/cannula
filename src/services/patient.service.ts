@@ -6,6 +6,8 @@ import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/ac
 import PatientHealthProfile from '../models/patient-health-profile.model';
 import sessionService from './session.service';
 import { IPatientStatusEnum } from '../interfaces/patient.interface';
+import uploadPolicyService from './upload-policy.service';
+import { UploadPurposeEnum } from '../constants/upload-policy';
 
 class PatientService {
     private model = Patient;
@@ -79,6 +81,7 @@ class PatientService {
     }
 
     public async create(payload: Partial<IPatient>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<PatientDocument> {
+        if(payload.profile_photo)throw new (await import('./domain-error')).DomainError('أنشئ ملف المريض ثم ارفع صورته لغرضه المحدد',422,'UPLOAD_TARGET_NOT_FOUND');
         const doc = await this.model.create(payload);
         try {
             await PatientHealthProfile.create({ patient_id: doc._id });
@@ -106,10 +109,13 @@ class PatientService {
 
     public async update(id: string, payload: Partial<IPatient>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<PatientDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
+        const media = payload.profile_photo !== undefined && payload.profile_photo !== null
+            ? await uploadPolicyService.requireReadyReference(payload.profile_photo, UploadPurposeEnum.PATIENT_PROFILE_PHOTO, 'PATIENT', id) : null;
         if (oldDoc && payload.status !== undefined && payload.status !== IPatientStatusEnum.ACTIVE && payload.status !== oldDoc.status) {
             await sessionService.revokeAll(String(oldDoc.user_id), { reasonCode: 'PATIENT_STATUS_DISABLED' });
         }
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if (doc && payload.profile_photo !== undefined) await uploadPolicyService.finalizeReplacement(media, oldDoc?.profile_photo, id, 'profile_photo');
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

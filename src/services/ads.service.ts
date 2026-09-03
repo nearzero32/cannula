@@ -3,6 +3,7 @@ import type { IAds, IAdsStatus } from '../interfaces/ads.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
 
 class AdsService {
     private model = Ads;
@@ -53,7 +54,9 @@ class AdsService {
     }
 
     public async create(payload: Partial<IAds>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AdsDocument> {
+        const media=payload.image?await uploadPolicyService.requireReadyReference(payload.image,UploadPurposeEnum.AD_IMAGE,'AD','000000000000000000000001'):null;
         const doc = await this.model.create(payload);
+        await uploadPolicyService.finalizeReplacement(media,null,String(doc._id),'image');
         try {
             await this.activityLog.logActivity({
                 user_id: meta?.user_id,
@@ -74,7 +77,9 @@ class AdsService {
 
     public async update(id: string, payload: Partial<IAds>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AdsDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
+        const media=payload.image?await uploadPolicyService.requireReadyReference(payload.image,UploadPurposeEnum.AD_IMAGE,'AD',id):null;
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
+        if(doc&&payload.image!==undefined)await uploadPolicyService.finalizeReplacement(media,oldDoc?.image,id,'image');
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));
