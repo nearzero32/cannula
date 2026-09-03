@@ -17,11 +17,12 @@ import { seedHomeCareCategories } from './migrations/seed-home-care-categories.m
 import { RATE_LIMIT_RESPONSE } from './schemas/api-response.schema';
 import { ApiErrorPlugin } from './middleware/api-error.middleware';
 import { backfillHealthProfiles } from './migrations/backfill-health-profiles.migration';
-import { repairAppointmentSlotIndex } from './migrations/repair-appointment-slot-index.migration';
 import { backfillPharmacyWorkflow } from './migrations/backfill-pharmacy-workflow.migration';
 import { assertPharmacyTransactionSupport } from './services/pharmacy-transaction.service';
 import { assertOtpDebugConfiguration } from './config/otp-debug.config';
 import { assertProductionSecurityConfiguration } from './config/security.config';
+import { rebuildAppointmentStorage } from './migrations/rebuild-appointments.migration';
+import { assertAppointmentTransactionSupport } from './services/appointment-transaction.service';
 
 async function bootstrap() {
     assertProductionSecurityConfiguration();
@@ -30,14 +31,15 @@ async function bootstrap() {
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
     await assertPharmacyTransactionSupport();
+    await assertAppointmentTransactionSupport();
     await removePasswordShow();
     await ensureSuperAdminExists();
     await seedChronicConditions();
     await seedSuggestions();
     await seedHomeCareCategories();
     await backfillHealthProfiles();
-    await repairAppointmentSlotIndex();
     await backfillPharmacyWorkflow();
+    await rebuildAppointmentStorage();
 
     // Connect Redis
     await RedisClient.getInstance().connect();

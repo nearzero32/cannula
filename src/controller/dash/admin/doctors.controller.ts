@@ -35,19 +35,10 @@ const doctorBodySchema = t.Object({
             })
         )
     ),
-    appointment_duration: t.Optional(t.Number({ minimum: 5 })),
-    slot_interval: t.Optional(t.Number({ minimum: 5 })),
-    buffer_before: t.Optional(t.Number({ minimum: 0 })),
-    buffer_after: t.Optional(t.Number({ minimum: 0 })),
-    accept_auto_booking: t.Optional(t.Boolean()),
-    allow_reschedule: t.Optional(t.Boolean()),
-    booking_lead_time_hours: t.Optional(t.Number({ minimum: 0 })),
-    cancellation_window_hours: t.Optional(t.Number({ minimum: 0 })),
     consultation_fee: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     follow_up_fee: t.Optional(t.Nullable(t.Number({ minimum: 0 }))),
     currency: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
     assistant_ids: t.Optional(t.Array(t.String())),
-    accepting_new_patients: t.Optional(t.Boolean()),
     is_featured: t.Optional(t.Boolean()),
     status: t.Optional(t.Enum(IDoctorStatusEnum)),
     notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
@@ -74,19 +65,10 @@ const doctorUpdateSchema = t.Partial(
                 lng: t.Nullable(t.Number()),
             })
         ),
-        appointment_duration: t.Number({ minimum: 5 }),
-        slot_interval: t.Number({ minimum: 5 }),
-        buffer_before: t.Number({ minimum: 0 }),
-        buffer_after: t.Number({ minimum: 0 }),
-        accept_auto_booking: t.Boolean(),
-        allow_reschedule: t.Boolean(),
-        booking_lead_time_hours: t.Number({ minimum: 0 }),
-        cancellation_window_hours: t.Number({ minimum: 0 }),
         consultation_fee: t.Nullable(t.Number({ minimum: 0 })),
         follow_up_fee: t.Nullable(t.Number({ minimum: 0 })),
         currency: t.Nullable(t.String({ maxLength: 10 })),
         assistant_ids: t.Array(t.String()),
-        accepting_new_patients: t.Boolean(),
         is_featured: t.Boolean(),
         notes_internal: t.Nullable(t.String({ maxLength: 2000 })),
     })
@@ -209,19 +191,10 @@ export const doctorsController = new Elysia({
                     license_number: body.license_number,
                     clinic_ids: body.clinic_ids?.map((id) => new ObjectId(id)) ?? [],
                     map_location: body.map_location,
-                    appointment_duration: body.appointment_duration ?? 30,
-                    slot_interval: body.slot_interval ?? 15,
-                    buffer_before: body.buffer_before ?? 0,
-                    buffer_after: body.buffer_after ?? 0,
-                    accept_auto_booking: body.accept_auto_booking ?? false,
-                    allow_reschedule: body.allow_reschedule ?? true,
-                    booking_lead_time_hours: body.booking_lead_time_hours ?? 1,
-                    cancellation_window_hours: body.cancellation_window_hours ?? 24,
                     consultation_fee: body.consultation_fee,
                     follow_up_fee: body.follow_up_fee,
                     currency: body.currency ?? 'IQD',
                     assistant_ids: body.assistant_ids?.map((id) => new ObjectId(id)) ?? [],
-                    accepting_new_patients: body.accepting_new_patients ?? true,
                     is_featured: body.is_featured ?? false,
                     status: body.status ?? IDoctorStatusEnum.DRAFT,
                     notes_internal: body.notes_internal,
@@ -286,19 +259,10 @@ export const doctorsController = new Elysia({
             if (body.verification_status !== undefined) payload.verification_status = body.verification_status;
             if (body.clinic_ids !== undefined) payload.clinic_ids = body.clinic_ids.map((id) => new ObjectId(id));
             if (body.map_location !== undefined) payload.map_location = body.map_location;
-            if (body.appointment_duration !== undefined) payload.appointment_duration = body.appointment_duration;
-            if (body.slot_interval !== undefined) payload.slot_interval = body.slot_interval;
-            if (body.buffer_before !== undefined) payload.buffer_before = body.buffer_before;
-            if (body.buffer_after !== undefined) payload.buffer_after = body.buffer_after;
-            if (body.accept_auto_booking !== undefined) payload.accept_auto_booking = body.accept_auto_booking;
-            if (body.allow_reschedule !== undefined) payload.allow_reschedule = body.allow_reschedule;
-            if (body.booking_lead_time_hours !== undefined) payload.booking_lead_time_hours = body.booking_lead_time_hours;
-            if (body.cancellation_window_hours !== undefined) payload.cancellation_window_hours = body.cancellation_window_hours;
             if (body.consultation_fee !== undefined) payload.consultation_fee = body.consultation_fee;
             if (body.follow_up_fee !== undefined) payload.follow_up_fee = body.follow_up_fee;
             if (body.currency !== undefined) payload.currency = body.currency;
             if (body.assistant_ids !== undefined) payload.assistant_ids = body.assistant_ids.map((id) => new ObjectId(id));
-            if (body.accepting_new_patients !== undefined) payload.accepting_new_patients = body.accepting_new_patients;
             if (body.is_featured !== undefined) payload.is_featured = body.is_featured;
             if (body.notes_internal !== undefined) payload.notes_internal = body.notes_internal;
 

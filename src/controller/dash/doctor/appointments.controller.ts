@@ -1,401 +1,47 @@
 import Elysia, { t } from 'elysia';
-import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
-import mongoose from 'mongoose';
-import appointmentService from '../../../services/appointment.service';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import doctorService from '../../../services/doctor.service';
-import {
-    IAppointmentStatusEnum,
-    IAppointmentPaymentStatusEnum,
-    IAppointmentCancelledByModelEnum,
-} from '../../../interfaces/appointment.interface';
-import { BadRequestResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema, ValidationOrBusinessRuleResponseSchema } from '../../../schemas/api-response.schema';
+import appointmentService, { formatAppointment } from '../../../services/appointment.service';
+import appointmentSlotService from '../../../services/appointment-slot.service';
+import appointmentWorkflowService from '../../../services/appointment-workflow.service';
+import doctorAvailabilityService from '../../../services/doctor-availability.service';
+import { AppointmentActorTypeEnum, IAppointmentStatusEnum } from '../../../interfaces/appointment.interface';
+import { DomainError } from '../../../services/domain-error';
+import { AppointmentCalendarResponseSchema, AppointmentListResponseSchema, AppointmentResponseSchema, AvailabilityListResponseSchema, BookingSettingsResponseSchema, ExceptionBodySchema, ExceptionListResponseSchema, ExceptionResponseSchema, HistoryResponseSchema, SettingsBodySchema, SlotsResponseSchema, WeeklyDaySchema } from '../../../schemas/appointment-response.schema';
+import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, SuccessResponseWithoutDataSchema, ValidationOrBusinessRuleResponseSchema } from '../../../schemas/api-response.schema';
 
-const ObjectId = mongoose.Types.ObjectId;
+const errors = { 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationOrBusinessRuleResponseSchema, ...ProtectedApiErrorResponses };
+const destinationSchema = t.Object({ doctorId: t.Optional(t.String()), clinicId: t.Optional(t.String()), specialtyId: t.Optional(t.Nullable(t.String())), date: t.String({ format: 'date' }), startsAt: t.String({ format: 'date-time' }), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false });
+const pagination = (page: number, limit: number, total: number) => ({ page, limit, total, pages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 });
+async function self(userId: string) { const doctor = await doctorService.getByUserId(userId); if (!doctor) throw new DomainError('الملف الشخصي غير موجود', 404, 'DOCTOR_NOT_BOOKABLE'); return doctor; }
+const actor = (userId: string, doctorId: string) => ({ type: AppointmentActorTypeEnum.DOCTOR, userId, doctorId });
 
-const buildMeta = (phrase: any, endpoint: string) => ({
-    user_id: phrase._id,
-    user_name: `${phrase.role}_${phrase._id}`,
-    user_type: phrase.role,
-    endpoint,
-    source: 'dashboard',
-});
-
-export const doctorAppointmentsController = new Elysia({
-    prefix: '/appointments',
-    detail: { tags: [SWAGGER_TAGS.DOCTOR.APPOINTMENTS] },
-})
+export const doctorAppointmentsController = new Elysia({ prefix: '/appointments', detail: { tags: [SWAGGER_TAGS.DOCTOR.APPOINTMENTS] } })
     .use(AuthPlugin())
+    .onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message, code: error.code }; } })
+    .get('/availability/weekly/:clinicId', async ({ params, phrase }) => { const doctor = await self(phrase._id); return { error: false, message: 'تم جلب جدول الدوام', data: await doctorAvailabilityService.weekly(String(doctor._id), params.clinicId) }; }, { response: { 200: AvailabilityListResponseSchema, ...errors } })
+    .put('/availability/weekly/:clinicId', async ({ params, body, phrase }) => { const doctor = await self(phrase._id); return { error: false, message: 'تم تحديث جدول الدوام', data: await doctorAvailabilityService.replaceWeekly(String(doctor._id), params.clinicId, body.days, actor(phrase._id, String(doctor._id))) }; }, { body: t.Object({ days: t.Array(WeeklyDaySchema, { maxItems: 7 }) }, { additionalProperties: false }), response: { 200: AvailabilityListResponseSchema, ...errors } })
+    .get('/availability/exceptions', async ({ query, phrase }) => { const doctor = await self(phrase._id); return { error: false, message: 'تم جلب استثناءات الدوام', data: await doctorAvailabilityService.exceptions(String(doctor._id), query.from, query.to) }; }, { query: t.Object({ from: t.Optional(t.String({ format: 'date' })), to: t.Optional(t.String({ format: 'date' })) }), response: { 200: ExceptionListResponseSchema, ...errors } })
+    .post('/availability/exceptions', async ({ body, phrase, set }) => { const doctor = await self(phrase._id); const data = await doctorAvailabilityService.createException(String(doctor._id), body, actor(phrase._id, String(doctor._id))); set.status = 201; return { error: false, message: 'تم إنشاء استثناء الدوام', data }; }, { body: ExceptionBodySchema, response: { 201: ExceptionResponseSchema, ...errors } })
+    .patch('/availability/exceptions/:id', async ({ params, body, phrase }) => { const doctor = await self(phrase._id); return { error: false, message: 'تم تحديث استثناء الدوام', data: await doctorAvailabilityService.updateException(String(doctor._id), params.id, body, actor(phrase._id, String(doctor._id))) }; }, { body: t.Partial(ExceptionBodySchema), response: { 200: ExceptionResponseSchema, ...errors } })
+    .delete('/availability/exceptions/:id', async ({ params, phrase }) => { const doctor = await self(phrase._id); await doctorAvailabilityService.deleteException(String(doctor._id), params.id, actor(phrase._id, String(doctor._id))); return { error: false, message: 'تم حذف استثناء الدوام' }; }, { response: { 200: SuccessResponseWithoutDataSchema, ...errors } })
+    .get('/availability/preview', async ({ query, phrase }) => { const doctor = await self(phrase._id); const result = await appointmentSlotService.getSlots({ doctorId: String(doctor._id), clinicId: query.clinicId, specialtyId: query.specialtyId, date: query.date }, { enforceLeadTime: false }); return { error: false, message: 'تم جلب معاينة الأوقات', data: { doctorId: result.doctorId, clinicId: result.clinicId, date: result.date, timezone: result.timezone, slots: result.slots } }; }, { query: t.Object({ clinicId: t.String(), specialtyId: t.Optional(t.String()), date: t.String({ format: 'date' }) }), response: { 200: SlotsResponseSchema, ...errors } })
+    .patch('/availability/settings', async ({ body, phrase }) => { const doctor = await self(phrase._id); return { error: false, message: 'تم تحديث إعدادات الحجز', data: await doctorAvailabilityService.updateSettings(String(doctor._id), body, actor(phrase._id, String(doctor._id))) }; }, { body: SettingsBodySchema, response: { 200: BookingSettingsResponseSchema, ...errors } })
+    .get('/calendar', async ({ query, phrase }) => { const doctor = await self(phrase._id); const result = await appointmentService.list({ doctorId: String(doctor._id), from: new Date(query.from), to: new Date(query.to), clinicId: query.clinicId, status: query.status, limit: 100 }); return { error: false, message: 'تم جلب تقويم المواعيد', data: result.data.map(item => formatAppointment(item, { includeInternal: true })) }; }, { query: t.Object({ from: t.String({ format: 'date-time' }), to: t.String({ format: 'date-time' }), clinicId: t.Optional(t.String()), status: t.Optional(t.Enum(IAppointmentStatusEnum)) }), response: { 200: AppointmentCalendarResponseSchema, ...errors } })
+    .get('/', async ({ query, phrase }) => { const doctor = await self(phrase._id); const result = await appointmentService.list({ doctorId: String(doctor._id), page: Number(query.page) || 1, limit: Number(query.limit) || 20, clinicId: query.clinicId, patientId: query.patientId, status: query.status, from: query.from ? new Date(query.from) : undefined, to: query.to ? new Date(query.to) : undefined, search: query.search }); return { error: false, message: 'تم جلب المواعيد', data: result.data.map(item => formatAppointment(item, { includeInternal: true })), pagination: pagination(result.page, result.limit, result.count) }; }, { query: t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()), clinicId: t.Optional(t.String()), patientId: t.Optional(t.String()), status: t.Optional(t.Enum(IAppointmentStatusEnum)), from: t.Optional(t.String({ format: 'date-time' })), to: t.Optional(t.String({ format: 'date-time' })), search: t.Optional(t.String()) }), response: { 200: AppointmentListResponseSchema, ...errors } })
+    .get('/:id', async ({ params, phrase }) => { const doctor = await self(phrase._id), appointment = await appointmentService.doctorAppointment(params.id, String(doctor._id)); return { error: false, message: 'تم جلب الموعد', data: formatAppointment(appointment, { includeInternal: true }) }; }, { response: { 200: AppointmentResponseSchema, ...errors } })
+    .get('/:id/history', async ({ params, phrase }) => { const doctor = await self(phrase._id); await appointmentService.doctorAppointment(params.id, String(doctor._id)); return { error: false, message: 'تم جلب سجل الموعد', data: await appointmentService.history(params.id) }; }, { response: { 200: HistoryResponseSchema, ...errors } })
+    .post('/:id/confirm', ({ params, phrase }) => operation(params.id, phrase, 'confirm'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/check-in', ({ params, phrase }) => operation(params.id, phrase, 'checkIn'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/start', ({ params, phrase }) => operation(params.id, phrase, 'start'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/complete', ({ params, phrase }) => operation(params.id, phrase, 'complete'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/no-show', ({ params, phrase }) => operation(params.id, phrase, 'noShow'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/cancel', async ({ params, body, phrase }) => { const doctor = await self(phrase._id), result = await appointmentWorkflowService.cancel(params.id, actor(phrase._id, String(doctor._id)), body.reason); return { error: false, message: 'تم إلغاء الموعد', data: formatAppointment(result, { includeInternal: true }) }; }, { body: t.Object({ reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }), response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/reschedule', async ({ params, body, phrase }) => { const doctor = await self(phrase._id), result = await appointmentWorkflowService.reschedule(params.id, body, actor(phrase._id, String(doctor._id))); return { error: false, message: 'تمت إعادة جدولة الموعد', data: formatAppointment(result.appointment, { includeInternal: true }) }; }, { body: destinationSchema, response: { 200: AppointmentResponseSchema, ...errors } })
+    .patch('/:id/notes', async ({ params, body, phrase }) => { const doctor = await self(phrase._id), result = await appointmentWorkflowService.updateInternalNotes(params.id, body.notesInternal ?? null, actor(phrase._id, String(doctor._id))); return { error: false, message: 'تم تحديث الملاحظات', data: formatAppointment(result, { includeInternal: true }) }; }, { body: t.Object({ notesInternal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))) }, { additionalProperties: false }), response: { 200: AppointmentResponseSchema, ...errors } });
 
-    // List the doctor's own appointments
-    .get(
-        '/',
-        async ({ query, phrase, set }) => {
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const page = Math.max(1, Number(query.page) || 1);
-            const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
-
-            const main_match: Record<string, unknown> = {
-                doctor_id: new ObjectId((doctor._id as any).toString()),
-            };
-
-            if (query.patient_id && ObjectId.isValid(query.patient_id))
-                main_match.patient_id = new ObjectId(query.patient_id);
-
-            if (query.clinic_id && ObjectId.isValid(query.clinic_id))
-                main_match.clinic_id = new ObjectId(query.clinic_id);
-
-            if (query.status) main_match.status = query.status;
-
-            if (query.payment_status) main_match.payment_status = query.payment_status;
-
-            if (query.dateFrom || query.dateTo) {
-                const dateFilter: Record<string, Date> = {};
-                if (query.dateFrom) dateFilter.$gte = new Date(query.dateFrom);
-                if (query.dateTo) dateFilter.$lte = new Date(query.dateTo);
-                main_match.date = dateFilter;
-            }
-
-            if (query.search) {
-                main_match.$or = [
-                    { appointment_number: { $regex: query.search, $options: 'i' } },
-                    { reason: { $regex: query.search, $options: 'i' } },
-                ];
-            }
-
-            const { data, count } = await appointmentService.getPaginated({
-                main_match,
-                page,
-                limit,
-            });
-            const totalPages = Math.ceil(count / limit);
-
-            return {
-                error: false,
-                message: 'تم جلب المواعيد بنجاح',
-                data,
-                pagination: {
-                    page,
-                    limit,
-                    total: count,
-                    pages: totalPages,
-                    hasNext: page < totalPages,
-                    hasPrev: page > 1,
-                },
-            };
-        },
-        {
-            query: t.Object({
-                page: t.Optional(t.String()),
-                limit: t.Optional(t.String()),
-                patient_id: t.Optional(t.String()),
-                clinic_id: t.Optional(t.String()),
-                status: t.Optional(t.Enum(IAppointmentStatusEnum)),
-                payment_status: t.Optional(t.Enum(IAppointmentPaymentStatusEnum)),
-                dateFrom: t.Optional(t.String()),
-                dateTo: t.Optional(t.String()),
-                search: t.Optional(t.String()),
-            }),
-            response: {
-                200: GenericPaginatedResponseSchema, 404: NotFoundResponseSchema,
-                422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    )
-
-    // Get a single appointment (must belong to this doctor)
-    .get(
-        '/:id',
-        async ({ params, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
-                set.status = 403;
-                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
-            }
-
-            return { error: false, message: 'تم جلب الموعد بنجاح', data: appointment };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
-                404: NotFoundResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    )
-
-    // Cancel appointment
-    .patch(
-        '/:id/cancel',
-        async ({ params, body, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
-                set.status = 403;
-                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
-            }
-
-            const nonCancellable = [
-                IAppointmentStatusEnum.CANCELLED,
-                IAppointmentStatusEnum.COMPLETED,
-                IAppointmentStatusEnum.NO_SHOW,
-            ];
-            if (nonCancellable.includes(appointment.status as any)) {
-                set.status = 422;
-                return { error: true, message: 'لا يمكن إلغاء هذا الموعد في حالته الحالية' };
-            }
-
-            const updated = await appointmentService.cancel(
-                params.id,
-                {
-                    cancel_reason: body.cancel_reason ?? null,
-                    cancelled_by: (doctor._id as any).toString(),
-                    cancelled_by_model: IAppointmentCancelledByModelEnum.DOCTOR,
-                },
-                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/cancel`)
-            );
-            return { error: false, message: 'تم إلغاء الموعد بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            body: t.Object({
-                cancel_reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-            }),
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
-                404: NotFoundResponseSchema, 422: ValidationOrBusinessRuleResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    )
-
-    // Check in patient
-    .patch(
-        '/:id/check-in',
-        async ({ params, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
-                set.status = 403;
-                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
-            }
-
-            const allowedStatuses = [
-                IAppointmentStatusEnum.PENDING,
-                IAppointmentStatusEnum.CONFIRMED,
-            ];
-            if (!allowedStatuses.includes(appointment.status as any)) {
-                set.status = 422;
-                return { error: true, message: 'لا يمكن تسجيل وصول المريض في هذه المرحلة' };
-            }
-
-            const updated = await appointmentService.checkIn(
-                params.id,
-                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/check-in`)
-            );
-            return { error: false, message: 'تم تسجيل وصول المريض بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
-                404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    )
-
-    // Complete appointment
-    .patch(
-        '/:id/complete',
-        async ({ params, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
-                set.status = 403;
-                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
-            }
-
-            const allowedStatuses = [
-                IAppointmentStatusEnum.CONFIRMED,
-                IAppointmentStatusEnum.CHECKED_IN,
-                IAppointmentStatusEnum.IN_PROGRESS,
-            ];
-            if (!allowedStatuses.includes(appointment.status as any)) {
-                set.status = 422;
-                return { error: true, message: 'لا يمكن إنهاء هذا الموعد في حالته الحالية' };
-            }
-
-            const updated = await appointmentService.complete(
-                params.id,
-                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/complete`)
-            );
-            return { error: false, message: 'تم إنهاء الموعد بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
-                404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    )
-
-    // Mark as no-show
-    .patch(
-        '/:id/no-show',
-        async ({ params, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
-                set.status = 403;
-                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
-            }
-
-            const allowedStatuses = [
-                IAppointmentStatusEnum.PENDING,
-                IAppointmentStatusEnum.CONFIRMED,
-            ];
-            if (!allowedStatuses.includes(appointment.status as any)) {
-                set.status = 422;
-                return { error: true, message: 'لا يمكن تسجيل الغياب في هذه المرحلة' };
-            }
-
-            const updated = await appointmentService.noShow(
-                params.id,
-                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/no-show`)
-            );
-            return { error: false, message: 'تم تسجيل غياب المريض بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
-                404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    )
-
-    // Update internal notes
-    .patch(
-        '/:id/notes',
-        async ({ params, body, phrase, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const doctor = await doctorService.getByUserId(phrase._id);
-            if (!doctor) {
-                set.status = 404;
-                return { error: true, message: 'الملف الشخصي غير موجود' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            if (appointment.doctor_id.toString() !== (doctor._id as any).toString()) {
-                set.status = 403;
-                return { error: true, message: 'غير مصرح بالوصول إلى هذا الموعد' };
-            }
-
-            const updated = await appointmentService.update(
-                params.id,
-                { notes_internal: body.notes_internal ?? null },
-                buildMeta(phrase, `/dash/doctor/appointments/${params.id}/notes`)
-            );
-            return { error: false, message: 'تم تحديث الملاحظات بنجاح', data: updated };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            body: t.Object({
-                notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-            }),
-            response: {
-                200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema,
-                404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses,
-            },
-        }
-    );
+async function operation(id: string, phrase: { _id: string }, action: 'confirm' | 'checkIn' | 'start' | 'complete' | 'noShow') {
+    const doctor = await self(phrase._id); const result = await appointmentWorkflowService[action](id, actor(phrase._id, String(doctor._id)));
+    return { error: false, message: 'تم تحديث حالة الموعد', data: formatAppointment(result, { includeInternal: true }) };
+}

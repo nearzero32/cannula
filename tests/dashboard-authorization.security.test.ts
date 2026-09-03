@@ -37,7 +37,10 @@ function adminProfile(permissions: IAdminPermission[] = [], super_admin = false)
 }
 
 function materialize(path: string) {
-    return path.replace(':flowId', 'flow-id-12345678901234567890').replace(/:id|:patientId/g, objectId);
+    const concrete = path.replace(':flowId', 'flow-id-12345678901234567890').replace(/:id|:patientId|:doctorId|:clinicId/g, objectId);
+    if (concrete.endsWith('/appointments/calendar')) return `${concrete}?from=2026-09-01T00:00:00.000Z&to=2026-09-02T00:00:00.000Z`;
+    if (concrete.includes('/appointments/availability/') && concrete.endsWith('/preview')) return `${concrete}?clinicId=${objectId}&date=2026-09-10`;
+    return concrete;
 }
 
 beforeEach(() => {

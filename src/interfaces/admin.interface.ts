@@ -6,6 +6,7 @@ export const IAdminPermissionEnum = {
     MANAGE_DOCTORS: 'manage_doctors',
     MANAGE_PATIENTS: 'manage_patients',
     MANAGE_APPOINTMENTS: 'manage_appointments',
+    MANAGE_AVAILABILITY: 'manage_availability',
     MANAGE_CLINICS: 'manage_clinics',
     MANAGE_SPECIALTIES: 'manage_specialties',
     VERIFY_DOCTORS: 'verify_doctors',

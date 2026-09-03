@@ -1,169 +1,63 @@
-# Appointment Model Documentation
+# Appointment scheduling domain
 
-## Purpose
+Cannula's appointment domain is authoritative: clients choose a generated start instant, while the backend validates the current schedule and calculates duration and blocked bounds. There is no compatibility contract with the disposable pre-launch appointment schema.
 
-The `Appointment` model stores booking records between patients and doctors at a clinic.
+## Time policy
 
-It is used to:
+- Business timezone: `Asia/Baghdad`.
+- Availability and exceptions store local `HH:mm` periods plus Baghdad calendar dates.
+- Appointment start/end and blocked bounds are UTC `Date` instants.
+- `local_date` is the indexed Baghdad date used for the doctor/day lock. API DTOs expose UTC ISO instants and derived Baghdad date/time.
 
-- track appointment identity (`appointment_number`)
-- connect patient, doctor, clinic, and optional specialty
-- manage lifecycle status (`pending`, `confirmed`, etc.)
-- support operational data (booking source, internal notes, cancellation, reschedule)
+## Storage
 
-## Schema Overview
+`Appointment` stores references, beneficiary/source, actual and buffered intervals, workflow state/timestamps/version, cancellation actor, reschedule links, internal notes, payment status, and immutable doctor, clinic, specialty, beneficiary and fee/currency snapshots.
 
-```ts
-import mongoose, { Schema, model, models } from 'mongoose';
-import { IAppointmentBookingSourceEnum, IAppointmentStatusEnum } from '../interfaces/appointment.interface';
-import type { IAppointment } from '../interfaces/appointment.interface';
+`DoctorAvailability` stores one unique doctor/clinic/day record with zero or more non-overlapping local periods. Multiple periods represent breaks; slots are never persisted.
 
-export type AppointmentDocument = mongoose.Document & IAppointment;
+`DoctorAvailabilityException` stores one doctor/date/global-or-clinic override. `CLOSED` yields no periods and `CUSTOM_HOURS` replaces weekly periods.
 
-const appointmentSchema = new Schema(
-    {
-        appointment_number: {
-            type: String,
-            required: true,
-            unique: true,
-            trim: true,
-            index: true,
-        },
-        patient_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Patient',
-            required: true,
-            index: true,
-        },
-        doctor_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Doctor',
-            required: true,
-            index: true,
-        },
-        clinic_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Clinic',
-            required: true,
-            index: true,
-        },
-        specialty_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Specialty',
-            default: null,
-            index: true,
-        },
-        date: {
-            type: Date,
-            required: true,
-            index: true,
-        },
-        start_time: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        end_time: {
-            type: String,
-            required: true,
-            trim: true,
-        },
-        status: {
-            type: String,
-            enum: Object.values(IAppointmentStatusEnum),
-            default: IAppointmentStatusEnum.PENDING,
-            index: true,
-        },
-        booked_by: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-            default: null,
-        },
-        booking_source: {
-            type: String,
-            enum: Object.values(IAppointmentBookingSourceEnum),
-            default: IAppointmentBookingSourceEnum.APP,
-        },
-        reason: {
-            type: String,
-            trim: true,
-            maxlength: 1000,
-            default: null,
-        },
-        notes_internal: {
-            type: String,
-            trim: true,
-            maxlength: 2000,
-            default: null,
-        },
-        cancel_reason: {
-            type: String,
-            trim: true,
-            maxlength: 1000,
-            default: null,
-        },
-        rescheduled_from: {
-            type: Schema.Types.ObjectId,
-            ref: 'Appointment',
-            default: null,
-        },
-    },
-    {
-        timestamps: true,
-        versionKey: false,
-    }
-);
+`AppointmentHistory` stores ordered domain events. `AppointmentCounter` atomically issues `APP-YYYY-NNNNNN`. `AppointmentDayLock` serializes booking decisions for a doctor and Baghdad date inside MongoDB transactions.
 
-appointmentSchema.index({ doctor_id: 1, date: 1, start_time: 1 });
-appointmentSchema.index({ patient_id: 1, date: 1 });
-appointmentSchema.index({ clinic_id: 1, date: 1 });
-appointmentSchema.index({ status: 1, date: 1 });
+## Slot calculation
 
-export const Appointment =
-    (models.Appointment as mongoose.Model<AppointmentDocument>) ||
-    model<AppointmentDocument>('Appointment', appointmentSchema);
-export default Appointment;
-```
+The slot service validates that the doctor is active, verified, licensed, accepting patients, belongs to the active clinic, and provides an optional active specialty. It loads the weekly rule, most-specific exception, settings, and blocking appointments. Candidate starts advance by `slot_interval`; duration may differ. Duration plus buffers must fit the period. Past/lead-time and half-open buffered overlaps are removed. Booking recomputes the exact slot inside its transaction.
 
-## Fields
+## Workflow
 
-| Field | Type | Required | Description |
-| --- | --- | --- | --- |
-| `appointment_number` | `String` | Yes | Unique booking identifier, trimmed and indexed. |
-| `patient_id` | `ObjectId` | Yes | Reference to patient record (`Patient`). |
-| `doctor_id` | `ObjectId` | Yes | Reference to doctor profile (`Doctor`). |
-| `clinic_id` | `ObjectId` | Yes | Reference to clinic (`Clinic`). |
-| `specialty_id` | `ObjectId` | No | Optional reference to specialty (`Specialty`). |
-| `date` | `Date` | Yes | Appointment date (indexed). |
-| `start_time` | `String` | Yes | Start time string for the slot. |
-| `end_time` | `String` | Yes | End time string for the slot. |
-| `status` | `String` | Yes | Lifecycle state. Default: `pending`. |
-| `booked_by` | `ObjectId` | No | Optional `User` who created booking (for admin-assisted bookings). |
-| `booking_source` | `String` | Yes | Booking origin. Default: `app`. |
-| `reason` | `String` | No | Optional patient complaint or booking reason. |
-| `notes_internal` | `String` | No | Internal staff/admin notes (not for patient display). |
-| `cancel_reason` | `String` | No | Optional cancellation reason. |
-| `rescheduled_from` | `ObjectId` | No | Optional previous appointment reference if rescheduled. |
-| `createdAt` | `Date` | Auto | Auto-generated create timestamp. |
-| `updatedAt` | `Date` | Auto | Auto-generated update timestamp. |
+Allowed dedicated operations are:
 
-## Enum Source of Truth
+- `PENDING -> CONFIRMED`
+- `PENDING | CONFIRMED -> CANCELLED`
+- `PENDING | CONFIRMED -> RESCHEDULED` while creating a linked replacement atomically
+- `CONFIRMED -> CHECKED_IN`
+- `CONFIRMED -> NO_SHOW`
+- `CHECKED_IN -> IN_PROGRESS`
+- `IN_PROGRESS -> COMPLETED`
 
-Values are centralized in `src/interfaces/appointment.interface.ts`.
+There is no generic status-write endpoint. Patient cancel/reschedule obeys the cancellation window; patient reschedule also requires `allow_reschedule`. Doctor/Admin operations are not subject to the customer window. Patient booking starts confirmed only when `accept_auto_booking` is true. Admin creation may explicitly choose pending or confirmed and is limited to `admin_panel` or `phone` sources.
 
-- `IAppointmentStatusEnum`: `pending`, `confirmed`, `cancelled`, `completed`, `no_show`
-- `IAppointmentBookingSourceEnum`: `app`, `admin_panel`, `phone`
+Appointment mutations and availability mutations write domain history or operational `ActivityLog` as applicable. Workflow events are published through a subscriber hook. Durable reminders are deferred until durable job infrastructure exists.
 
-## Indexes
+## API routes
 
-```ts
-appointmentSchema.index({ doctor_id: 1, date: 1, start_time: 1 });
-appointmentSchema.index({ patient_id: 1, date: 1 });
-appointmentSchema.index({ clinic_id: 1, date: 1 });
-appointmentSchema.index({ status: 1, date: 1 });
-```
+All routes are mounted under `/api` and use the existing audience/role guards.
 
-- `doctor_id + date + start_time` supports doctor schedule queries.
-- `patient_id + date` supports patient history/upcoming lookups.
-- `clinic_id + date` supports clinic-level daily schedule views.
-- `status + date` supports operational filtering by state.
+Patient Mobile (`/mobile/appointments`): `GET /availability`, `GET /`, `POST /`, `GET /:id`, `GET /:id/history`, `POST /:id/cancel`, and `POST /:id/reschedule`.
+
+Doctor Dashboard (`/dash/doctor/appointments`): weekly availability GET/PUT, exception GET/POST/PATCH/DELETE, preview, settings PATCH, calendar/list/detail/history, and dedicated confirm/check-in/start/complete/no-show/cancel/reschedule/internal-notes operations. Each request resolves the authenticated doctor; no doctor ID can override ownership.
+
+Admin Dashboard (`/dash/admin/appointments`): global doctor availability operations, preview, settings, calendar/list/detail/history, assisted creation, all workflow operations, notes, and payment status.
+
+Permission mapping:
+
+- `manage_appointments`: list/create/workflow/history/notes
+- `manage_availability`: schedules, exceptions, preview and settings
+- `manage_payments`: payment status
+- Super Admin uses the existing bypass.
+
+## Indexes and transactions
+
+Appointment indexes support unique display number; doctor/start; doctor/status/start; clinic/start; patient/start; status/start; and doctor/local-date/blocked interval scans. Availability is unique by doctor/clinic/day. Exceptions are unique by doctor/clinic/date. History is ordered by appointment/created time.
+
+Creation atomically covers day lock, fresh slot check, counter, appointment and history. State changes atomically cover compare-and-set version plus history. Rescheduling creates and links both records in one transaction. Startup rejects Mongo deployments without replica-set/mongos transaction support and discards only old-shape appointment records before reconciling indexes.

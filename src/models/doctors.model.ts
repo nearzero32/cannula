@@ -69,6 +69,8 @@ const doctorSchema = new Schema(
             required: true,
             trim: true,
         },
+        sub_specialties: { type: [String], default: [] },
+        languages: { type: [String], default: [] },
 
         experience_years: {
             type: Number,
@@ -111,8 +113,8 @@ const doctorSchema = new Schema(
         },
 
         // ── Booking defaults ─────────────────────────────────────────────────────
-        // Used when generating available slots and validating new appointments.
-        // Per-day exceptions belong in a future `doctor_availability` collection.
+        // Used by the slot engine together with DoctorAvailability and
+        // DoctorAvailabilityException records.
 
         /** Default appointment length in minutes. */
         appointment_duration: {
@@ -182,6 +184,9 @@ const doctorSchema = new Schema(
             min: 0,
             default: null,
         },
+        currency: { type: String, trim: true, default: 'IQD', maxlength: 10 },
+        accepting_new_patients: { type: Boolean, default: true },
+        is_featured: { type: Boolean, default: false },
 
         // ── Staff & visibility ───────────────────────────────────────────────────
 

@@ -1,129 +1,55 @@
 import Elysia, { t } from 'elysia';
-import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
-import mongoose from 'mongoose';
-import appointmentService from '../../../services/appointment.service';
-import {
-    IAppointmentStatusEnum,
-    IAppointmentBookingSourceEnum,
-    IAppointmentPaymentStatusEnum,
-    IAppointmentCancelledByModelEnum,
-} from '../../../interfaces/appointment.interface';
-import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
 import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
+import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
+import appointmentService, { formatAppointment } from '../../../services/appointment.service';
+import appointmentSlotService from '../../../services/appointment-slot.service';
+import appointmentWorkflowService from '../../../services/appointment-workflow.service';
+import doctorAvailabilityService from '../../../services/doctor-availability.service';
+import { AppointmentActorTypeEnum, AppointmentBeneficiaryTypeEnum, IAppointmentBookingSourceEnum, IAppointmentPaymentStatusEnum, IAppointmentStatusEnum } from '../../../interfaces/appointment.interface';
+import { DomainError } from '../../../services/domain-error';
+import { AppointmentCalendarResponseSchema, AppointmentListResponseSchema, AppointmentResponseSchema, AvailabilityListResponseSchema, BookingSettingsResponseSchema, ExceptionBodySchema, ExceptionListResponseSchema, ExceptionResponseSchema, HistoryResponseSchema, SettingsBodySchema, SlotsResponseSchema, WeeklyDaySchema } from '../../../schemas/appointment-response.schema';
+import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, SuccessResponseWithoutDataSchema, ValidationOrBusinessRuleResponseSchema } from '../../../schemas/api-response.schema';
 
-const ObjectId = mongoose.Types.ObjectId;
+const errors = { 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationOrBusinessRuleResponseSchema, ...ProtectedApiErrorResponses };
+export const appointmentAdminPermission = (request: Request) => {
+    const pathname = new URL(request.url).pathname;
+    if (pathname.includes('/appointments/availability/')) return IAdminPermissionEnum.MANAGE_AVAILABILITY;
+    if (pathname.endsWith('/payment')) return IAdminPermissionEnum.MANAGE_PAYMENTS;
+    return IAdminPermissionEnum.MANAGE_APPOINTMENTS;
+};
+const actor = (userId: string) => ({ type: AppointmentActorTypeEnum.ADMIN, userId });
+const pagination = (page: number, limit: number, total: number) => ({ page, limit, total, pages: Math.ceil(total / limit), hasNext: page * limit < total, hasPrev: page > 1 });
+const beneficiarySchema = t.Union([t.Object({ type: t.Literal(AppointmentBeneficiaryTypeEnum.SELF) }, { additionalProperties: false }), t.Object({ type: t.Literal(AppointmentBeneficiaryTypeEnum.CHILD), childId: t.String() }, { additionalProperties: false })]);
+const destinationSchema = t.Object({ doctorId: t.Optional(t.String()), clinicId: t.Optional(t.String()), specialtyId: t.Optional(t.Nullable(t.String())), date: t.String({ format: 'date' }), startsAt: t.String({ format: 'date-time' }), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false });
 
-const buildMeta = (phrase: any, endpoint: string) => ({
-    user_id: phrase._id,
-    user_name: `${phrase.role}_${phrase._id}`,
-    user_type: phrase.role,
-    endpoint,
-    source: 'dashboard',
-});
+export const appointmentsController = new Elysia({ prefix: '/appointments', detail: { tags: [SWAGGER_TAGS.ADMIN.APPOINTMENTS] } })
+    .use(AuthPlugin()).use(AdminPermissionGuardPlugin(appointmentAdminPermission))
+    .onError(({ error, set }) => { if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message, code: error.code }; } })
+    .get('/availability/:doctorId/weekly/:clinicId', async ({ params }) => ({ error: false, message: 'تم جلب جدول الدوام', data: await doctorAvailabilityService.weekly(params.doctorId, params.clinicId) }), { response: { 200: AvailabilityListResponseSchema, ...errors } })
+    .put('/availability/:doctorId/weekly/:clinicId', async ({ params, body, phrase }) => ({ error: false, message: 'تم تحديث جدول الدوام', data: await doctorAvailabilityService.replaceWeekly(params.doctorId, params.clinicId, body.days, actor(phrase._id)) }), { body: t.Object({ days: t.Array(WeeklyDaySchema, { maxItems: 7 }) }, { additionalProperties: false }), response: { 200: AvailabilityListResponseSchema, ...errors } })
+    .get('/availability/:doctorId/exceptions', async ({ params, query }) => ({ error: false, message: 'تم جلب استثناءات الدوام', data: await doctorAvailabilityService.exceptions(params.doctorId, query.from, query.to) }), { query: t.Object({ from: t.Optional(t.String({ format: 'date' })), to: t.Optional(t.String({ format: 'date' })) }), response: { 200: ExceptionListResponseSchema, ...errors } })
+    .post('/availability/:doctorId/exceptions', async ({ params, body, phrase, set }) => { const data = await doctorAvailabilityService.createException(params.doctorId, body, actor(phrase._id)); set.status = 201; return { error: false, message: 'تم إنشاء استثناء الدوام', data }; }, { body: ExceptionBodySchema, response: { 201: ExceptionResponseSchema, ...errors } })
+    .patch('/availability/:doctorId/exceptions/:id', async ({ params, body, phrase }) => ({ error: false, message: 'تم تحديث استثناء الدوام', data: await doctorAvailabilityService.updateException(params.doctorId, params.id, body, actor(phrase._id)) }), { body: t.Partial(ExceptionBodySchema), response: { 200: ExceptionResponseSchema, ...errors } })
+    .delete('/availability/:doctorId/exceptions/:id', async ({ params, phrase }) => { await doctorAvailabilityService.deleteException(params.doctorId, params.id, actor(phrase._id)); return { error: false, message: 'تم حذف استثناء الدوام' }; }, { response: { 200: SuccessResponseWithoutDataSchema, ...errors } })
+    .get('/availability/:doctorId/preview', async ({ params, query }) => { const result = await appointmentSlotService.getSlots({ doctorId: params.doctorId, clinicId: query.clinicId, specialtyId: query.specialtyId, date: query.date }, { enforceLeadTime: false }); return { error: false, message: 'تم جلب معاينة الأوقات', data: { doctorId: result.doctorId, clinicId: result.clinicId, date: result.date, timezone: result.timezone, slots: result.slots } }; }, { query: t.Object({ clinicId: t.String(), specialtyId: t.Optional(t.String()), date: t.String({ format: 'date' }) }), response: { 200: SlotsResponseSchema, ...errors } })
+    .patch('/availability/:doctorId/settings', async ({ params, body, phrase }) => ({ error: false, message: 'تم تحديث إعدادات الحجز', data: await doctorAvailabilityService.updateSettings(params.doctorId, body, actor(phrase._id)) }), { body: SettingsBodySchema, response: { 200: BookingSettingsResponseSchema, ...errors } })
+    .get('/calendar', async ({ query }) => { const result = await appointmentService.list({ doctorId: query.doctorId, clinicId: query.clinicId, patientId: query.patientId, status: query.status, from: new Date(query.from), to: new Date(query.to), limit: 100 }); return { error: false, message: 'تم جلب تقويم المواعيد', data: result.data.map(item => formatAppointment(item, { includeInternal: true })) }; }, { query: t.Object({ from: t.String({ format: 'date-time' }), to: t.String({ format: 'date-time' }), doctorId: t.Optional(t.String()), clinicId: t.Optional(t.String()), patientId: t.Optional(t.String()), status: t.Optional(t.Enum(IAppointmentStatusEnum)) }), response: { 200: AppointmentCalendarResponseSchema, ...errors } })
+    .get('/', async ({ query }) => { const result = await appointmentService.list({ page: Number(query.page) || 1, limit: Number(query.limit) || 20, doctorId: query.doctorId, clinicId: query.clinicId, patientId: query.patientId, childId: query.childId, beneficiaryType: query.beneficiaryType, status: query.status, bookingSource: query.bookingSource, paymentStatus: query.paymentStatus, from: query.from ? new Date(query.from) : undefined, to: query.to ? new Date(query.to) : undefined, search: query.search }); return { error: false, message: 'تم جلب المواعيد', data: result.data.map(item => formatAppointment(item, { includeInternal: true })), pagination: pagination(result.page, result.limit, result.count) }; }, { query: t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()), doctorId: t.Optional(t.String()), clinicId: t.Optional(t.String()), patientId: t.Optional(t.String()), childId: t.Optional(t.String()), beneficiaryType: t.Optional(t.Enum(AppointmentBeneficiaryTypeEnum)), status: t.Optional(t.Enum(IAppointmentStatusEnum)), bookingSource: t.Optional(t.Enum(IAppointmentBookingSourceEnum)), paymentStatus: t.Optional(t.Enum(IAppointmentPaymentStatusEnum)), from: t.Optional(t.String({ format: 'date-time' })), to: t.Optional(t.String({ format: 'date-time' })), search: t.Optional(t.String()) }), response: { 200: AppointmentListResponseSchema, ...errors } })
+    .post('/', async ({ body, phrase, set }) => { const appointment = await appointmentWorkflowService.create({ patientId: body.patientId, doctorId: body.doctorId, clinicId: body.clinicId, specialtyId: body.specialtyId, date: body.date, startsAt: body.startsAt, beneficiary: body.beneficiary, reason: body.reason, source: body.bookingSource, bookedByUserId: phrase._id, initialStatus: body.initialStatus }, actor(phrase._id)); set.status = 201; return { error: false, message: 'تم إنشاء الموعد', data: formatAppointment(appointment, { includeInternal: true }) }; }, { body: t.Object({ patientId: t.String(), doctorId: t.String(), clinicId: t.String(), specialtyId: t.Optional(t.Nullable(t.String())), date: t.String({ format: 'date' }), startsAt: t.String({ format: 'date-time' }), beneficiary: beneficiarySchema, reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))), bookingSource: t.Union([t.Literal(IAppointmentBookingSourceEnum.ADMIN_PANEL), t.Literal(IAppointmentBookingSourceEnum.PHONE)]), initialStatus: t.Optional(t.Union([t.Literal(IAppointmentStatusEnum.PENDING), t.Literal(IAppointmentStatusEnum.CONFIRMED)])) }, { additionalProperties: false }), response: { 201: AppointmentResponseSchema, ...errors } })
+    .get('/:id', async ({ params }) => ({ error: false, message: 'تم جلب الموعد', data: formatAppointment(await appointmentService.byId(params.id), { includeInternal: true }) }), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .get('/:id/history', async ({ params }) => { await appointmentService.byId(params.id); return { error: false, message: 'تم جلب سجل الموعد', data: await appointmentService.history(params.id) }; }, { response: { 200: HistoryResponseSchema, ...errors } })
+    .post('/:id/confirm', ({ params, phrase }) => operation(params.id, phrase._id, 'confirm'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/check-in', ({ params, phrase }) => operation(params.id, phrase._id, 'checkIn'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/start', ({ params, phrase }) => operation(params.id, phrase._id, 'start'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/complete', ({ params, phrase }) => operation(params.id, phrase._id, 'complete'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/no-show', ({ params, phrase }) => operation(params.id, phrase._id, 'noShow'), { response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/cancel', async ({ params, body, phrase }) => ({ error: false, message: 'تم إلغاء الموعد', data: formatAppointment(await appointmentWorkflowService.cancel(params.id, actor(phrase._id), body.reason), { includeInternal: true }) }), { body: t.Object({ reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }), response: { 200: AppointmentResponseSchema, ...errors } })
+    .post('/:id/reschedule', async ({ params, body, phrase }) => { const result = await appointmentWorkflowService.reschedule(params.id, body, actor(phrase._id)); return { error: false, message: 'تمت إعادة جدولة الموعد', data: formatAppointment(result.appointment, { includeInternal: true }) }; }, { body: destinationSchema, response: { 200: AppointmentResponseSchema, ...errors } })
+    .patch('/:id/notes', async ({ params, body, phrase }) => ({ error: false, message: 'تم تحديث الملاحظات', data: formatAppointment(await appointmentWorkflowService.updateInternalNotes(params.id, body.notesInternal ?? null, actor(phrase._id)), { includeInternal: true }) }), { body: t.Object({ notesInternal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))) }), response: { 200: AppointmentResponseSchema, ...errors } })
+    .patch('/:id/payment', async ({ params, body, phrase }) => ({ error: false, message: 'تم تحديث حالة الدفع', data: formatAppointment(await appointmentWorkflowService.updatePayment(params.id, body.paymentStatus, actor(phrase._id)), { includeInternal: true }) }), { body: t.Object({ paymentStatus: t.Enum(IAppointmentPaymentStatusEnum) }, { additionalProperties: false }), response: { 200: AppointmentResponseSchema, ...errors } });
 
-export const appointmentsController = new Elysia({
-    prefix: '/appointments',
-    detail: { tags: [SWAGGER_TAGS.ADMIN.APPOINTMENTS] },
-})
-    .use(AuthPlugin())
-    .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_APPOINTMENTS))
-
-    // List appointments with filters
-    .get(
-        '/',
-        async ({ query }) => {
-            const page = Math.max(1, Number(query.page) || 1);
-            const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
-
-            const main_match: Record<string, unknown> = {};
-
-            if (query.doctor_id && ObjectId.isValid(query.doctor_id))
-                main_match.doctor_id = new ObjectId(query.doctor_id);
-
-            if (query.patient_id && ObjectId.isValid(query.patient_id))
-                main_match.patient_id = new ObjectId(query.patient_id);
-
-            if (query.clinic_id && ObjectId.isValid(query.clinic_id))
-                main_match.clinic_id = new ObjectId(query.clinic_id);
-
-            if (query.status) main_match.status = query.status;
-            if (query.payment_status) main_match.payment_status = query.payment_status;
-
-            if (query.dateFrom || query.dateTo) {
-                const dateFilter: Record<string, Date> = {};
-                if (query.dateFrom) dateFilter.$gte = new Date(query.dateFrom);
-                if (query.dateTo) dateFilter.$lte = new Date(query.dateTo);
-                main_match.date = dateFilter;
-            }
-
-            if (query.search) {
-                main_match.$or = [
-                    { appointment_number: { $regex: query.search, $options: 'i' } },
-                    { reason: { $regex: query.search, $options: 'i' } },
-                    { cancel_reason: { $regex: query.search, $options: 'i' } },
-                ];
-            }
-
-            const { data, count } = await appointmentService.getPaginated({
-                main_match,
-                page,
-                limit,
-            });
-            const totalPages = Math.ceil(count / limit);
-
-            return {
-                error: false,
-                message: 'تم جلب المواعيد بنجاح',
-                data,
-                pagination: {
-                    page,
-                    limit,
-                    total: count,
-                    pages: totalPages,
-                    hasNext: page < totalPages,
-                    hasPrev: page > 1,
-                },
-            };
-        },
-        {
-            query: t.Object({
-                page: t.Optional(t.String()),
-                limit: t.Optional(t.String()),
-                doctor_id: t.Optional(t.String()),
-                patient_id: t.Optional(t.String()),
-                clinic_id: t.Optional(t.String()),
-                status: t.Optional(t.Enum(IAppointmentStatusEnum)),
-                payment_status: t.Optional(t.Enum(IAppointmentPaymentStatusEnum)),
-                dateFrom: t.Optional(t.String()),
-                dateTo: t.Optional(t.String()),
-                search: t.Optional(t.String()),
-            }),
-            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
-        }
-    )
-
-    // Get appointment by ID
-    .get(
-        '/:id',
-        async ({ params, set }) => {
-            if (!ObjectId.isValid(params.id)) {
-                set.status = 400;
-                return { error: true, message: 'معرف الموعد غير صالح' };
-            }
-
-            const appointment = await appointmentService.getById(params.id);
-            if (!appointment) {
-                set.status = 404;
-                return { error: true, message: 'الموعد غير موجود' };
-            }
-
-            return { error: false, message: 'تم جلب الموعد بنجاح', data: appointment };
-        },
-        {
-            params: t.Object({ id: t.String() }),
-            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses },
-        }
-    )
-
+async function operation(id: string, userId: string, action: 'confirm' | 'checkIn' | 'start' | 'complete' | 'noShow') {
+    return { error: false as const, message: 'تم تحديث حالة الموعد', data: formatAppointment(await appointmentWorkflowService[action](id, actor(userId)), { includeInternal: true }) };
+}
