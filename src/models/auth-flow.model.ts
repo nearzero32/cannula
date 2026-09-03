@@ -10,7 +10,7 @@ const schema = new Schema({
     patient_id: { type: Schema.Types.ObjectId, ref: 'Patient', default: null },
     otp_hash: { type: String, select: false, default: null },
     support_otp_hash: { type: String, select: false, default: null },
-    otp_expires_at: { type: Date, default: null }, support_otp_expires_at: { type: Date, default: null },
+    otp_expires_at: { type: Date, default: null }, otp_last_sent_at: { type: Date, default: null }, support_otp_expires_at: { type: Date, default: null },
     otp_verified_at: { type: Date, default: null }, consumed_at: { type: Date, default: null },
     otp_attempts: { type: Number, default: 0 }, resend_count: { type: Number, default: 0 },
     login_attempts: { type: Number, default: 0 }, support_issue_count: { type: Number, default: 0 },

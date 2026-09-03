@@ -17,29 +17,32 @@ import { hashPassword, verifyPassword } from '../constants/hashing';
 import { TokenAudienceEnum } from '../constants/jwt';
 import sessionService from './session.service';
 import { isOtpDebugReturnEnabled } from '../config/otp-debug.config';
+import securityRateLimitService from './security-rate-limit.service';
 
 const FLOW_TTL_MS = 10 * 60_000, OTP_TTL_MS = 5 * 60_000, SUPPORT_TTL_MS = 3 * 60_000;
 const MAX_OTP_ATTEMPTS = 5, MAX_RESENDS = 3, MAX_PIN_ATTEMPTS = 5;
+export const OTP_RESEND_COOLDOWN_SECONDS = 45;
 export const PIN_PATTERN = /^\d{6}$/;
 
 export function normalizePhone(phone: string): string {
-    const normalized = phone.trim().replace(/[\s()-]/g, '');
-    if (!/^\+?\d{7,15}$/.test(normalized)) throw new DomainError('رقم الهاتف غير صالح', 400);
+    let normalized = phone.trim().replace(/[\s()-]/g, '');
+    if (normalized.startsWith('00964')) normalized = `+964${normalized.slice(5)}`;
+    if (normalized.startsWith('+964')) normalized = `0${normalized.slice(4).replace(/^0/, '')}`;
+    if (!/^\d{7,15}$/.test(normalized)) throw new DomainError('رقم الهاتف غير صالح', 400, 'AUTH_PHONE_INVALID');
     return normalized;
 }
 function code(): string { return crypto.randomInt(0, 1_000_000).toString().padStart(6, '0'); }
 function codeHash(value: string): string {
-    const secret = process.env.OTP_HASH_SECRET || process.env.ACCESS_TOKEN_SECRET;
-    if (!secret) throw new Error('OTP_HASH_SECRET or ACCESS_TOKEN_SECRET is required');
+    const secret = process.env.OTP_HASH_SECRET;
+    if (!secret) throw new Error('OTP_HASH_SECRET is required');
     return crypto.createHmac('sha256', secret).update(value).digest('hex');
 }
 
 class PatientAuthService {
     async start(phoneInput: string, context: { ip?: string } = {}) {
         const phone = normalizePhone(phoneInput), now = new Date();
-        const recentScope = context.ip ? { $or: [{ phone }, { ip_address: context.ip }] } : { phone };
-        const recent = await AuthFlow.countDocuments({ ...recentScope, createdAt: { $gte: new Date(now.getTime() - 5 * 60_000) } }).exec();
-        if (recent >= 5) { await authEventService.record({ phone, type: E.OTP_RATE_LIMITED, success: false, reason_code: 'START_RATE_LIMITED', ip_address: context.ip }); throw new DomainError('طلبات كثيرة، حاول لاحقاً', 429); }
+        await securityRateLimitService.enforce('OTP_START_PHONE',phone);
+        if(context.ip)await securityRateLimitService.enforce('OTP_START_IP',context.ip);
         const user = await User.findOne({ phone, role: IUserRoleEnum.PATIENT }).select('_id').exec();
         const flowId = crypto.randomUUID();
         const flow = await AuthFlow.create({ flow_id: flowId, phone, user_id: user?._id ?? null, step: user ? S.PIN : S.OTP, expires_at: new Date(now.getTime() + FLOW_TTL_MS), ip_address: context.ip ?? '' });
@@ -50,38 +53,31 @@ class PatientAuthService {
     }
 
     private async sendOtp(flow: any, resend: boolean, ip?: string) {
-        if (flow.resend_count >= MAX_RESENDS) { await authEventService.record({ flow_id: flow.flow_id, phone: flow.phone, type: E.OTP_RATE_LIMITED, success: false, reason_code: 'OTP_RESEND_RATE_LIMITED', ip_address: ip }); throw new DomainError('تم تجاوز عدد مرات إعادة الإرسال', 429); }
         const otp = code(), expiresAt = new Date(Date.now() + OTP_TTL_MS);
+        const updated=await AuthFlow.findOneAndUpdate({_id:flow._id,step:S.OTP,expires_at:{$gt:new Date()}},{$set:{otp_hash:codeHash(otp),otp_expires_at:expiresAt,otp_last_sent_at:new Date()}},{returnDocument:'after'}).exec();
+        if(!updated)throw new DomainError('حالة تدفق المصادقة غير صالحة',409,'AUTH_FLOW_COMPLETED');
         await authEventService.record({ flow_id: flow.flow_id, phone: flow.phone, type: resend ? E.OTP_RESENT : E.OTP_REQUESTED, success: true, ip_address: ip });
-        await AuthFlow.updateOne({ _id: flow._id, step: S.OTP }, { $set: { otp_hash: codeHash(otp), otp_expires_at: expiresAt }, $inc: { resend_count: 1 } }).exec();
         try { await otpDeliveryService.send(flow.phone, otp); await authEventService.record({ flow_id: flow.flow_id, phone: flow.phone, type: E.OTP_SENT, success: true, ip_address: ip }); }
         catch (error) { await AuthFlow.updateOne({ _id: flow._id }, { $unset: { otp_hash: 1, otp_expires_at: 1 } }).exec(); await authEventService.record({ flow_id: flow.flow_id, phone: flow.phone, type: E.OTP_SEND_FAILED, success: false, reason_code: 'PROVIDER_FAILURE', ip_address: ip }); throw new DomainError('تعذر إرسال رمز التحقق', 503); }
         return { expiresAt: expiresAt.toISOString(), ...(isOtpDebugReturnEnabled() ? { debugOtp: otp } : {}) };
     }
 
     async resend(flowId: string, ip?: string) {
-        const flow = await AuthFlow.findOne({ flow_id: flowId }).select('+otp_hash +support_otp_hash').exec();
-        this.requireFlow(flow, S.OTP);
-        const challenge = await this.sendOtp(flow, true, ip);
-        return { flowId, nextStep: S.OTP, ...challenge };
+        const existing=await AuthFlow.findOne({flow_id:flowId}).exec();this.requireFlow(existing,S.OTP);
+        await securityRateLimitService.enforce('OTP_RESEND_PHONE',existing!.phone);if(ip)await securityRateLimitService.enforce('OTP_RESEND_IP',ip);
+        const otp=code(),now=new Date(),expiresAt=new Date(now.getTime()+OTP_TTL_MS),cooldownBefore=new Date(now.getTime()-OTP_RESEND_COOLDOWN_SECONDS*1000);
+        const flow=await AuthFlow.findOneAndUpdate({flow_id:flowId,step:S.OTP,expires_at:{$gt:now},resend_count:{$lt:MAX_RESENDS},$or:[{otp_last_sent_at:null},{otp_last_sent_at:{$lte:cooldownBefore}}]},{$set:{otp_hash:codeHash(otp),otp_expires_at:expiresAt,otp_last_sent_at:now},$inc:{resend_count:1}},{returnDocument:'after'}).exec();
+        if(!flow){const current=await AuthFlow.findOne({flow_id:flowId}).exec();this.requireFlow(current,S.OTP);if(current!.resend_count>=MAX_RESENDS)throw new DomainError('تم تجاوز عدد مرات إعادة الإرسال',429,'AUTH_OTP_RESEND_LIMIT');const retry=Math.max(1,Math.ceil((OTP_RESEND_COOLDOWN_SECONDS*1000-(now.getTime()-(current!.otp_last_sent_at?.getTime()??0)))/1000));const error=new DomainError('انتظر قبل إعادة إرسال الرمز',429,'AUTH_OTP_RESEND_COOLDOWN') as DomainError&{retryAfterSeconds?:number};error.retryAfterSeconds=retry;throw error}
+        try{await otpDeliveryService.send(flow.phone,otp);await authEventService.record({flow_id:flowId,phone:flow.phone,type:E.OTP_RESENT,success:true,ip_address:ip})}catch{await AuthFlow.updateOne({_id:flow._id,otp_hash:codeHash(otp)},{$unset:{otp_hash:1,otp_expires_at:1}}).exec();throw new DomainError('تعذر إرسال رمز التحقق',503,'OTP_PROVIDER_FAILURE')}
+        return{flowId,nextStep:S.OTP,expiresAt:expiresAt.toISOString(),...(isOtpDebugReturnEnabled()?{debugOtp:otp}:{})};
     }
 
     async verifyOtp(flowId: string, otp: string, ip?: string) {
-        const flow = await AuthFlow.findOne({ flow_id: flowId }).select('+otp_hash +support_otp_hash').exec();
-        this.requireFlow(flow, S.OTP);
-        if (flow!.otp_attempts >= MAX_OTP_ATTEMPTS) throw new DomainError('تم تجاوز محاولات التحقق', 429);
-        const now = new Date(), normalValid = Boolean(flow!.otp_hash && flow!.otp_expires_at && flow!.otp_expires_at > now && codeHash(otp) === flow!.otp_hash);
-        const supportValid = Boolean(flow!.support_otp_hash && flow!.support_otp_expires_at && flow!.support_otp_expires_at > now && codeHash(otp) === flow!.support_otp_hash);
-        if (!normalValid && !supportValid) {
-            await AuthFlow.updateOne({ _id: flow!._id, step: S.OTP }, { $inc: { otp_attempts: 1 } }).exec();
-            const anyActive = Boolean((flow!.otp_hash && flow!.otp_expires_at && flow!.otp_expires_at > now) || (flow!.support_otp_hash && flow!.support_otp_expires_at && flow!.support_otp_expires_at > now));
-            const expired = !anyActive;
-            await authEventService.record({ flow_id: flowId, phone: flow!.phone, type: expired ? E.OTP_EXPIRED : E.OTP_VERIFICATION_FAILED, success: false, reason_code: expired ? 'OTP_EXPIRED' : 'OTP_INVALID', ip_address: ip });
-            throw new DomainError(expired ? 'انتهت صلاحية رمز التحقق' : 'رمز التحقق غير صحيح', 400);
-        }
-        const updated = await AuthFlow.findOneAndUpdate({ _id: flow!._id, step: S.OTP, otp_verified_at: null }, { $set: { step: S.CREATE_PIN, otp_verified_at: now }, $unset: { otp_hash: 1, support_otp_hash: 1, otp_expires_at: 1, support_otp_expires_at: 1 } }, { returnDocument: 'after' }).exec();
-        if (!updated) throw new DomainError('تم استخدام رمز التحقق مسبقاً', 409);
-        await authEventService.record({ flow_id: flowId, phone: flow!.phone, type: supportValid ? E.SUPPORT_OTP_USED : E.OTP_VERIFIED, success: true, ip_address: ip });
+        const seed=await AuthFlow.findOne({flow_id:flowId}).exec();this.requireFlow(seed,S.OTP);await securityRateLimitService.enforce('OTP_VERIFY_PHONE',seed!.phone);if(ip)await securityRateLimitService.enforce('OTP_VERIFY_IP',ip);
+        const now=new Date(),hash=codeHash(otp),match={$or:[{otp_hash:hash,otp_expires_at:{$gt:now}},{support_otp_hash:hash,support_otp_expires_at:{$gt:now}}]};
+        const consumed=await AuthFlow.findOneAndUpdate({flow_id:flowId,step:S.OTP,expires_at:{$gt:now},otp_attempts:{$lt:MAX_OTP_ATTEMPTS},...match},{$set:{step:S.CREATE_PIN,otp_verified_at:now},$unset:{otp_hash:1,support_otp_hash:1,otp_expires_at:1,support_otp_expires_at:1}},{returnDocument:'before'}).select('+otp_hash +support_otp_hash').exec();
+        if(!consumed){const active={$or:[{otp_hash:{$ne:null},otp_expires_at:{$gt:now}},{support_otp_hash:{$ne:null},support_otp_expires_at:{$gt:now}}]};const failed=await AuthFlow.findOneAndUpdate({flow_id:flowId,step:S.OTP,expires_at:{$gt:now},otp_attempts:{$lt:MAX_OTP_ATTEMPTS},$and:[active,{$nor:[{otp_hash:hash,otp_expires_at:{$gt:now}},{support_otp_hash:hash,support_otp_expires_at:{$gt:now}}]}]},{$inc:{otp_attempts:1}},{returnDocument:'after'}).exec();if(failed){await authEventService.record({flow_id:flowId,phone:failed.phone,type:E.OTP_VERIFICATION_FAILED,success:false,reason_code:'OTP_INVALID',ip_address:ip});throw new DomainError('رمز التحقق غير صحيح',400,'AUTH_OTP_INVALID')}const state=await AuthFlow.findOne({flow_id:flowId}).select('+otp_hash +support_otp_hash').exec();if(state?.step!==S.OTP||(state?.otp_hash===hash&&state.otp_expires_at&&state.otp_expires_at>now)||(state?.support_otp_hash===hash&&state.support_otp_expires_at&&state.support_otp_expires_at>now))throw new DomainError('تم استخدام رمز التحقق مسبقاً',409,'AUTH_OTP_ALREADY_USED');if((state?.otp_attempts??MAX_OTP_ATTEMPTS)>=MAX_OTP_ATTEMPTS)throw new DomainError('تم تجاوز محاولات التحقق',429,'AUTH_OTP_ATTEMPTS_EXCEEDED');throw new DomainError('انتهت صلاحية رمز التحقق',400,'AUTH_OTP_EXPIRED')}
+        await authEventService.record({flow_id:flowId,phone:consumed.phone,type:consumed.support_otp_hash===hash?E.SUPPORT_OTP_USED:E.OTP_VERIFIED,success:true,ip_address:ip});
         return { nextStep: S.CREATE_PIN };
     }
 
@@ -113,15 +109,16 @@ class PatientAuthService {
     async login(flowId: string, pin: string, device: Record<string, string | undefined> = {}, ip?: string) {
         if (!PIN_PATTERN.test(pin)) throw new DomainError('الرمز السري يجب أن يتكون من 6 أرقام', 400);
         const flow = await AuthFlow.findOne({ flow_id: flowId, step: S.PIN }).exec(); this.requireFlow(flow, S.PIN);
-        const recentFailures = await AuthEvent.countDocuments({ phone: flow!.phone, type: E.LOGIN_FAILED, createdAt: { $gte: new Date(Date.now() - 15 * 60_000) } }).exec();
-        if (flow!.login_attempts >= MAX_PIN_ATTEMPTS || recentFailures >= MAX_PIN_ATTEMPTS) { await authEventService.record({ flow_id: flowId, phone: flow!.phone, user_id: flow!.user_id, type: E.LOGIN_RATE_LIMITED, success: false }); throw new DomainError('تم تجاوز محاولات تسجيل الدخول', 429); }
+        await securityRateLimitService.check('PIN_PHONE',flow!.phone,'AUTH_PIN_RATE_LIMITED');if(ip)await securityRateLimitService.check('PIN_IP',ip,'AUTH_PIN_RATE_LIMITED');
         const user = await User.findOne({ _id: flow!.user_id, role: IUserRoleEnum.PATIENT }).select('+password_hash').exec();
         await authEventService.record({ flow_id: flowId, phone: flow!.phone, user_id: flow!.user_id, type: E.LOGIN_ATTEMPT, success: true, metadata: device, ip_address: ip });
         if (!user || user.status !== IUserStatusEnum.ACTIVE || !(await verifyPassword(pin, user.password_hash))) {
+            await securityRateLimitService.enforce('PIN_PHONE',flow!.phone,'AUTH_PIN_RATE_LIMITED');if(ip)await securityRateLimitService.enforce('PIN_IP',ip,'AUTH_PIN_RATE_LIMITED');
             await AuthFlow.updateOne({ _id: flow!._id }, { $inc: { login_attempts: 1 } }).exec();
             await authEventService.record({ flow_id: flowId, phone: flow!.phone, user_id: flow!.user_id, type: E.LOGIN_FAILED, success: false, reason_code: 'INVALID_PIN', metadata: device, ip_address: ip });
             throw new DomainError('رقم الهاتف أو الرمز السري غير صحيح', 401);
         }
+        await securityRateLimitService.reset('PIN_PHONE',flow!.phone);
         user.last_login_at = new Date(); await user.save(); const tokens = await sessionService.create(user, TokenAudienceEnum.MOBILE, device, ip);
         const patient = await Patient.findOne({ user_id: user._id }).select('_id').lean().exec();
         await AuthFlow.updateOne({ _id: flow!._id }, { $set: { step: S.COMPLETED, consumed_at: new Date(), patient_id: patient?._id } }).exec();
@@ -144,6 +141,7 @@ class PatientAuthService {
     }
 
     async issueSupportOtp(flowId: string, reason: string, actorUserId: string, ip?: string) {
+        await securityRateLimitService.enforce('SUPPORT_ADMIN',actorUserId);await securityRateLimitService.enforce('SUPPORT_FLOW',flowId);
         const supportOtp = code(), now = new Date();
         const flow = await AuthFlow.findOneAndUpdate({
             flow_id: flowId, step: S.OTP, expires_at: { $gt: now },

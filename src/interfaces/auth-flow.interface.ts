@@ -19,6 +19,7 @@ export interface IAuthFlow extends IBaseDocument {
     otp_hash?: string | null;
     support_otp_hash?: string | null;
     otp_expires_at?: Date | null;
+    otp_last_sent_at?: Date | null;
     support_otp_expires_at?: Date | null;
     otp_verified_at?: Date | null;
     otp_attempts: number;

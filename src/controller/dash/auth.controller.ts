@@ -10,9 +10,9 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, ProtectedApiErrorR
 import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
 import sessionService from '../../services/session.service';
 import { DomainError } from '../../services/domain-error';
+import { resolveClientIp } from '../../services/client-ip.service';
 
 export const DASHBOARD_ROLES = [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR, IUserRoleEnum.NURSE, IUserRoleEnum.PHARMACY];
-const requestIp = (headers: Record<string, string | undefined>) => headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || '';
 
 export const authController = new Elysia({
     prefix: '/auth',
@@ -21,7 +21,7 @@ export const authController = new Elysia({
 
     .post(
         '/login',
-        async ({ body, headers, set }) => {
+        async ({ body, request, server, set }) => {
             const user = await userService.findByCredentials({
                 phone: body.phone,
                 password: body.password,
@@ -41,7 +41,7 @@ export const authController = new Elysia({
             const user_id = (user._id as any).toString();
             const tokens = await sessionService.create(user, TokenAudienceEnum.DASHBOARD, {
                 deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform,
-            }, requestIp(headers));
+            }, resolveClientIp(request,server));
 
             try {
                 await ActivityLogService.logActivity({
@@ -90,9 +90,9 @@ export const authController = new Elysia({
 
     .post(
         '/refresh',
-        async ({ body, headers, set }) => {
+        async ({ body, request, server, set }) => {
             try {
-                return { error: false, data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.DASHBOARD, { ip: requestIp(headers) }) };
+                return { error: false, data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.DASHBOARD, { ip: resolveClientIp(request,server) }) };
             } catch (error) {
                 if (!(error instanceof DomainError)) throw error;
                 set.status = error.status;

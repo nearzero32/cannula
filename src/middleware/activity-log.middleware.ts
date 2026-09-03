@@ -2,6 +2,7 @@ import Elysia, { type Context } from 'elysia';
 import ActivityLogService from '../services/activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import type { IUserRole } from '../interfaces/user.interface';
+import { resolveClientIp } from '../services/client-ip.service';
 
 function getSource(path: string): string {
     if (path.startsWith('/dash') || path.startsWith('/auth')) return IActivityLogSourceEnum.DASHBOARD;
@@ -40,19 +41,12 @@ function getDocumentId(path: string): string | null {
     return null;
 }
 
-function getIpAddress(headers: Record<string, string | undefined>): string {
-    return headers['x-forwarded-for']?.split(',')[0]?.trim()
-        || headers['x-real-ip']
-        || headers['cf-connecting-ip']
-        || '';
-}
-
 export const ActivityLogPlugin = new Elysia({ name: 'activity-log-plugin' })
-    .derive({ as: 'global' }, ({ request, headers }) => {
+    .derive({ as: 'global' }, ({ request, server }) => {
         const url = new URL(request.url);
         const path = url.pathname;
         const method = request.method;
-        const ip = getIpAddress(headers as Record<string, string | undefined>);
+        const ip = resolveClientIp(request,server);
 
         return {
             _activityMeta: {

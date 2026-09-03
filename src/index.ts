@@ -25,10 +25,12 @@ import { rebuildAppointmentStorage } from './migrations/rebuild-appointments.mig
 import { assertAppointmentTransactionSupport } from './services/appointment-transaction.service';
 import { normalizeDoctorBookingSettings } from './migrations/normalize-doctor-booking-settings.migration';
 import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
+import { assertTrustedProxyConfiguration } from './config/trusted-proxy.config';
 
 async function bootstrap() {
     assertProductionSecurityConfiguration();
     assertOtpDebugConfiguration();
+    assertTrustedProxyConfiguration();
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();

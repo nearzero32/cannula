@@ -97,7 +97,10 @@ export const ValidationOrBusinessRuleResponseSchema = t.Union([
 
 export const RATE_LIMIT_MESSAGE = 'لقد تجاوزت الحد المسموح به من الطلبات، يرجى المحاولة لاحقاً';
 export const RATE_LIMIT_RESPONSE = { error: true, message: RATE_LIMIT_MESSAGE } as const;
-export const RateLimitResponseSchema = errorResponse('تم تجاوز حد الطلبات', RATE_LIMIT_MESSAGE);
+export const RateLimitResponseSchema = t.Object({
+    error:t.Literal(true), message:t.String(), code:t.Optional(t.String()),
+    retryAfterSeconds:t.Optional(t.Integer({minimum:1})),
+},{description:'تم تجاوز حد الطلبات؛ Retry-After يحمل القيمة نفسها عند توفرها',additionalProperties:true});
 
 export const PublicApiErrorResponses = {
     429: RateLimitResponseSchema,

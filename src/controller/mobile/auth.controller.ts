@@ -9,6 +9,7 @@ import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSche
 import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
 import sessionService from '../../services/session.service';
 import { TokenAudienceEnum } from '../../constants/jwt';
+import { resolveClientIp } from '../../services/client-ip.service';
 
 const phoneSchema = t.String({ minLength: 7, maxLength: 30 });
 const flowSchema = t.String({ minLength: 20, maxLength: 100 });
@@ -36,35 +37,36 @@ export const otpResendDataSchema = t.Object({
 const AuthStartResponseSchema = successResponse(authStartDataSchema);
 const OtpResendResponseSchema = successResponse(otpResendDataSchema);
 const errors = { 400: BadRequestResponseSchema, 401: UnauthorizedResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, 503: ServiceUnavailableResponseSchema, ...PublicApiErrorResponses };
-const ip = (headers: Record<string, string | undefined>) => headers['x-forwarded-for']?.split(',')[0]?.trim() || headers['x-real-ip'] || '';
-function fail(error: unknown, set: { status?: number | string }) {
+function fail(error: unknown, set: any) {
     if (!(error instanceof DomainError)) throw error;
-    set.status = error.status; return { error: true as const, message: error.message };
+    set.status = error.status; const retryAfterSeconds=(error as DomainError&{retryAfterSeconds?:number}).retryAfterSeconds;
+    if(retryAfterSeconds){set.headers={...(set.headers??{}),'Retry-After':String(retryAfterSeconds)}}
+    return { error: true as const, message: error.message, ...(error.code?{code:error.code}:{}), ...(retryAfterSeconds?{retryAfterSeconds}:{}) };
 }
 
 export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH] } })
-    .post('/start', async ({ body, headers, set }) => {
-        try { return { error: false, message: 'تم بدء المصادقة بنجاح', data: await patientAuthService.start(body.phone, { ip: ip(headers) }) }; }
+    .post('/start', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم بدء المصادقة بنجاح', data: await patientAuthService.start(body.phone, { ip: resolveClientIp(request,server) }) }; }
         catch (error) { return fail(error, set); }
     }, { body: authStartBodySchema, detail: { description: 'نقطة البداية الموحدة: تعيد PIN للحساب الموجود أو OTP للرقم الجديد دون كشف accountExists. debugOtp اختياري للتطوير/الاختبار فقط ولا يظهر في production.' }, response: { 200: AuthStartResponseSchema, ...errors } })
-    .post('/otp/resend', async ({ body, headers, set }) => {
-        try { return { error: false, message: 'تم إرسال رمز تحقق جديد', data: await patientAuthService.resend(body.flowId, ip(headers)) }; }
+    .post('/otp/resend', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم إرسال رمز تحقق جديد', data: await patientAuthService.resend(body.flowId, resolveClientIp(request,server)) }; }
         catch (error) { return fail(error, set); }
     }, { body: t.Object({ flowId: flowSchema }, { additionalProperties: false }), detail: { description: 'يولد OTP جديداً. debugOtp اختياري للتطوير/الاختبار فقط ولا يظهر في production.' }, response: { 200: OtpResendResponseSchema, ...errors } })
-    .post('/otp/verify', async ({ body, headers, set }) => {
-        try { return { error: false, message: 'تم التحقق من رقم الهاتف', data: await patientAuthService.verifyOtp(body.flowId, body.otp, ip(headers)) }; }
+    .post('/otp/verify', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم التحقق من رقم الهاتف', data: await patientAuthService.verifyOtp(body.flowId, body.otp, resolveClientIp(request,server)) }; }
         catch (error) { return fail(error, set); }
     }, { body: otpVerifyBodySchema, response: { 200: GenericDataResponseSchema, ...errors } })
-    .post('/pin/create', async ({ body, headers, set }) => {
-        try { set.status = 201; return { error: false, message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح', data: await patientAuthService.createPin(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, ip(headers)) }; }
+    .post('/pin/create', async ({ body, request, server, set }) => {
+        try { set.status = 201; return { error: false, message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح', data: await patientAuthService.createPin(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, resolveClientIp(request,server)) }; }
         catch (error) { return fail(error, set); }
     }, { body: pinCreateBodySchema, detail: { description: 'ينشئ PIN من 6 أرقام بعد OTP، ثم ينشئ الحساب والجلسة تلقائياً. لا يتطلب اسماً أو DOB أو كلمة مرور.' }, response: { 201: GenericDataResponseSchema, ...errors } })
-    .post('/pin/login', async ({ body, headers, set }) => {
-        try { return { error: false, message: 'تم تسجيل الدخول بنجاح', data: await patientAuthService.login(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, ip(headers)) }; }
+    .post('/pin/login', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم تسجيل الدخول بنجاح', data: await patientAuthService.login(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, resolveClientIp(request,server)) }; }
         catch (error) { return fail(error, set); }
     }, { body: pinLoginBodySchema, detail: { description: 'يسجل دخول المريض برمز PIN مكون من 6 أرقام.' }, response: { 200: GenericDataResponseSchema, ...errors } })
-    .post('/refresh', async ({ body, headers, set }) => {
-        try { return { error: false, message: 'تم تحديث الجلسة بنجاح', data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.MOBILE, { ip: ip(headers) }) }; }
+    .post('/refresh', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم تحديث الجلسة بنجاح', data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.MOBILE, { ip: resolveClientIp(request,server) }) }; }
         catch (error) { return fail(error, set); }
     }, { body: t.Object({ refreshToken: t.String({ minLength: 1 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, ...errors } })
     .group('', (app) => app.use(AuthPlugin(TokenAudienceEnum.MOBILE)).use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))

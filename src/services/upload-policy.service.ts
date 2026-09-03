@@ -14,6 +14,7 @@ import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import type { TokenAudience } from '../constants/jwt';
 import PharmacyTreatmentRequest from '../models/pharmacy-treatment-request.model';
+import securityRateLimitService from './security-rate-limit.service';
 
 export interface UploadActor { userId:string; role:IUserRole; audience:TokenAudience }
 const models:Record<MediaTargetType,any>={PATIENT:Patient,PATIENT_CHILD:PatientChild,DOCTOR:Doctor,NURSE:Nurse,PHARMACY:Pharmacy,CLINIC:Clinic,SPECIALTY:Specialty,AD:Ads,ABOUT_US:AboutUs,HOME_CARE_CATEGORY:HomeCareCategory,HOME_CARE_SERVICE:HomeCareService};
@@ -37,8 +38,9 @@ class UploadPolicyService {
         if(!isAllowedImageContentType(input.contentType))throw new DomainError('نوع الملف غير مدعوم',422,'UPLOAD_CONTENT_TYPE_UNSUPPORTED');
         const policy=await this.authorize(input.purpose,actor,input.targetId);if(!policy.contentTypes.includes(input.contentType))throw new DomainError('نوع الملف غير مدعوم لهذا الغرض',422,'UPLOAD_CONTENT_TYPE_UNSUPPORTED');
         let config;try{config=getR2Config()}catch{throw new DomainError('خدمة التخزين غير مهيأة',503,'STORAGE_UNAVAILABLE')}if(!config)throw new DomainError('خدمة التخزين غير مهيأة',503,'STORAGE_UNAVAILABLE');
-        const [pending,recent]=await Promise.all([MediaAsset.countDocuments({owner_user_id:actor.userId,status:{$in:[MediaAssetStatusEnum.PENDING,MediaAssetStatusEnum.VALIDATING]}}),MediaAsset.countDocuments({owner_user_id:actor.userId,createdAt:{$gte:new Date(Date.now()-60_000)}})]);
-        if(pending>=5||recent>=10)throw new DomainError('تم تجاوز حد طلبات الرفع',429,'UPLOAD_RATE_LIMITED');
+        await securityRateLimitService.enforce('UPLOAD_USER',actor.userId,'UPLOAD_RATE_LIMITED');
+        const pending=await MediaAsset.countDocuments({owner_user_id:actor.userId,status:{$in:[MediaAssetStatusEnum.PENDING,MediaAssetStatusEnum.VALIDATING]}});
+        if(pending>=5)throw new DomainError('تم تجاوز حد طلبات الرفع',429,'UPLOAD_RATE_LIMITED');
         const uploadId=randomUUID(),ext=extensionForContentType(input.contentType),opaque=randomUUID();
         const maxBytes=Math.min(policy.maxBytes,config.maxUploadBytes),pendingKey=`pending/${uploadId}.${ext}`,objectKey=`${policy.visibility.toLowerCase()}/${policy.prefix}/${opaque}.${ext}`;
         const expiresAt=new Date(Date.now()+config.presignExpiresIn*1000);
