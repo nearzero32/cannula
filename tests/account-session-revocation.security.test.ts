@@ -5,11 +5,13 @@ import Doctor from '../src/models/doctors.model';
 import Nurse from '../src/models/nurse.model';
 import Pharmacy from '../src/models/pharmacy.model';
 import User from '../src/models/users.model';
+import Admin from '../src/models/admins.model';
 import patientService from '../src/services/patient.service';
 import doctorService from '../src/services/doctor.service';
 import nurseService from '../src/services/nurse.service';
 import pharmacyService from '../src/services/pharmacy.service';
 import userService from '../src/services/user.service';
+import adminService from '../src/services/admin.service';
 import sessionService from '../src/services/session.service';
 import ActivityLogService from '../src/services/activity-log.service';
 import { IPatientStatusEnum } from '../src/interfaces/patient.interface';
@@ -26,9 +28,14 @@ const doc = (status: string) => ({ _id: id, user_id: userId, status, toObject() 
 afterEach(() => mock.restore());
 
 describe('security-sensitive account mutations revoke logical sessions', () => {
-    test('disabling Patient, Doctor, Nurse, and Pharmacy profiles revokes every user session', async () => {
+    test('disabling Admin, Patient, Doctor, Nurse, and Pharmacy profiles revokes every user session', async () => {
         const revoke = spyOn(sessionService, 'revokeAll').mockResolvedValue(2);
         spyOn(ActivityLogService, 'logActivity').mockResolvedValue({} as never);
+
+        const adminDoc = { ...doc('active'), is_active: true };
+        spyOn(Admin, 'findById').mockReturnValue(query(adminDoc) as never);
+        spyOn(Admin, 'findByIdAndUpdate').mockReturnValue(query({ ...adminDoc, is_active: false }) as never);
+        await adminService.update(String(id), { is_active: false });
 
         spyOn(Patient, 'findById').mockReturnValue(query(doc(IPatientStatusEnum.ACTIVE)) as never);
         spyOn(Patient, 'findByIdAndUpdate').mockReturnValue(query(doc(IPatientStatusEnum.BLOCKED)) as never);
@@ -46,10 +53,10 @@ describe('security-sensitive account mutations revoke logical sessions', () => {
         spyOn(Pharmacy, 'findByIdAndUpdate').mockReturnValue(query(doc(IPharmacyStatusEnum.SUSPENDED)) as never);
         await pharmacyService.update(String(id), { status: IPharmacyStatusEnum.SUSPENDED }, String(id), '/test');
 
-        expect(revoke).toHaveBeenCalledTimes(4);
-        expect(revoke.mock.calls.map((call) => call[0])).toEqual([String(userId), String(userId), String(userId), String(userId)]);
+        expect(revoke).toHaveBeenCalledTimes(5);
+        expect(revoke.mock.calls.map((call) => call[0])).toEqual([String(userId), String(userId), String(userId), String(userId), String(userId)]);
         expect(revoke.mock.calls.map((call) => call[1]?.reasonCode)).toEqual([
-            'PATIENT_STATUS_DISABLED', 'DOCTOR_STATUS_DISABLED', 'NURSE_STATUS_DISABLED', 'PHARMACY_STATUS_DISABLED',
+            'ADMIN_STATUS_DISABLED', 'PATIENT_STATUS_DISABLED', 'DOCTOR_STATUS_DISABLED', 'NURSE_STATUS_DISABLED', 'PHARMACY_STATUS_DISABLED',
         ]);
     });
 

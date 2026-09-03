@@ -64,7 +64,7 @@ async function json(response: Response): Promise<Record<string, unknown>> {
 }
 
 beforeEach(() => {
-    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ sid: payload.sid, userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshDigest: 'hash', createdAt: '', lastSeenAt: '', lastRefreshedAt: '', expiresAt: '' }));
     spyOn(Admin, 'findOne').mockReturnValue(query({ is_active: true, super_admin: false, permissions: [IAdminPermissionEnum.MANAGE_HOME_CARE] }) as never);
 });
 

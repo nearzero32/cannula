@@ -82,11 +82,11 @@ export class NurseService {
             }
             payload.qualified_service_ids = serviceIds;
         }
+        if (input.status !== undefined && input.status !== INurseStatusEnum.ACTIVE && input.status !== current.status) {
+            await sessionService.revokeAll(String(current.user_id), { reasonCode: 'NURSE_STATUS_DISABLED' });
+        }
         const updated = await Nurse.findByIdAndUpdate(id, { $set: payload }, { returnDocument: 'after', runValidators: true }).exec();
         if (!updated) throw new DomainError('الممرض غير موجود', 404);
-        if (input.status !== undefined && input.status !== INurseStatusEnum.ACTIVE) {
-            await sessionService.revokeAll(String(updated.user_id), { reasonCode: 'NURSE_STATUS_DISABLED' });
-        }
         await this.audit('PATCH', IActivityLogActionEnum.UPDATE, updated, current, input, actor);
         return await this.getById(id) ?? updated;
     }

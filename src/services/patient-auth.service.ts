@@ -129,13 +129,18 @@ class PatientAuthService {
         return { ...tokens, user: { _id: String(user._id), phone: user.phone, role: user.role, status: user.status } };
     }
 
-    async changeRequiredPin(userId: string, pin: string) {
+    async changeRequiredPin(userId: string, restrictedSid: string, pin: string) {
         if (!PIN_PATTERN.test(pin)) throw new DomainError('الرمز السري يجب أن يتكون من 6 أرقام', 400);
         const user = await User.findOne({ _id: userId, role: IUserRoleEnum.PATIENT, must_change_pin: true }).select('+password_hash').exec();
         if (!user) throw new DomainError('تغيير الرمز السري غير مطلوب', 409);
-        await sessionService.revokeAll(userId, { phone: user.phone, reasonCode: 'REQUIRED_PIN_CHANGED' }); user.password_hash = await hashPassword(pin); user.must_change_pin = false; await user.save();
+        const oldSession = await sessionService.get(userId, restrictedSid);
+        if (!oldSession?.restricted) throw new DomainError('جلسة تغيير الرمز السري غير صالحة', 403, 'RESTRICTED_SESSION_REQUIRED');
+        user.password_hash = await hashPassword(pin); user.must_change_pin = false; await user.save();
+        await sessionService.revokeAll(userId, { phone: user.phone, reasonCode: 'REQUIRED_PIN_CHANGED' });
         await authEventService.record({ phone: user.phone, user_id: user._id, type: E.PATIENT_FORCED_PIN_CHANGED, success: true });
-        return await sessionService.create(user, TokenAudienceEnum.MOBILE);
+        return await sessionService.create(user, TokenAudienceEnum.MOBILE, {
+            deviceId: oldSession.deviceId, deviceName: oldSession.deviceName, platform: oldSession.platform,
+        });
     }
 
     async issueSupportOtp(flowId: string, reason: string, actorUserId: string, ip?: string) {
@@ -154,9 +159,11 @@ class PatientAuthService {
         const patient = await Patient.findById(patientId).exec();
         if (!patient) throw new DomainError('المريض غير موجود', 404);
         const temporaryPin = code(), hash = await hashPassword(temporaryPin);
+        const currentUser = await User.findOne({ _id: patient.user_id, role: IUserRoleEnum.PATIENT }).exec();
+        if (!currentUser) throw new DomainError('حساب المريض غير موجود', 404);
+        await sessionService.revokeAll(String(currentUser._id), { phone: currentUser.phone, patientId: String(patient._id), actorType: 'admin', actorUserId, reasonCode: 'ADMIN_PIN_RESET', ip });
         const user = await User.findOneAndUpdate({ _id: patient.user_id, role: IUserRoleEnum.PATIENT }, { $set: { password_hash: hash, must_change_pin: true } }, { returnDocument: 'after' }).exec();
         if (!user) throw new DomainError('حساب المريض غير موجود', 404);
-        await sessionService.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient._id), actorType: 'admin', actorUserId, reasonCode: 'ADMIN_PIN_RESET', ip });
         await authEventService.record({ phone: user.phone, user_id: user._id, patient_id: patient._id as any, type: E.ADMIN_PATIENT_PIN_RESET, success: true, actor_type: 'admin', actor_user_id: actorUserId, ip_address: ip, metadata: { reason } });
         return { temporaryPin, mustChangePin: true };
     }
@@ -168,7 +175,7 @@ class PatientAuthService {
         const user = await User.findById(patient.user_id).exec();
         if (!user) throw new DomainError('حساب المريض غير موجود', 404);
         const revoked = await sessionService.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient._id), actorType: 'admin', actorUserId, reasonCode: 'ADMIN_SESSION_REVOCATION', ip });
-        return { revoked };
+        return { revokedSessionsCount: revoked };
     }
 
     async securityDetails(patientId: string) {

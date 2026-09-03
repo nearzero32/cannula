@@ -100,10 +100,10 @@ class DoctorService {
 
     public async update(id: string, payload: Partial<IDoctor>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<DoctorDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
-        const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
-        if (doc && payload.status !== undefined && payload.status !== IDoctorStatusEnum.ACTIVE) {
-            await sessionService.revokeAll(String(doc.user_id), { reasonCode: 'DOCTOR_STATUS_DISABLED' });
+        if (oldDoc && payload.status !== undefined && payload.status !== IDoctorStatusEnum.ACTIVE && payload.status !== oldDoc.status) {
+            await sessionService.revokeAll(String(oldDoc.user_id), { reasonCode: 'DOCTOR_STATUS_DISABLED' });
         }
+        const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
         if (doc && oldDoc) {
             try {
                 const changed_fields = Object.keys(payload).filter(k => JSON.stringify((oldDoc as any)[k]) !== JSON.stringify((doc as any)[k]));

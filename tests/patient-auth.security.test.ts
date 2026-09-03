@@ -15,7 +15,6 @@ import { sanitizeCredentialData } from '../src/services/credential-sanitizer';
 import { AuthFlowStepEnum as S } from '../src/interfaces/auth-flow.interface';
 import { IAdminPermissionEnum } from '../src/interfaces/admin.interface';
 import { requireAdminPermission } from '../src/services/admin-auth-permission.service';
-import RedisClient from '../src/databases/redis';
 import { verifyPassword } from '../src/constants/hashing';
 import { hashPassword } from '../src/constants/hashing';
 import userService from '../src/services/user.service';
@@ -222,7 +221,7 @@ describe('Patient authentication contracts and security', () => {
         const createUser = spyOn(userService, 'create').mockResolvedValue({ _id: userId, phone: flow.phone, role: 'patient', status: 'active' } as never);
         spyOn(patientService, 'create').mockResolvedValue({ _id: patientId } as never);
         spyOn(AuthFlow, 'updateOne').mockReturnValue(query({}) as never); spyOn(authEventService, 'record').mockResolvedValue({} as never);
-        spyOn(RedisClient.getInstance(), 'set').mockResolvedValue();
+        spyOn(sessionService, 'create').mockResolvedValue({ accessToken: 'access-token', refreshToken: 'refresh-token', mustChangePin: false, sessionId: '12345678-1234-4234-8234-123456789012' });
         const result = await patientAuthService.createPin('flow', '123456');
         expect(result.accessToken).toBeString(); expect(result.refreshToken).toBeString();
         const payload = (createUser.mock.calls[0] as any)[0];
@@ -241,7 +240,8 @@ describe('Patient authentication contracts and security', () => {
         const save = mock(async () => {});
         const findUser = spyOn(User, 'findOne').mockReturnValue(query({ _id: objectId, phone: flow.phone, role: 'patient', status: 'active', password_hash: hash, must_change_pin: false, save }) as never);
         spyOn(Patient, 'findOne').mockReturnValue(query({ _id: new mongoose.Types.ObjectId() }) as never);
-        spyOn(AuthFlow, 'updateOne').mockReturnValue(query({}) as never); spyOn(authEventService, 'record').mockResolvedValue({} as never); spyOn(RedisClient.getInstance(), 'set').mockResolvedValue();
+        spyOn(AuthFlow, 'updateOne').mockReturnValue(query({}) as never); spyOn(authEventService, 'record').mockResolvedValue({} as never);
+        spyOn(sessionService, 'create').mockResolvedValue({ accessToken: 'access-token', refreshToken: 'refresh-token', mustChangePin: false, sessionId: '12345678-1234-4234-8234-123456789012' });
         expect((await patientAuthService.login('flow', pin)).accessToken).toBeString();
         findUser.mockReturnValue(query({ _id: objectId, phone: flow.phone, role: 'patient', status: 'active', password_hash: hash, save }) as never);
         await expect(patientAuthService.login('flow', '654321')).rejects.toThrow('غير صحيح');
@@ -299,8 +299,9 @@ describe('Patient authentication contracts and security', () => {
     test('admin PIN reset hashes the one-time PIN, forces change, revokes sessions, and audits safely', async () => {
         const patientId = new mongoose.Types.ObjectId(), userId = new mongoose.Types.ObjectId();
         spyOn(Patient, 'findById').mockReturnValue(query({ _id: patientId, user_id: userId }) as never);
+        spyOn(User, 'findOne').mockReturnValue(query({ _id: userId, phone: '07700000000', role: 'patient' }) as never);
         const update = spyOn(User, 'findOneAndUpdate').mockReturnValue(query({ _id: userId, phone: '07700000000' }) as never);
-        const redis = RedisClient.getInstance(); spyOn(redis, 'deleteByPattern').mockResolvedValue(1);
+        spyOn(sessionService, 'revokeAll').mockResolvedValue(1);
         const event = spyOn(authEventService, 'record').mockResolvedValue({} as never);
         const result = await patientAuthService.adminResetPin(patientId.toString(), 'Forgot PIN', objectId.toString());
         expect(result.temporaryPin).toMatch(/^\d{6}$/); expect(result.mustChangePin).toBe(true);
@@ -315,18 +316,22 @@ describe('Patient authentication contracts and security', () => {
         const oldHash = await hashPassword('111111');
         const user = { _id: objectId, phone: '07700000000', role: 'patient', status: 'active', password_hash: oldHash, must_change_pin: true, save: mock(async () => {}) };
         spyOn(User, 'findOne').mockReturnValue(query(user) as never);
-        const redis = RedisClient.getInstance(); spyOn(redis, 'deleteByPattern').mockResolvedValue(1); spyOn(redis, 'set').mockResolvedValue();
+        const restrictedSid = '12345678-1234-4234-8234-123456789012';
+        spyOn(sessionService, 'get').mockResolvedValue({ sid: restrictedSid, userId: objectId.toString(), role: 'patient', audience: TokenAudienceEnum.MOBILE, restricted: true, currentRefreshDigest: 'hash', createdAt: '', lastSeenAt: '', lastRefreshedAt: '', expiresAt: '', deviceName: 'Pixel' });
+        spyOn(sessionService, 'revokeAll').mockResolvedValue(1);
+        spyOn(sessionService, 'create').mockResolvedValue({ accessToken: 'new-access', refreshToken: 'new-refresh', mustChangePin: false, sessionId: '87654321-4321-4321-8321-210987654321' });
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
-        const result = await patientAuthService.changeRequiredPin(objectId.toString(), '222222');
+        const result = await patientAuthService.changeRequiredPin(objectId.toString(), restrictedSid, '222222');
         expect(result.mustChangePin).toBe(false); expect(user.must_change_pin).toBe(false);
+        expect(result.sessionId).not.toBe(restrictedSid);
         expect(await verifyPassword('222222', user.password_hash)).toBe(true);
         expect(await verifyPassword('111111', user.password_hash)).toBe(false);
         expect(user).not.toHaveProperty('password_show');
     });
 
     test('restricted reset sessions can reach PIN change but not normal patient operations', async () => {
-        const token = signAccessToken({ _id: objectId.toString(), role: 'patient', sid: '12345678-1234-4234-8234-123456789012', audience: TokenAudienceEnum.MOBILE });
-        spyOn(sessionService, 'validateAccess').mockResolvedValue({ userId: objectId.toString(), role: 'patient', audience: TokenAudienceEnum.MOBILE, restricted: true, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' });
+        const token = signAccessToken({ _id: objectId.toString(), role: 'patient', sid: '12345678-1234-4234-8234-123456789012', audience: TokenAudienceEnum.MOBILE, restricted: true });
+        spyOn(sessionService, 'validateAccess').mockResolvedValue({ sid: '12345678-1234-4234-8234-123456789012', userId: objectId.toString(), role: 'patient', audience: TokenAudienceEnum.MOBILE, restricted: true, currentRefreshDigest: 'hash', createdAt: '', lastSeenAt: '', lastRefreshedAt: '', expiresAt: '' });
         const app = new Elysia().use(AuthPlugin(TokenAudienceEnum.MOBILE))
             .get('/api/mobile/normal', () => ({ ok: true }))
             .get('/api/mobile/auth/pin/change-required', () => ({ ok: true }));

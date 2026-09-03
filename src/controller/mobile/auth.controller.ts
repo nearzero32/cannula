@@ -70,9 +70,13 @@ export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags
     .group('', (app) => app.use(AuthPlugin(TokenAudienceEnum.MOBILE)).use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))
         .post('/pin/change-required', async ({ body, phrase, set }) => {
             if (phrase.role !== IUserRoleEnum.PATIENT) { set.status = 403; return { error: true, message: 'غير مصرح لك بالوصول' }; }
-            try { return { error: false, message: 'تم تغيير الرمز السري بنجاح', data: await patientAuthService.changeRequiredPin(phrase._id, body.pin) }; }
+            try { return { error: false, message: 'تم تغيير الرمز السري بنجاح', data: await patientAuthService.changeRequiredPin(phrase._id, phrase.sid, body.pin) }; }
             catch (error) { return fail(error, set); }
         }, { body: t.Object({ pin: pinCreateSchema }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
+        .get('/sessions', async ({ phrase }) => {
+            const sessions = await sessionService.list(phrase._id);
+            return { error: false, message: 'تم جلب الجلسات بنجاح', data: sessions.map(session => ({ ...session, current: session.sid === phrase.sid })) };
+        }, { response: { 200: GenericDataResponseSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
         .post('/logout', async ({ phrase }) => {
             await sessionService.revoke(phrase._id, phrase.sid, { reasonCode: 'USER_LOGOUT' });
             return { error: false, message: 'تم تسجيل الخروج بنجاح' };

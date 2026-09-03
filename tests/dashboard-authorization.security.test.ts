@@ -45,7 +45,7 @@ function materialize(path: string) {
 
 beforeEach(() => {
     process.env.ACCESS_TOKEN_SECRET = 'test-access-secret-that-is-long-enough';
-    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ sid: payload.sid, userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshDigest: 'hash', createdAt: '', lastSeenAt: '', lastRefreshedAt: '', expiresAt: '' }));
 });
 afterEach(() => mock.restore());
 

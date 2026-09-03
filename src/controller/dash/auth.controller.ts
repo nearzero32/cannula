@@ -21,7 +21,7 @@ export const authController = new Elysia({
 
     .post(
         '/login',
-        async ({ body, set }) => {
+        async ({ body, headers, set }) => {
             const user = await userService.findByCredentials({
                 phone: body.phone,
                 password: body.password,
@@ -39,7 +39,9 @@ export const authController = new Elysia({
             }
 
             const user_id = (user._id as any).toString();
-            const tokens = await sessionService.create(user, TokenAudienceEnum.DASHBOARD);
+            const tokens = await sessionService.create(user, TokenAudienceEnum.DASHBOARD, {
+                deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform,
+            }, requestIp(headers));
 
             try {
                 await ActivityLogService.logActivity({
@@ -75,6 +77,9 @@ export const authController = new Elysia({
             body: t.Object({
                 phone: t.String({ minLength: 1 }),
                 password: t.String({ minLength: 1 }),
+                deviceId: t.Optional(t.String({ maxLength: 200 })),
+                deviceName: t.Optional(t.String({ maxLength: 200 })),
+                platform: t.Optional(t.String({ maxLength: 100 })),
             }),
             response: {
                 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 401: UnauthorizedResponseSchema,
@@ -106,7 +111,11 @@ export const authController = new Elysia({
     )
 
     .group('', (app) =>
-        app.use(AuthPlugin()).use(RoleGuardPlugin(DASHBOARD_ROLES)).post('/logout', async ({ phrase }) => {
+        app.use(AuthPlugin()).use(RoleGuardPlugin(DASHBOARD_ROLES)).get('/sessions', async ({ phrase }) => {
+            const sessions = await sessionService.list(phrase._id);
+            return { error: false, data: sessions.map(session => ({ ...session, current: session.sid === phrase.sid })) };
+        }, { response: { 200: SuccessDataWithoutMessageSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
+        .post('/logout', async ({ phrase }) => {
             await sessionService.revoke(phrase._id, phrase.sid, { reasonCode: 'USER_LOGOUT' });
 
             try {

@@ -3,6 +3,7 @@ import type { IAdmin } from '../interfaces/admin.interface';
 import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import sessionService from './session.service';
 
 class AdminService {
     private model = Admin;
@@ -97,6 +98,7 @@ class AdminService {
 
     public async update(id: string, payload: Partial<IAdmin>, meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }): Promise<AdminDocument | null> {
         const oldDoc = await this.model.findById(id).exec();
+        if (oldDoc && payload.is_active === false && oldDoc.is_active !== false) await sessionService.revokeAll(String(oldDoc.user_id), { reasonCode: 'ADMIN_STATUS_DISABLED' });
         const doc = await this.model.findByIdAndUpdate(id, payload, { returnDocument: 'after' }).exec();
         if (doc && oldDoc) {
             try {

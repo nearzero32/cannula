@@ -17,7 +17,7 @@ function request(path: string, role: 'admin' | 'doctor' | 'nurse' | 'patient') {
     return new Request(`http://localhost${path}`, { headers });
 }
 beforeEach(() => {
-    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+    spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ sid: payload.sid, userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshDigest: 'hash', createdAt: '', lastSeenAt: '', lastRefreshedAt: '', expiresAt: '' }));
     spyOn(sessionService, 'create').mockResolvedValue({ accessToken: 'access', refreshToken: 'refresh', mustChangePin: false, sessionId: '12345678-1234-4234-8234-123456789012' });
 });
 afterEach(() => mock.restore());
@@ -47,7 +47,7 @@ describe('Nurse dashboard identity and authorization', () => {
             const response = await nurseHomeCareController.handle(request('/home-care/available', IUserRoleEnum.NURSE));
             expect(response.status).toBe(403);
             mock.restore();
-            spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshHash: 'hash', createdAt: '', lastRefreshedAt: '' }));
+            spyOn(sessionService, 'validateAccess').mockImplementation(async payload => ({ sid: payload.sid, userId: payload._id, role: payload.role, audience: payload.aud, restricted: false, currentRefreshDigest: 'hash', createdAt: '', lastSeenAt: '', lastRefreshedAt: '', expiresAt: '' }));
         }
     });
 
