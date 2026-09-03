@@ -15,7 +15,7 @@ function buildMongoUri(baseUri: string): string {
     const encodedUser = encodeURIComponent(user);
     const encodedPassword = encodeURIComponent(password);
 
-    return baseUri.replace(/^mongodb:\/\//, `mongodb://${encodedUser}:${encodedPassword}@`);
+    return baseUri.replace(/^(mongodb(?:\+srv)?):\/\//, `$1://${encodedUser}:${encodedPassword}@`);
 }
 
 export function loadMongoConfigFromEnv(): IMongoDBConfig {
@@ -29,6 +29,7 @@ export function loadMongoConfigFromEnv(): IMongoDBConfig {
 
     return {
         uri,
+        options: process.env.MONGODB_TLS === 'true' ? { tls: true } : undefined,
         maxPoolSize: parseInt(process.env.MONGODB_MAX_POOL_SIZE || '10'),
         minPoolSize: parseInt(process.env.MONGODB_MIN_POOL_SIZE || '5'),
         maxIdleTimeMS: parseInt(process.env.MONGODB_MAX_IDLE_TIME_MS || '30000'),

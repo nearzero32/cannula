@@ -1,5 +1,7 @@
 node_modules
 .git
+.gitignore
+.github
 .env
 .env.*
 README.md
@@ -9,3 +11,15 @@ compose.yml
 compose.yaml
 docker-compose.yml
 docker-compose.yaml
+logs.txt
+*.log
+coverage
+dist
+build
+tests
+.vscode
+.idea
+*.pem
+*.key
+*.bak
+*.backup

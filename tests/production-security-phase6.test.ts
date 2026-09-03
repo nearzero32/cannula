@@ -1,0 +1,95 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+import Elysia from 'elysia';
+import { assertProductionConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from '../src/config/production.config';
+import { HttpSecurityPlugin } from '../src/middleware/http-security.middleware';
+import { ApiErrorPlugin } from '../src/middleware/api-error.middleware';
+import { safeSearchPattern } from '../src/services/search-safety.service';
+
+const originalNodeEnv = process.env.NODE_ENV;
+const originalPublicHttps = process.env.PUBLIC_HTTPS;
+afterEach(() => {
+    if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = originalNodeEnv;
+    if (originalPublicHttps === undefined) delete process.env.PUBLIC_HTTPS;
+    else process.env.PUBLIC_HTTPS = originalPublicHttps;
+    delete process.env.SWAGGER_ADMIN_TOKEN;
+});
+
+const validProduction = {
+    NODE_ENV: 'production',
+    ACCESS_TOKEN_SECRET: 'access-0123456789abcdef0123456789abcdef',
+    REFRESH_TOKEN_SECRET: 'refresh-0123456789abcdef0123456789abcdef',
+    OTP_HASH_SECRET: 'otp-0123456789abcdef0123456789abcdef',
+    OTP_DEBUG_RETURN_CODE: 'false',
+    ALLOWED_ORIGINS: 'https://dashboard.cannula.app,https://app.cannula.app:443',
+    MONGODB_URI: 'mongodb://app:password@mongo:27017/cannula?replicaSet=rs0&authSource=cannula',
+    MONGODB_INTERNAL_NETWORK: 'true',
+    REDIS_HOST: 'redis',
+    REDIS_PASSWORD: 'redis-password',
+    REDIS_INTERNAL_NETWORK: 'true',
+    ENABLE_SWAGGER: 'false',
+    PUBLIC_HTTPS: 'true',
+};
+
+describe('Phase 6 production configuration', () => {
+    test('accepts independent strong secrets and explicit private dependency boundaries', () => {
+        expect(() => assertProductionConfiguration(validProduction)).not.toThrow();
+    });
+
+    test('rejects weak, repeated, and debug secrets without echoing values', () => {
+        expect(() => assertProductionConfiguration({ ...validProduction, ACCESS_TOKEN_SECRET: 'short' })).toThrow('SECURITY_CONFIG_WEAK:ACCESS_TOKEN_SECRET');
+        expect(() => assertProductionConfiguration({ ...validProduction, REFRESH_TOKEN_SECRET: validProduction.ACCESS_TOKEN_SECRET })).toThrow('SECURITY_CONFIG_REUSED:AUTH_SECRETS');
+        expect(() => assertProductionConfiguration({ ...validProduction, OTP_DEBUG_RETURN_CODE: 'true' })).toThrow('OTP_DEBUG_RETURN_CODE=true');
+    });
+
+    test('rejects wildcard/non-HTTPS origins and normalizes exact origins', () => {
+        expect(() => parseAllowedOrigins({ NODE_ENV: 'production', ALLOWED_ORIGINS: '*' })).toThrow('ALLOWED_ORIGINS');
+        expect(() => parseAllowedOrigins({ NODE_ENV: 'production', ALLOWED_ORIGINS: 'http://cannula.app' })).toThrow('ALLOWED_ORIGINS');
+        expect(parseAllowedOrigins(validProduction)).toEqual(['https://dashboard.cannula.app', 'https://app.cannula.app']);
+    });
+
+    test('requires authenticated Redis and Mongo plus an explicit transport boundary', () => {
+        expect(() => assertProductionConfiguration({ ...validProduction, REDIS_PASSWORD: '' })).toThrow('REDIS_PASSWORD');
+        expect(() => assertProductionConfiguration({ ...validProduction, MONGODB_URI: 'mongodb://mongo:27017/cannula?replicaSet=rs0' })).toThrow('MONGODB_CREDENTIALS');
+        expect(() => assertProductionConfiguration({ ...validProduction, REDIS_INTERNAL_NETWORK: 'false' })).toThrow('REDIS_TRANSPORT');
+    });
+
+    test('Swagger is production-off by default and body size is bounded', () => {
+        expect(isSwaggerEnabled({ NODE_ENV: 'production' })).toBe(false);
+        expect(isSwaggerEnabled({ NODE_ENV: 'development' })).toBe(true);
+        expect(requestBodyLimitBytes({})).toBe(2 * 1024 * 1024);
+        expect(() => requestBodyLimitBytes({ REQUEST_BODY_LIMIT_BYTES: '99999999' })).toThrow('REQUEST_BODY_LIMIT_BYTES');
+    });
+
+    test('search patterns are literal and bounded', () => {
+        expect(safeSearchPattern('a.*(b)+')).toBe('a\\.\\*\\(b\\)\\+');
+        expect(() => safeSearchPattern('x'.repeat(129))).toThrow();
+        try { safeSearchPattern('x'.repeat(129)); } catch (error) { expect(error).toMatchObject({ code: 'SEARCH_TOO_LONG', status: 422 }); }
+    });
+});
+
+describe('Phase 6 HTTP boundary', () => {
+    test('adds a server request ID and restrictive headers without trusting client ID', async () => {
+        process.env.NODE_ENV = 'production';
+        process.env.PUBLIC_HTTPS = 'true';
+        const app = new Elysia({ prefix: '/api' }).use(HttpSecurityPlugin).get('/probe', () => ({ ok: true }));
+        const response = await app.handle(new Request('http://localhost/api/probe', { headers: { 'X-Request-Id': 'attacker-value' } }));
+        expect(response.headers.get('x-request-id')).toMatch(/^[0-9a-f-]{36}$/);
+        expect(response.headers.get('x-request-id')).not.toBe('attacker-value');
+        expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+        expect(response.headers.get('strict-transport-security')).toBe('max-age=31536000');
+        expect(response.headers.get('content-security-policy')).toContain("default-src 'none'");
+    });
+
+    test('unknown errors are redacted and correlated', async () => {
+        process.env.NODE_ENV = 'production';
+        process.env.PUBLIC_HTTPS = 'true';
+        const app = new Elysia({ prefix: '/api' }).use(HttpSecurityPlugin).use(ApiErrorPlugin).get('/explode', () => { throw new Error('mongodb://user:password@internal/path'); });
+        const response = await app.handle(new Request('http://localhost/api/explode'));
+        const payload = await response.json() as Record<string, unknown>;
+        expect(response.status).toBe(500);
+        expect(JSON.stringify(payload)).not.toContain('password');
+        expect(payload.code).toBe('INTERNAL_SERVER_ERROR');
+        expect(payload.requestId).toBe(response.headers.get('x-request-id'));
+    });
+});

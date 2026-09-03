@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import chronicConditionService from '../../services/chronic-condition.service';
 import { IChronicConditionStatusEnum } from '../../interfaces/chronic-condition.interface';
 import { GenericPaginatedResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
+import { safeSearchPattern } from '../../services/search-safety.service';
 
 export const mobileChronicConditionsController = new Elysia({
     prefix: '/chronic-conditions',
@@ -21,9 +22,10 @@ export const mobileChronicConditionsController = new Elysia({
             };
 
             if (query.search) {
+                const search = safeSearchPattern(query.search);
                 main_match.$or = [
-                    { name: { $regex: query.search, $options: 'i' } },
-                    { description: { $regex: query.search, $options: 'i' } },
+                    { name: { $regex: search, $options: 'i' } },
+                    { description: { $regex: search, $options: 'i' } },
                 ];
             }
 

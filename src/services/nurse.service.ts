@@ -9,6 +9,7 @@ import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import sessionService from './session.service';
 import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
+import { safeSearchPattern } from './search-safety.service';
 
 export interface NurseWriteActor { user_id: string; endpoint: string }
 
@@ -46,9 +47,9 @@ export class NurseService {
         const filter: FilterQuery<INurse> = {};
         if (query.status) filter.status = query.status;
         if (query.search?.trim()) filter.$or = [
-            { full_name: { $regex: query.search.trim(), $options: 'i' } },
-            { license_number: { $regex: query.search.trim(), $options: 'i' } },
-            { specialty: { $regex: query.search.trim(), $options: 'i' } },
+            { full_name: { $regex: safeSearchPattern(query.search), $options: 'i' } },
+            { license_number: { $regex: safeSearchPattern(query.search), $options: 'i' } },
+            { specialty: { $regex: safeSearchPattern(query.search), $options: 'i' } },
         ];
         const [data, count] = await Promise.all([
             Nurse.find(filter).populate({ path: 'qualified_service_ids', select: 'name status category_id' })

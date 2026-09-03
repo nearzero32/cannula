@@ -82,7 +82,8 @@ export const ActivityLogPlugin = new Elysia({ name: 'activity-log-plugin' })
                 user_name = `${user_type}_${phrase._id}`;
             }
 
-            const request_body = method !== 'GET' ? body : {};
+            // Production audit records keep metadata only; medical/private payloads never enter a global body log.
+            const request_body = process.env.NODE_ENV === 'production' ? {} : (method !== 'GET' ? body : {});
 
             await ActivityLogService.create({
                 user_id: user_id ? (user_id as any) : undefined,

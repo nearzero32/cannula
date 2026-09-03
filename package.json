@@ -4,7 +4,9 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "start": "bun run src/index.ts",
-    "test": "bun test"
+    "test": "bun test",
+    "typecheck": "bunx --bun typescript@5.9.3 --noEmit",
+    "build": "bun build src/index.ts --target=bun --outdir=dist"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",
@@ -14,8 +16,11 @@
     "elysia": "^1.4.28",
     "elysia-rate-limit": "^4.6.2",
     "jsonwebtoken": "^9.0.3",
-    "mongoose": "8.18.0",
+    "mongoose": "8.24.1",
     "redis": "^5.12.1"
+  },
+  "overrides": {
+    "nanoid": "5.1.16"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",

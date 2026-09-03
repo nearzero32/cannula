@@ -4,6 +4,7 @@ import mongoose from 'mongoose';
 import specialtyService from '../../services/specialty.service';
 import { ISpecialtyStatusEnum, type ISpecialty } from '../../interfaces/specialty.interface';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
+import { safeSearchPattern } from '../../services/search-safety.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -33,9 +34,10 @@ export const mobileSpecialtiesController = new Elysia({
             };
 
             if (query.search) {
+                const search = safeSearchPattern(query.search);
                 main_match.$or = [
-                    { name: { $regex: query.search, $options: 'i' } },
-                    { description: { $regex: query.search, $options: 'i' } },
+                    { name: { $regex: search, $options: 'i' } },
+                    { description: { $regex: search, $options: 'i' } },
                 ];
             }
 

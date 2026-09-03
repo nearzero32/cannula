@@ -12,7 +12,6 @@ class RedisClient {
         }
 
         const clientOptions: any = {};
-        const isProduction = process.env.NODE_ENV === 'production';
         const redisTestUrl = process.env.NODE_ENV === 'test' ? process.env.REDIS_TEST_URL : undefined;
 
         if (redisTestUrl) {
@@ -23,17 +22,18 @@ class RedisClient {
             clientOptions.url = redisTestUrl;
         }
 
-        // Build Redis URL with or without password based on environment
-        if (!redisTestUrl && isProduction && config.redis.password) {
-            clientOptions.url = `redis://:${config.redis.password}@${config.redis.host}:${config.redis.port}`;
-        } else if (!redisTestUrl) {
-            clientOptions.url = `redis://${config.redis.host}:${config.redis.port}`;
+        if (!redisTestUrl) {
+            const protocol = config.redis.tls ? 'rediss:' : 'redis:';
+            const url = new URL(`${protocol}//${config.redis.host}:${config.redis.port}`);
+            if (config.redis.username) url.username = config.redis.username;
+            if (config.redis.password) url.password = config.redis.password;
+            clientOptions.url = url.toString();
         }
 
         this.client = createClient(clientOptions);
 
-        this.client.on('error', (error) => {
-            console.error('Redis Client Error:', error);
+        this.client.on('error', () => {
+            console.error('Redis client error');
         });
 
         this.client.on('connect', () => {
@@ -82,6 +82,11 @@ class RedisClient {
 
     public async del(key: string): Promise<number> {
         return await this.client.del(key);
+    }
+
+    public async ping(): Promise<boolean> {
+        if (!this.isConnected) return false;
+        return (await this.client.ping()) === 'PONG';
     }
 
     public async deleteByPattern(pattern: string): Promise<number> {

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { safeSearchPattern } from '../../../services/search-safety.service';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
@@ -98,7 +99,7 @@ export const suggestionsController = new Elysia({
             }
 
             if (query.search) {
-                main_match.suggestion = { $regex: query.search, $options: 'i' };
+                main_match.suggestion = { $regex: safeSearchPattern(query.search), $options: 'i' };
             }
 
             const { data, count } = await suggestionService.getPaginated({

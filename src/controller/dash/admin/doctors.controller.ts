@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { safeSearchPattern } from '../../../services/search-safety.service';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
@@ -99,10 +100,11 @@ export const doctorsController = new Elysia({
                 main_match.clinic_ids = new ObjectId(query.clinic_id);
 
             if (query.search) {
+                const search = safeSearchPattern(query.search);
                 main_match.$or = [
-                    { full_name: { $regex: query.search, $options: 'i' } },
-                    { display_name: { $regex: query.search, $options: 'i' } },
-                    { license_number: { $regex: query.search, $options: 'i' } },
+                    { full_name: { $regex: search, $options: 'i' } },
+                    { display_name: { $regex: search, $options: 'i' } },
+                    { license_number: { $regex: search, $options: 'i' } },
                 ];
             }
 

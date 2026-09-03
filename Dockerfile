@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1 AS base
+FROM oven/bun:1.3.14 AS base
 WORKDIR /usr/src/app
 
 FROM base AS install
@@ -20,4 +20,6 @@ RUN chown -R bun:bun /usr/src/app
 
 USER bun
 EXPOSE 3001
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+  CMD bun -e "const r=await fetch('http://127.0.0.1:3001/api/health/live');process.exit(r.ok?0:1)"
 CMD ["bun", "run", "start"]

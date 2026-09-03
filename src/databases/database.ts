@@ -104,7 +104,7 @@ export class MongoDB {
             return this.connection;
         } catch (error) {
             this.isConnecting = false;
-            console.error('❌ MongoDB connection error:', error);
+            console.error('MongoDB connection failed');
             throw error;
         }
     }
@@ -117,8 +117,8 @@ export class MongoDB {
             console.log('🔗 Mongoose connected to MongoDB');
         });
 
-        mongoose.connection.on('error', (error) => {
-            console.error('❌ Mongoose connection error:', error);
+        mongoose.connection.on('error', () => {
+            console.error('Mongoose connection error');
         });
 
         mongoose.connection.on('disconnected', () => {
@@ -129,16 +129,6 @@ export class MongoDB {
             console.log('🔄 Mongoose reconnected to MongoDB');
         });
 
-        // Handle application termination
-        process.on('SIGINT', async () => {
-            await this.disconnect();
-            process.exit(0);
-        });
-
-        process.on('SIGTERM', async () => {
-            await this.disconnect();
-            process.exit(0);
-        });
     }
 
     /**
@@ -209,7 +199,7 @@ export class MongoDB {
     /**
      * Health check for MongoDB connection
      */
-    public async healthCheck(): Promise<{ status: string; latency?: number; error?: string }> {
+    public async healthCheck(): Promise<{ status: string; latency?: number }> {
         try {
             if (!this.isConnected() || !this.connection || !mongoose.connection.db) {
                 return { status: 'disconnected' };
@@ -224,11 +214,8 @@ export class MongoDB {
                 status: 'healthy',
                 latency,
             };
-        } catch (error) {
-            return {
-                status: 'unhealthy',
-                error: error instanceof Error ? error.message : 'Unknown error',
-            };
+        } catch {
+            return { status: 'unhealthy' };
         }
     }
 

@@ -19,18 +19,24 @@ import { ApiErrorPlugin } from './middleware/api-error.middleware';
 import { backfillHealthProfiles } from './migrations/backfill-health-profiles.migration';
 import { backfillPharmacyWorkflow } from './migrations/backfill-pharmacy-workflow.migration';
 import { assertPharmacyTransactionSupport } from './services/pharmacy-transaction.service';
-import { assertOtpDebugConfiguration } from './config/otp-debug.config';
-import { assertProductionSecurityConfiguration } from './config/security.config';
 import { rebuildAppointmentStorage } from './migrations/rebuild-appointments.migration';
 import { assertAppointmentTransactionSupport } from './services/appointment-transaction.service';
 import { normalizeDoctorBookingSettings } from './migrations/normalize-doctor-booking-settings.migration';
 import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
-import { assertTrustedProxyConfiguration } from './config/trusted-proxy.config';
+import { assertProductionConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from './config/production.config';
+import { HttpSecurityPlugin } from './middleware/http-security.middleware';
+
+const HEALTH_TIMEOUT_MS = 2_000;
+
+async function withTimeout<T>(operation: Promise<T>, timeoutMs = HEALTH_TIMEOUT_MS): Promise<T> {
+    return await Promise.race([
+        operation,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error('health check timeout')), timeoutMs)),
+    ]);
+}
 
 async function bootstrap() {
-    assertProductionSecurityConfiguration();
-    assertOtpDebugConfiguration();
-    assertTrustedProxyConfiguration();
+    assertProductionConfiguration();
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
@@ -50,14 +56,20 @@ async function bootstrap() {
     // Connect Redis
     await RedisClient.getInstance().connect();
 
+    const origins = parseAllowedOrigins();
     const app = new Elysia({
         prefix: '/api',
+        serve: {
+            port: Number(process.env.PORT || 3001),
+            hostname: process.env.HOST || '0.0.0.0',
+            maxRequestBodySize: requestBodyLimitBytes(),
+            development: process.env.NODE_ENV !== 'production',
+        },
     })
-        .use(swagger(swaggerConfig))
+        .use(HttpSecurityPlugin)
+        .use(isSwaggerEnabled() ? swagger(swaggerConfig) : new Elysia())
         .use(cors({
-            origin: process.env.ALLOWED_ORIGINS
-                ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
-                : true,
+            origin: origins.length ? origins : ['http://localhost:3000', 'http://localhost:5173'],
             methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
             allowedHeaders: ['Content-Type', 'Authorization'],
             credentials: true,
@@ -72,11 +84,47 @@ async function bootstrap() {
         }))
         .use(ActivityLogPlugin)
         .use(ApiErrorPlugin)
+        .get('/health/live', () => ({ status: 'ok' }))
+        .get('/health/ready', async ({ set }) => {
+            try {
+                const [mongo, redis] = await Promise.all([
+                    withTimeout(db.healthCheck()),
+                    withTimeout(RedisClient.getInstance().ping()),
+                ]);
+                if (mongo.status !== 'healthy' || !redis) throw new Error('dependency unavailable');
+                return { status: 'ready' };
+            } catch {
+                set.status = 503;
+                return { status: 'not_ready' };
+            }
+        })
         .use(dashboardController)
         .use(mobileController)
-        .listen(3001);
+        .listen({ port: Number(process.env.PORT || 3001), hostname: process.env.HOST || '0.0.0.0' });
 
-    console.log(`🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`);
+    console.log(JSON.stringify({ level: 'info', event: 'server_started', port: app.server?.port }));
+
+    let shuttingDown = false;
+    const shutdown = async (signal: string) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        console.log(JSON.stringify({ level: 'info', event: 'shutdown_started', signal }));
+        const force = setTimeout(() => process.exit(1), 12_000);
+        force.unref();
+        try {
+            await Promise.race([app.stop(), new Promise((_, reject) => setTimeout(() => reject(new Error('drain timeout')), 10_000))]);
+            await Promise.allSettled([RedisClient.getInstance().disconnect(), db.disconnect()]);
+            clearTimeout(force);
+            process.exit(0);
+        } catch {
+            process.exit(1);
+        }
+    };
+    process.once('SIGTERM', () => void shutdown('SIGTERM'));
+    process.once('SIGINT', () => void shutdown('SIGINT'));
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+    console.error(JSON.stringify({ level: 'fatal', event: 'startup_failed', errorType: error instanceof Error ? error.name : 'unknown' }));
+    process.exit(1);
+});

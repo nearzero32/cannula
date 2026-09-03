@@ -1,9 +1,6 @@
 import Elysia from 'elysia';
-import fs from 'fs';
-import path from 'path';
 import { resolveClientIp } from '../services/client-ip.service';
 
-const logStream = fs.createWriteStream(path.resolve('logs.txt'), { flags: 'a' });
 const reqStartMap = new WeakMap<Request, number>();
 const reqIpMap = new WeakMap<Request, string>();
 
@@ -11,12 +8,7 @@ function writeMorganLine(request: Request, status: number, responseTimeMs: numbe
     const date = new Date().toUTCString();
     const method = request.method;
     const url = new URL(request.url).pathname;
-    const userAgent = request.headers.get('user-agent') ?? '-';
-    const referrer = request.headers.get('referer') ?? '-';
-
-    // morgan combined format
-    const line = `${ip} - - [${date}] "${method} ${url}" ${status} - "${referrer}" "${userAgent}"\n`;
-    logStream.write(line);
+    console.log(JSON.stringify({ timestamp: date, method, path: url, status, responseTimeMs, clientIp: ip }));
 }
 
 export const ActivityLoggerPlugin = new Elysia({ name: 'activity-logger-plugin' })

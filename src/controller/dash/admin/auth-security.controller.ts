@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { safeSearchPattern } from '../../../services/search-safety.service';
 import mongoose from 'mongoose';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import authEventService from '../../../services/auth-event.service';
@@ -20,7 +21,7 @@ export const authSecurityController = new Elysia({ prefix: '/auth-security', det
         try {
             await requireAdminPermission(phrase.role, phrase._id, IAdminPermissionEnum.VIEW_AUTH_AUDIT);
             const match: Record<string, unknown> = {};
-            if (query.phone) match.phone = { $regex: query.phone, $options: 'i' };
+            if (query.phone) match.phone = { $regex: safeSearchPattern(query.phone), $options: 'i' };
             if (query.flowId) match.flow_id = query.flowId;
             if (query.type) match.type = query.type;
             if (query.success !== undefined) match.success = query.success;

@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { safeSearchPattern } from '../../../services/search-safety.service';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
@@ -47,10 +48,11 @@ export const activityLogController = new Elysia({
             }
 
             if (query.search) {
+                const search = safeSearchPattern(query.search);
                 main_match.$or = [
-                    { user_name: { $regex: query.search, $options: 'i' } },
-                    { endpoint: { $regex: query.search, $options: 'i' } },
-                    { collection_name: { $regex: query.search, $options: 'i' } },
+                    { user_name: { $regex: search, $options: 'i' } },
+                    { endpoint: { $regex: search, $options: 'i' } },
+                    { collection_name: { $regex: search, $options: 'i' } },
                 ];
             }
 

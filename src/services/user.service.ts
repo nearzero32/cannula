@@ -25,7 +25,7 @@ class UserService {
         limit?: number;
     }): Promise<{ data: UserDocument[]; count: number }> {
         const safePage = Math.max(1, page);
-        const safeLimit = Math.max(1, limit);
+        const safeLimit = Math.min(100, Math.max(1, limit));
         const skip = (safePage - 1) * safeLimit;
 
         const pipeline: PipelineStage[] = [

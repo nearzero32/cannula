@@ -10,6 +10,7 @@ import {
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 import { doctorSpecialtyMap } from '../../services/doctor-specialty.service';
 import Specialty from '../../models/specialties.model';
+import { safeSearchPattern } from '../../services/search-safety.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -74,9 +75,10 @@ export const mobileDoctorsController = new Elysia({
             }
 
             if (query.search) {
-                const matchingSpecialties = await Specialty.find({ name: { $regex: query.search, $options: 'i' } }).select('_id').lean().exec();
+                const search = safeSearchPattern(query.search);
+                const matchingSpecialties = await Specialty.find({ name: { $regex: search, $options: 'i' } }).select('_id').lean().exec();
                 main_match.$or = [
-                    { display_name: { $regex: query.search, $options: 'i' } },
+                    { display_name: { $regex: search, $options: 'i' } },
                     ...(matchingSpecialties.length ? [{ specialty_ids: { $in: matchingSpecialties.map(item => item._id) } }] : []),
                 ];
             }

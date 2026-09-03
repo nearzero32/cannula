@@ -1,4 +1,5 @@
 import Elysia, { t } from 'elysia';
+import { safeSearchPattern } from '../../../services/search-safety.service';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
 import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
@@ -68,10 +69,11 @@ export const adsController = new Elysia({
             }
 
             if (query.search) {
+                const search = safeSearchPattern(query.search);
                 andConditions.push({
                     $or: [
-                        { title: { $regex: query.search, $options: 'i' } },
-                        { description: { $regex: query.search, $options: 'i' } },
+                        { title: { $regex: search, $options: 'i' } },
+                        { description: { $regex: search, $options: 'i' } },
                     ],
                 });
             }

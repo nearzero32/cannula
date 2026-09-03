@@ -6,6 +6,13 @@ services:
     init: true
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,noexec,nosuid
+    mem_limit: 768m
+    cpus: 1.0
     env_file: .env
     ports:
       - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
@@ -21,56 +28,69 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    healthcheck:
+      test: ["CMD", "bun", "-e", "const r=await fetch('http://127.0.0.1:3001/api/health/ready');process.exit(r.ok?0:1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   mongo:
-    image: mongo:8
+    image: mongo:8.2.12
     container_name: ur-menu-mongo
     restart: unless-stopped
     mem_limit: 1500m
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: cannula
+    secrets:
+      - mongo_keyfile
+    entrypoint: ["bash", "-ec"]
     command:
-      - mongod
-      - --bind_ip_all
-      - --replSet
-      - ${MONGODB_REPLICA_SET_NAME:-rs0}
-      - --wiredTigerCacheSizeGB
-      - "0.75"
+      - |
+        cp /run/secrets/mongo_keyfile /tmp/mongo-keyfile
+        chown mongodb:mongodb /tmp/mongo-keyfile
+        chmod 400 /tmp/mongo-keyfile
+        exec docker-entrypoint.sh mongod --bind_ip_all --replSet "${MONGODB_REPLICA_SET_NAME:-rs0}" --keyFile /tmp/mongo-keyfile --wiredTigerCacheSizeGB 0.75
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' localhost:27017/admin | grep 1"]
+      test: ["CMD-SHELL", "mongosh --quiet --username \"$$MONGO_INITDB_ROOT_USERNAME\" --password \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval 'db.adminCommand({ ping: 1 }).ok' localhost:27017/admin | grep 1"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 20s
 
   mongo-init:
-    image: mongo:8
+    image: mongo:8.2.12
     container_name: cannula-mongo-init
     restart: "no"
     depends_on:
       mongo:
         condition: service_healthy
-    entrypoint:
-      - mongosh
-      - --host
-      - mongo:27017
-      - --quiet
-      - --eval
+    environment:
+      MONGODB_ROOT_USER: ${MONGODB_ROOT_USER}
+      MONGODB_ROOT_PASSWORD: ${MONGODB_ROOT_PASSWORD}
+      MONGODB_USER: ${MONGODB_USER}
+      MONGODB_PASSWORD: ${MONGODB_PASSWORD}
+      MONGODB_REPLICA_SET_NAME: ${MONGODB_REPLICA_SET_NAME:-rs0}
+    entrypoint: ["bash", "-ec"]
+    command:
       - |
-        const replicaSet = "${MONGODB_REPLICA_SET_NAME:-rs0}";
-        try { rs.status(); } catch (error) {
-          rs.initiate({_id: replicaSet, members: [{_id: 0, host: "mongo:27017"}]});
-        }
-        while (!db.hello().isWritablePrimary) { sleep(500); }
+        AUTH=(--host mongo:27017 --quiet --username "$$MONGODB_ROOT_USER" --password "$$MONGODB_ROOT_PASSWORD" --authenticationDatabase admin)
+        mongosh "$${AUTH[@]}" --eval 'try { rs.status() } catch (error) { rs.initiate({_id: process.env.MONGODB_REPLICA_SET_NAME, members: [{_id: 0, host: "mongo:27017"}]}) }'
+        until mongosh "$${AUTH[@]}" --eval 'quit(db.hello().isWritablePrimary ? 0 : 1)'; do sleep 1; done
+        mongosh "$${AUTH[@]}" --eval 'const target=db.getSiblingDB("cannula"); if (!target.getUser(process.env.MONGODB_USER)) target.createUser({user:process.env.MONGODB_USER,pwd:process.env.MONGODB_PASSWORD,roles:[{role:"readWrite",db:"cannula"}]})'
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.11-alpine
     container_name: ur-menu-redis
     restart: unless-stopped
     mem_limit: 256m
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
     volumes:
       - redis_data:/data
     healthcheck:
@@ -83,3 +103,7 @@ services:
 volumes:
   mongo_data:
   redis_data:
+
+secrets:
+  mongo_keyfile:
+    file: ${MONGODB_KEYFILE_PATH:-./secrets/mongo-keyfile}

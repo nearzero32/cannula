@@ -6,6 +6,7 @@ import { APPOINTMENT_DAILY_CAP_COUNTING_STATUSES, AppointmentActorTypeEnum, IApp
 import { DEFAULT_MAX_APPOINTMENTS_PER_DAY } from '../interfaces/doctor.interface';
 import { minutesUntil, toBaghdadLocal } from './appointment-time.service';
 import { DomainError } from './domain-error';
+import { safeSearchPattern } from './search-safety.service';
 
 export interface AppointmentListQuery {
     page?: number; limit?: number; doctorId?: string; clinicId?: string; patientId?: string; childId?: string;
@@ -90,7 +91,7 @@ export class AppointmentService {
         if (query.view === 'upcoming') filter.starts_at = { ...(filter.starts_at ?? {}), $gte: now };
         if (query.view === 'past') filter.starts_at = { ...(filter.starts_at ?? {}), $lt: now };
         if (query.view === 'cancelled') filter.status = IAppointmentStatusEnum.CANCELLED;
-        if (query.search?.trim()) filter.$or = [{ appointment_number: { $regex: query.search.trim(), $options: 'i' } }, { 'snapshot.beneficiary.display_name': { $regex: query.search.trim(), $options: 'i' } }, { 'snapshot.doctor.display_name': { $regex: query.search.trim(), $options: 'i' } }];
+        if (query.search?.trim()) { const search = safeSearchPattern(query.search); filter.$or = [{ appointment_number: { $regex: search, $options: 'i' } }, { 'snapshot.beneficiary.display_name': { $regex: search, $options: 'i' } }, { 'snapshot.doctor.display_name': { $regex: search, $options: 'i' } }]; }
         const [data, count] = await Promise.all([Appointment.find(filter).sort({ starts_at: query.view === 'upcoming' ? 1 : -1 }).skip((page - 1) * limit).limit(limit).exec(), Appointment.countDocuments(filter).exec()]);
         return { data, count, page, limit };
     }
