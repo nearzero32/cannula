@@ -13,11 +13,20 @@ class RedisClient {
 
         const clientOptions: any = {};
         const isProduction = process.env.NODE_ENV === 'production';
+        const redisTestUrl = process.env.NODE_ENV === 'test' ? process.env.REDIS_TEST_URL : undefined;
+
+        if (redisTestUrl) {
+            const parsed = new URL(redisTestUrl);
+            if (!['127.0.0.1', 'localhost', '::1'].includes(parsed.hostname) || !parsed.port || parsed.port === '6379') {
+                throw new Error('REDIS_TEST_URL must use loopback and an explicit non-default port');
+            }
+            clientOptions.url = redisTestUrl;
+        }
 
         // Build Redis URL with or without password based on environment
-        if (isProduction && config.redis.password) {
+        if (!redisTestUrl && isProduction && config.redis.password) {
             clientOptions.url = `redis://:${config.redis.password}@${config.redis.host}:${config.redis.port}`;
-        } else {
+        } else if (!redisTestUrl) {
             clientOptions.url = `redis://${config.redis.host}:${config.redis.port}`;
         }
 

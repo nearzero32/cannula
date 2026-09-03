@@ -151,6 +151,15 @@ end
 return result
 `;
 
+/** Exported for real-Redis compatibility tests; application code uses SessionService methods. */
+export const sessionLuaScripts = {
+    create: CREATE_SESSION_SCRIPT,
+    rotate: ROTATE_REFRESH_SCRIPT,
+    revoke: REVOKE_SESSION_SCRIPT,
+    revokeAll: REVOKE_ALL_SCRIPT,
+    list: LIST_SESSIONS_SCRIPT,
+} as const;
+
 const digestJti = (jti: string) => crypto.createHash('sha256').update(jti).digest('hex');
 export function audienceForRole(role: IUserRole): TokenAudience {
     return role === 'patient' ? TokenAudienceEnum.MOBILE : TokenAudienceEnum.DASHBOARD;
