@@ -3,6 +3,7 @@ import ActivityLogService from '../services/activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import type { IUserRole } from '../interfaces/user.interface';
 import { resolveClientIp } from '../services/client-ip.service';
+import { sanitizeCredentialData } from '../services/credential-sanitizer';
 
 function getSource(path: string): string {
     if (path.startsWith('/dash') || path.startsWith('/auth')) return IActivityLogSourceEnum.DASHBOARD;
@@ -83,7 +84,7 @@ export const ActivityLogPlugin = new Elysia({ name: 'activity-log-plugin' })
             }
 
             // Production audit records keep metadata only; medical/private payloads never enter a global body log.
-            const request_body = process.env.NODE_ENV === 'production' ? {} : (method !== 'GET' ? body : {});
+            const request_body = process.env.NODE_ENV === 'production' ? {} : (method !== 'GET' ? sanitizeCredentialData(body) : {});
 
             await ActivityLogService.create({
                 user_id: user_id ? (user_id as any) : undefined,

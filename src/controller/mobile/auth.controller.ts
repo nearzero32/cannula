@@ -20,6 +20,10 @@ export const authStartBodySchema = t.Object({ phone: phoneSchema }, { additional
 export const otpVerifyBodySchema = t.Object({ flowId: flowSchema, otp: otpSchema }, { additionalProperties: false });
 export const pinCreateBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
 export const pinLoginBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
+export const pinForgotStartBodySchema = t.Object({ phone: phoneSchema }, { additionalProperties: false });
+export const pinForgotResendBodySchema = t.Object({ flowId: flowSchema }, { additionalProperties: false });
+export const pinForgotVerifyBodySchema = t.Object({ flowId: flowSchema, otp: otpSchema }, { additionalProperties: false });
+export const pinForgotResetBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, confirmPin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
 const debugOtpSchema = t.Optional(t.String({
     pattern: '^\\d{6}$',
     description: 'Development/testing only. Returned only when NODE_ENV is not production and OTP_DEBUG_RETURN_CODE=true; never returned in production.',
@@ -57,6 +61,22 @@ export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags
         try { return { error: false, message: 'تم التحقق من رقم الهاتف', data: await patientAuthService.verifyOtp(body.flowId, body.otp, resolveClientIp(request,server)) }; }
         catch (error) { return fail(error, set); }
     }, { body: otpVerifyBodySchema, response: { 200: GenericDataResponseSchema, ...errors } })
+    .post('/pin/forgot/start', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم بدء استعادة الرمز السري', data: await patientAuthService.startPinRecovery(body.phone, { ip: resolveClientIp(request, server) }) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: pinForgotStartBodySchema, detail: { description: 'يبدأ تدفق استعادة PIN لمريض نشط فقط. يرسل OTP من 6 أرقام؛ debugOtp للتطوير فقط ولا يظهر في production.' }, response: { 200: OtpResendResponseSchema, ...errors } })
+    .post('/pin/forgot/resend', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم إرسال رمز تحقق جديد لاستعادة الرمز السري', data: await patientAuthService.resendPinRecovery(body.flowId, resolveClientIp(request, server)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: pinForgotResendBodySchema, detail: { description: 'يعيد إرسال OTP الاستعادة بعد 45 ثانية، وبحد أقصى 3 مرات. الرد المحدود يتضمن Retry-After وretryAfterSeconds.' }, response: { 200: OtpResendResponseSchema, ...errors } })
+    .post('/pin/forgot/verify', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تم التحقق من رمز استعادة الرمز السري', data: await patientAuthService.verifyPinRecoveryOtp(body.flowId, body.otp, resolveClientIp(request, server)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: pinForgotVerifyBodySchema, detail: { description: 'يتحقق من OTP الاستعادة لمرة واحدة فقط ولا ينشئ جلسة قبل اختيار PIN جديد.' }, response: { 200: GenericDataResponseSchema, ...errors } })
+    .post('/pin/forgot/reset', async ({ body, request, server, set }) => {
+        try { return { error: false, message: 'تمت استعادة الرمز السري وتسجيل الدخول بنجاح', data: await patientAuthService.resetRecoveredPin(body.flowId, body.pin, body.confirmPin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, resolveClientIp(request, server)) }; }
+        catch (error) { return fail(error, set); }
+    }, { body: pinForgotResetBodySchema, detail: { description: 'يتطلب OTP استعادة تم التحقق منه وPIN من 6 أرقام متطابقة. يلغي كل الجلسات السابقة ثم يصدر جلسة مريض جديدة غير مقيّدة.' }, response: { 200: GenericDataResponseSchema, ...errors } })
     .post('/pin/create', async ({ body, request, server, set }) => {
         try { set.status = 201; return { error: false, message: 'تم إنشاء الحساب وتسجيل الدخول بنجاح', data: await patientAuthService.createPin(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, resolveClientIp(request,server)) }; }
         catch (error) { return fail(error, set); }

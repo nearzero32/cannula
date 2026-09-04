@@ -1,10 +1,12 @@
 import mongoose, { Schema, model, models } from 'mongoose';
-import { AuthFlowStepEnum, type IAuthFlow } from '../interfaces/auth-flow.interface';
+import { AuthFlowPurposeEnum, AuthFlowStepEnum, type IAuthFlow } from '../interfaces/auth-flow.interface';
 
 export type AuthFlowDocument = mongoose.Document & IAuthFlow;
 const schema = new Schema({
     flow_id: { type: String, required: true, unique: true },
     phone: { type: String, required: true, index: true },
+    purpose: { type: String, enum: Object.values(AuthFlowPurposeEnum), default: AuthFlowPurposeEnum.REGISTRATION, required: true },
+    is_current: { type: Boolean, default: false },
     step: { type: String, enum: Object.values(AuthFlowStepEnum), required: true },
     user_id: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     patient_id: { type: Schema.Types.ObjectId, ref: 'Patient', default: null },
@@ -18,4 +20,6 @@ const schema = new Schema({
 }, { timestamps: true, versionKey: false });
 schema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 schema.index({ phone: 1, createdAt: -1 });
+schema.index({ phone: 1, purpose: 1, expires_at: 1 });
+schema.index({ phone: 1, purpose: 1, is_current: 1 }, { unique: true, partialFilterExpression: { purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true } });
 export default (models.AuthFlow as mongoose.Model<AuthFlowDocument>) || model<AuthFlowDocument>('AuthFlow', schema);

@@ -4,15 +4,25 @@ import type { IBaseDocument } from './common.interface';
 export const AuthFlowStepEnum = {
     OTP: 'OTP',
     CREATE_PIN: 'CREATE_PIN',
+    RESET_PIN: 'RESET_PIN',
     PIN: 'PIN',
     COMPLETED: 'COMPLETED',
     LOCKED: 'LOCKED',
 } as const;
 export type AuthFlowStep = (typeof AuthFlowStepEnum)[keyof typeof AuthFlowStepEnum];
 
+export const AuthFlowPurposeEnum = {
+    REGISTRATION: 'REGISTRATION',
+    PIN_RECOVERY: 'PIN_RECOVERY',
+} as const;
+export type AuthFlowPurpose = (typeof AuthFlowPurposeEnum)[keyof typeof AuthFlowPurposeEnum];
+
 export interface IAuthFlow extends IBaseDocument {
     flow_id: string;
     phone: string;
+    purpose: AuthFlowPurpose;
+    /** Recovery flows use this claim to guarantee a single currently usable flow per phone. */
+    is_current?: boolean;
     step: AuthFlowStep;
     user_id?: mongoose.Types.ObjectId | null;
     patient_id?: mongoose.Types.ObjectId | null;
@@ -35,6 +45,9 @@ export const AuthEventTypeEnum = {
     PHONE_STARTED: 'PHONE_STARTED', OTP_REQUESTED: 'OTP_REQUESTED', OTP_SENT: 'OTP_SENT',
     OTP_SEND_FAILED: 'OTP_SEND_FAILED', OTP_RESENT: 'OTP_RESENT', OTP_VERIFICATION_FAILED: 'OTP_VERIFICATION_FAILED',
     OTP_VERIFIED: 'OTP_VERIFIED', OTP_EXPIRED: 'OTP_EXPIRED', OTP_RATE_LIMITED: 'OTP_RATE_LIMITED',
+    PIN_RECOVERY_STARTED: 'PIN_RECOVERY_STARTED', PIN_RECOVERY_OTP_SENT: 'PIN_RECOVERY_OTP_SENT',
+    PIN_RECOVERY_OTP_RESENT: 'PIN_RECOVERY_OTP_RESENT', PIN_RECOVERY_OTP_FAILED: 'PIN_RECOVERY_OTP_FAILED',
+    PIN_RECOVERY_OTP_VERIFIED: 'PIN_RECOVERY_OTP_VERIFIED', PIN_RECOVERY_COMPLETED: 'PIN_RECOVERY_COMPLETED',
     ACCOUNT_CREATION_STARTED: 'ACCOUNT_CREATION_STARTED', ACCOUNT_CREATED: 'ACCOUNT_CREATED', PIN_CREATED: 'PIN_CREATED',
     LOGIN_ATTEMPT: 'LOGIN_ATTEMPT', LOGIN_SUCCESS: 'LOGIN_SUCCESS', LOGIN_FAILED: 'LOGIN_FAILED', LOGIN_RATE_LIMITED: 'LOGIN_RATE_LIMITED',
     SUPPORT_OTP_ISSUED: 'SUPPORT_OTP_ISSUED', SUPPORT_OTP_USED: 'SUPPORT_OTP_USED', SUPPORT_OTP_EXPIRED: 'SUPPORT_OTP_EXPIRED',
