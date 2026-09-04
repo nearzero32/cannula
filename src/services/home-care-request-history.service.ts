@@ -1,11 +1,15 @@
-import mongoose from 'mongoose';
+import mongoose, { type ClientSession } from 'mongoose';
 import HomeCareRequestHistory from '../models/home-care-request-history.model';
 import type { IHomeCareRequestHistory } from '../interfaces/home-care-request-history.interface';
 
 export class HomeCareRequestHistoryService {
-    public async append(payload: Omit<IHomeCareRequestHistory, '_id' | 'createdAt'>): Promise<void> {
+    public async append(payload: Omit<IHomeCareRequestHistory, '_id' | 'createdAt'>, options?: { session?: ClientSession; critical?: boolean }): Promise<void> {
+        if (options?.critical) {
+            await HomeCareRequestHistory.create([payload], { session: options.session });
+            return;
+        }
         for (let attempt = 0; attempt < 2; attempt += 1) {
-            try { await HomeCareRequestHistory.create(payload); return; }
+            try { await HomeCareRequestHistory.create([payload], { session: options?.session }); return; }
             catch (error) {
                 if (attempt === 1 && process.env.NODE_ENV !== 'test') console.error('[CRITICAL] Home Care request history append failed', { request_id: String(payload.request_id), event_type: payload.event_type, error });
             }

@@ -156,8 +156,9 @@ export const homeCareRequestsAdminController = new Elysia({
             ...ProtectedApiErrorResponses,
         },
     })
-    .get('/:id/history', async ({ params, phrase }) => {
+    .get('/:id/history', async ({ params, phrase, set }) => {
         await requireOperationalAccess(phrase._id, phrase.role);
+        if (!mongoose.Types.ObjectId.isValid(params.id)) { set.status = 400; return { error: true, message: 'معرف الطلب غير صالح' }; }
         const request = await homeCareRequestService.getForDashboard(params.id);
         if (!request) throw new DomainError('الطلب غير موجود', 404);
         const history = await homeCareRequestHistoryService.list(params.id);
@@ -182,6 +183,11 @@ export const homeCareRequestsAdminController = new Elysia({
         await requireOperationalAccess(phrase._id, phrase.role);
         const request = await homeCareDispatchService.reopen(params.id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/reopen`));
         return { error: false, message: 'تم إعادة فتح الطلب بنجاح', data: formatHomeCareRequestForDashboard(request) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ reason: t.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
+    .patch('/:id/reject', async ({ params, body, phrase }) => {
+        await requireOperationalAccess(phrase._id, phrase.role);
+        const request = await homeCareRequestService.rejectForAdmin(params.id, body.reason, adminActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/reject`));
+        return { error: false, message: 'تم رفض طلب الرعاية المنزلية', data: formatHomeCareRequestForDashboard(request) };
     }, { params: t.Object({ id: t.String() }), body: t.Object({ reason: t.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } })
     .patch('/:id/status', async ({ params, body, phrase, set }) => {
         await requireOperationalAccess(phrase._id, phrase.role);
