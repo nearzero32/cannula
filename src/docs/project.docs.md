@@ -412,14 +412,13 @@ Purpose: promotional banners shown in the mobile app.
 ```ts
 type Ads = {
   _id: string;
-  title?: string;
-  description?: string;
+  title: string | null;
+  description: string | null;
   image: string;
-  link?: string;
-  clinic_id?: string;
-  doctor_id?: string;
   status: "active" | "inactive";
-  end_date?: Date;
+  sort_order: number;
+  start_date: Date | null;
+  end_date: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };

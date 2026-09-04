@@ -18,22 +18,6 @@ const adsSchema = new Schema<AdsDocument>(
             type: String,
             required: true
         },
-        link: {
-            type: String,
-            default: null
-        },
-        doctor_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'User',
-            required: false,
-            default: null
-        },
-        clinic_id: {
-            type: Schema.Types.ObjectId,
-            ref: 'Clinic',
-            required: false,
-            default: null
-        },
         status: {
             type: String,
             enum: Object.values(IAdsStatusEnum),
@@ -41,12 +25,23 @@ const adsSchema = new Schema<AdsDocument>(
         },
 
 
-        end_date: { type: Date, default: null },
+        sort_order: { type: Number, required: true, default: 1000, min: 0, validate: { validator: Number.isInteger, message: 'sort_order must be an integer' } },
+        start_date: { type: Date, default: null },
+        end_date: {
+            type: Date,
+            default: null,
+            validate: {
+                validator(this: AdsDocument, value: Date | null) {
+                    return !value || !this.start_date || this.start_date <= value;
+                },
+                message: 'start_date must be before or equal to end_date',
+            },
+        },
     },
     { timestamps: true, versionKey: false }
 );
 
-adsSchema.index({ clinic_id: 1, status: 1, createdAt: -1 });
+adsSchema.index({ status: 1, sort_order: 1, _id: 1 });
 
 export const Ads =
     (models.Ads as mongoose.Model<AdsDocument>) ||

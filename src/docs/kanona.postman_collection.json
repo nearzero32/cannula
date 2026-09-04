@@ -453,7 +453,7 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{baseUrl}}/dash/admin/ads?page=1&limit=10&clinic_id=&status=active&search=",
+                  "raw": "{{baseUrl}}/dash/admin/ads?page=1&limit=10&status=active&search=",
                   "host": ["{{baseUrl}}"],
                   "path": ["dash", "admin", "ads"],
                   "query": [
@@ -464,10 +464,6 @@
                     {
                       "key": "limit",
                       "value": "10"
-                    },
-                    {
-                      "key": "clinic_id",
-                      "value": ""
                     },
                     {
                       "key": "status",
@@ -514,7 +510,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"title\": \"Summer Offer\",\n  \"description\": \"20% discount\",\n  \"image\": \"https://example.com/ad.png\",\n  \"link\": \"https://example.com\",\n  \"clinic_id\": \"{{clinic_id}}\",\n  \"end_date\": \"2026-12-31T23:59:59.000Z\"\n}"
+                  "raw": "{\n  \"title\": \"Summer Offer\",\n  \"description\": \"20% discount\",\n  \"image\": \"https://example.com/ad.png\",\n  \"start_date\": \"2026-09-01T00:00:00.000Z\",\n  \"end_date\": \"2026-12-31T23:59:59.000Z\",\n  \"sort_order\": 1000\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/dash/admin/ads",
@@ -951,7 +947,7 @@
           "request": {
             "method": "GET",
             "url": {
-              "raw": "{{baseUrl}}/mobile/ads?page=1&limit=10&clinic_id=",
+              "raw": "{{baseUrl}}/mobile/ads?page=1&limit=10",
               "host": ["{{baseUrl}}"],
               "path": ["mobile", "ads"],
               "query": [
@@ -962,10 +958,6 @@
                 {
                   "key": "limit",
                   "value": "10"
-                },
-                {
-                  "key": "clinic_id",
-                  "value": ""
                 }
               ]
             }

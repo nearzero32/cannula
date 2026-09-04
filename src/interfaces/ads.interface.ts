@@ -1,4 +1,3 @@
-import mongoose from 'mongoose';
 import type { ITimestamps } from './common.interface';
 
 export const IAdsStatusEnum = {
@@ -12,9 +11,8 @@ export interface IAds extends ITimestamps {
     title: string | null;
     description: string | null;
     image: string;
-    link: string | null;
-    clinic_id: mongoose.Types.ObjectId | null;
-    doctor_id: mongoose.Types.ObjectId | null;
     status: IAdsStatus;
+    sort_order: number;
+    start_date: Date | null;
     end_date: Date | null;
 }
