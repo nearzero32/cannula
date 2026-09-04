@@ -12,7 +12,7 @@ import patientAuthService, { normalizePhone, PIN_PATTERN } from '../src/services
 import authEventService from '../src/services/auth-event.service';
 import otpDeliveryService from '../src/services/otp-delivery.service';
 import { sanitizeCredentialData } from '../src/services/credential-sanitizer';
-import { AuthFlowStepEnum as S } from '../src/interfaces/auth-flow.interface';
+import { AuthFlowPurposeEnum as P, AuthFlowStepEnum as S } from '../src/interfaces/auth-flow.interface';
 import { IAdminPermissionEnum } from '../src/interfaces/admin.interface';
 import { requireAdminPermission } from '../src/services/admin-auth-permission.service';
 import { verifyPassword } from '../src/constants/hashing';
@@ -33,6 +33,7 @@ const query = <T>(value: T) => ({ select() { return this; }, sort() { return thi
 const objectId = new mongoose.Types.ObjectId();
 const originalNodeEnv = process.env.NODE_ENV;
 const originalOtpDebug = process.env.OTP_DEBUG_RETURN_CODE;
+const normalAuthFlow = <T extends Record<string, unknown>>(flow: T) => ({ purpose: P.REGISTRATION, ...flow });
 
 beforeEach(() => {
     process.env.ACCESS_TOKEN_SECRET = 'test-access-secret-that-is-long-enough';
@@ -53,8 +54,8 @@ afterEach(() => {
 function arrangeNewPhoneStart() {
     spyOn(AuthFlow, 'countDocuments').mockReturnValue(query(0) as never);
     spyOn(User, 'findOne').mockReturnValue(query(null) as never);
-    spyOn(AuthFlow, 'create').mockResolvedValue({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.OTP } as never);
-    const update = spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.OTP }) as never);
+    spyOn(AuthFlow, 'create').mockResolvedValue(normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.OTP }) as never);
+    const update = spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query(normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.OTP })) as never);
     const event = spyOn(authEventService, 'record').mockResolvedValue({} as never);
     let delivered = '';
     spyOn(otpDeliveryService, 'send').mockImplementation(async (_phone, otp) => { delivered = otp; });
@@ -81,7 +82,7 @@ describe('Patient authentication contracts and security', () => {
     test('existing patient phone returns PIN without sending OTP', async () => {
         spyOn(AuthFlow, 'countDocuments').mockReturnValue(query(0) as never);
         spyOn(User, 'findOne').mockReturnValue(query({ _id: objectId }) as never);
-        spyOn(AuthFlow, 'create').mockResolvedValue({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.PIN } as never);
+        spyOn(AuthFlow, 'create').mockResolvedValue(normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.PIN }) as never);
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
         const send = spyOn(otpDeliveryService, 'send').mockResolvedValue();
         const result = await patientAuthService.start('07700000000');
@@ -118,7 +119,7 @@ describe('Patient authentication contracts and security', () => {
         const result = await patientAuthService.start('07700000000');
         if (result.nextStep !== S.OTP) throw new Error('Expected OTP step');
         const mutation = (update.mock.calls[0] as any)[1];
-        const verificationFlow = { _id: objectId, flow_id: result.flowId, phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: mutation.$set.otp_hash, otp_expires_at: mutation.$set.otp_expires_at, otp_attempts: 0 };
+        const verificationFlow = normalAuthFlow({ _id: objectId, flow_id: result.flowId, phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: mutation.$set.otp_hash, otp_expires_at: mutation.$set.otp_expires_at, otp_attempts: 0 });
         spyOn(AuthFlow, 'findOne').mockReturnValue(query(verificationFlow) as never);
         spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query({ ...verificationFlow, step: S.CREATE_PIN }) as never);
         expect(result.debugOtp).toMatch(/^\d{6}$/);
@@ -148,7 +149,7 @@ describe('Patient authentication contracts and security', () => {
         process.env.NODE_ENV = 'development'; process.env.OTP_DEBUG_RETURN_CODE = 'true';
         spyOn(AuthFlow, 'countDocuments').mockReturnValue(query(0) as never);
         spyOn(User, 'findOne').mockReturnValue(query({ _id: objectId }) as never);
-        spyOn(AuthFlow, 'create').mockResolvedValue({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.PIN } as never);
+        spyOn(AuthFlow, 'create').mockResolvedValue(normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', resend_count: 0, step: S.PIN }) as never);
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
         const send = spyOn(otpDeliveryService, 'send').mockResolvedValue();
         const result = await patientAuthService.start('07700000000');
@@ -160,7 +161,7 @@ describe('Patient authentication contracts and security', () => {
         process.env.NODE_ENV = 'development'; process.env.OTP_DEBUG_RETURN_CODE = 'true';
         spyOn(crypto, 'randomInt').mockReturnValue(739204 as never);
         const oldHash = crypto.createHmac('sha256', process.env.OTP_HASH_SECRET || process.env.ACCESS_TOKEN_SECRET!).update('111111').digest('hex');
-        const flow = { _id: objectId, flow_id: 'flow-id-12345678901234567890', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), resend_count: 0, otp_hash: oldHash };
+        const flow = normalAuthFlow({ _id: objectId, flow_id: 'flow-id-12345678901234567890', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), resend_count: 0, otp_hash: oldHash });
         spyOn(AuthFlow, 'findOne').mockReturnValue(query(flow) as never);
         const update = spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query({ ...flow, otp_hash: 'new' }) as never);
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
@@ -176,7 +177,7 @@ describe('Patient authentication contracts and security', () => {
     test('correct OTP verifies once and clears every challenge hash', async () => {
         const otp = '123456';
         const hash = crypto.createHmac('sha256', process.env.OTP_HASH_SECRET || process.env.ACCESS_TOKEN_SECRET!).update(otp).digest('hex');
-        const flow = { _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: hash, otp_expires_at: new Date(Date.now() + 60_000), otp_attempts: 0 };
+        const flow = normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: hash, otp_expires_at: new Date(Date.now() + 60_000), otp_attempts: 0 });
         spyOn(AuthFlow, 'findOne').mockReturnValue(query(flow) as never);
         const consume = spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query({ ...flow, step: S.CREATE_PIN }) as never);
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
@@ -189,7 +190,7 @@ describe('Patient authentication contracts and security', () => {
     });
 
     test('wrong, expired, and attempt-limited OTPs are rejected', async () => {
-        const flow = { _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: 'wrong', otp_expires_at: new Date(Date.now() + 60_000), otp_attempts: 0 };
+        const flow = normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), otp_hash: 'wrong', otp_expires_at: new Date(Date.now() + 60_000), otp_attempts: 0 });
         const find = spyOn(AuthFlow, 'findOne').mockReturnValue(query(flow) as never);
         const atomic=spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValueOnce(query(null) as never).mockReturnValueOnce(query({...flow,otp_attempts:1}) as never); spyOn(authEventService, 'record').mockResolvedValue({} as never);
         await expect(patientAuthService.verifyOtp('flow', '123456')).rejects.toThrow('غير صحيح');
@@ -204,7 +205,7 @@ describe('Patient authentication contracts and security', () => {
         await expect(patientAuthService.createPin('flow', '12345')).rejects.toThrow('6 أرقام');
         await expect(patientAuthService.createPin('flow', '1234567')).rejects.toThrow('6 أرقام');
         await expect(patientAuthService.createPin('flow', '12345a')).rejects.toThrow('6 أرقام');
-        spyOn(AuthFlow, 'findOne').mockReturnValue(query({ _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), resend_count: 3 }) as never);
+        spyOn(AuthFlow, 'findOne').mockReturnValue(query(normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.OTP, expires_at: new Date(Date.now() + 60_000), resend_count: 3 })) as never);
         spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValue(query(null) as never);
         spyOn(authEventService, 'record').mockResolvedValue({} as never);
         await expect(patientAuthService.resend('flow')).rejects.toThrow('إعادة الإرسال');
@@ -223,7 +224,7 @@ describe('Patient authentication contracts and security', () => {
     });
 
     test('verified OTP flow creates exactly one account and authenticated session', async () => {
-        const flow = { _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.CREATE_PIN, otp_verified_at: new Date(), expires_at: new Date(Date.now() + 60_000) };
+        const flow = normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.CREATE_PIN, otp_verified_at: new Date(), expires_at: new Date(Date.now() + 60_000) });
         const claim = spyOn(AuthFlow, 'findOneAndUpdate').mockReturnValueOnce(query(flow) as never).mockReturnValueOnce(query(null) as never);
         const userId = new mongoose.Types.ObjectId(), patientId = new mongoose.Types.ObjectId();
         const createUser = spyOn(userService, 'create').mockResolvedValue({ _id: userId, phone: flow.phone, role: 'patient', status: 'active' } as never);
@@ -242,7 +243,7 @@ describe('Patient authentication contracts and security', () => {
 
     test('correct six-digit PIN logs in, wrong six-digit PIN fails, and phone-wide failures rate limit', async () => {
         const pin = '123456', hash = await hashPassword(pin);
-        const flow = { _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.PIN, expires_at: new Date(Date.now() + 60_000), login_attempts: 0, user_id: objectId };
+        const flow = normalAuthFlow({ _id: objectId, flow_id: 'flow', phone: '07700000000', step: S.PIN, expires_at: new Date(Date.now() + 60_000), login_attempts: 0, user_id: objectId });
         spyOn(AuthFlow, 'findOne').mockReturnValue(query(flow) as never);
         const save = mock(async () => {});
         const findUser = spyOn(User, 'findOne').mockReturnValue(query({ _id: objectId, phone: flow.phone, role: 'patient', status: 'active', password_hash: hash, must_change_pin: false, save }) as never);

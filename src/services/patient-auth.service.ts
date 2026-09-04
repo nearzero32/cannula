@@ -161,13 +161,23 @@ class PatientAuthService {
 
         // Fail closed: sessions are revoked before writing the new credential, so a Redis failure cannot leave old sessions alive.
         await sessionService.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient._id), reasonCode: 'PIN_RECOVERY_SESSION_REVOCATION', ip });
-        const passwordHash = await hashPassword(pin);
+        let passwordHash: string;
+        try { passwordHash = await hashPassword(pin); }
+        catch (error) { await this.releaseRecoveryClaim(flow._id, now); throw error; }
         const updatedUser = await User.findOneAndUpdate({ _id: user._id, role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE }, { $set: { password_hash: passwordHash, must_change_pin: false } }, { returnDocument: 'after' }).exec();
-        if (!updatedUser) throw new DomainError('لا يمكن استعادة الرمز السري لهذا الحساب', 400, 'AUTH_RECOVERY_UNAVAILABLE');
+        if (!updatedUser) {
+            await this.releaseRecoveryClaim(flow._id, now);
+            throw new DomainError('لا يمكن استعادة الرمز السري لهذا الحساب', 400, 'AUTH_RECOVERY_UNAVAILABLE');
+        }
         await AuthFlow.updateOne({ _id: flow._id, purpose: P.PIN_RECOVERY, consumed_at: now }, { $set: { step: S.COMPLETED } }).exec();
         await authEventService.record({ flow_id: flowId, phone: updatedUser.phone, user_id: updatedUser._id, patient_id: patient._id, type: E.PIN_RECOVERY_COMPLETED, success: true, metadata: device, ip_address: ip });
         const tokens = await sessionService.create(updatedUser, TokenAudienceEnum.MOBILE, device, ip);
         return { ...tokens, user: { _id: String(updatedUser._id), phone: updatedUser.phone, role: updatedUser.role, status: updatedUser.status } };
+    }
+
+    /** Releases only a known-unwritten reset claim; uncertain database writes remain consumed to fail closed. */
+    private async releaseRecoveryClaim(flowId: unknown, claimedAt: Date) {
+        await AuthFlow.updateOne({ _id: flowId, purpose: P.PIN_RECOVERY, step: S.RESET_PIN, consumed_at: claimedAt }, { $set: { consumed_at: null } }).exec();
     }
 
     private async sendOtp(flow: any, resend: boolean, ip?: string) {

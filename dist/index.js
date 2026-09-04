@@ -104698,7 +104698,7 @@ var require_es5 = __commonJS((exports, module) => {
 
 // node_modules/@aws-sdk/core/dist-cjs/submodules/client/index.js
 var require_client3 = __commonJS((exports) => {
-  var __dirname = "C:\\Users\\alpha\\Documents\\GitHub\\alphaCode\\cannula\\node_modules\\@aws-sdk\\core\\dist-cjs\\submodules\\client";
+  var __dirname = "/app/node_modules/@aws-sdk/core/dist-cjs/submodules/client";
   var { Retry, RETRY_MODES } = require_retry();
   var { HttpRequest, parseUrl } = require_protocols();
   var { InvokeStore } = require_invoke_store();
@@ -137496,9 +137496,14 @@ var import_mongoose8 = __toESM(require_mongoose2(), 1);
 var AuthFlowStepEnum = {
   OTP: "OTP",
   CREATE_PIN: "CREATE_PIN",
+  RESET_PIN: "RESET_PIN",
   PIN: "PIN",
   COMPLETED: "COMPLETED",
   LOCKED: "LOCKED"
+};
+var AuthFlowPurposeEnum = {
+  REGISTRATION: "REGISTRATION",
+  PIN_RECOVERY: "PIN_RECOVERY"
 };
 var AuthEventTypeEnum = {
   PHONE_STARTED: "PHONE_STARTED",
@@ -137510,6 +137515,12 @@ var AuthEventTypeEnum = {
   OTP_VERIFIED: "OTP_VERIFIED",
   OTP_EXPIRED: "OTP_EXPIRED",
   OTP_RATE_LIMITED: "OTP_RATE_LIMITED",
+  PIN_RECOVERY_STARTED: "PIN_RECOVERY_STARTED",
+  PIN_RECOVERY_OTP_SENT: "PIN_RECOVERY_OTP_SENT",
+  PIN_RECOVERY_OTP_RESENT: "PIN_RECOVERY_OTP_RESENT",
+  PIN_RECOVERY_OTP_FAILED: "PIN_RECOVERY_OTP_FAILED",
+  PIN_RECOVERY_OTP_VERIFIED: "PIN_RECOVERY_OTP_VERIFIED",
+  PIN_RECOVERY_COMPLETED: "PIN_RECOVERY_COMPLETED",
   ACCOUNT_CREATION_STARTED: "ACCOUNT_CREATION_STARTED",
   ACCOUNT_CREATED: "ACCOUNT_CREATED",
   PIN_CREATED: "PIN_CREATED",
@@ -156671,6 +156682,8 @@ var import_mongoose66 = __toESM(require_mongoose2(), 1);
 var schema12 = new import_mongoose66.Schema({
   flow_id: { type: String, required: true, unique: true },
   phone: { type: String, required: true, index: true },
+  purpose: { type: String, enum: Object.values(AuthFlowPurposeEnum), default: AuthFlowPurposeEnum.REGISTRATION, required: true },
+  is_current: { type: Boolean, default: false },
   step: { type: String, enum: Object.values(AuthFlowStepEnum), required: true },
   user_id: { type: import_mongoose66.Schema.Types.ObjectId, ref: "User", default: null },
   patient_id: { type: import_mongoose66.Schema.Types.ObjectId, ref: "Patient", default: null },
@@ -156690,6 +156703,8 @@ var schema12 = new import_mongoose66.Schema({
 }, { timestamps: true, versionKey: false });
 schema12.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 schema12.index({ phone: 1, createdAt: -1 });
+schema12.index({ phone: 1, purpose: 1, expires_at: 1 });
+schema12.index({ phone: 1, purpose: 1, is_current: 1 }, { unique: true, partialFilterExpression: { purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true } });
 var auth_flow_model_default = import_mongoose66.models.AuthFlow || import_mongoose66.model("AuthFlow", schema12);
 
 // src/services/otp-delivery.service.ts
@@ -156761,12 +156776,156 @@ class PatientAuthService {
       await security_rate_limit_service_default.enforce("OTP_START_IP", context.ip);
     const user = await users_model_default.findOne({ phone, role: IUserRoleEnum.PATIENT }).select("_id").exec();
     const flowId = crypto5.randomUUID();
-    const flow = await auth_flow_model_default.create({ flow_id: flowId, phone, user_id: user?._id ?? null, step: user ? AuthFlowStepEnum.PIN : AuthFlowStepEnum.OTP, expires_at: new Date(now.getTime() + FLOW_TTL_MS), ip_address: context.ip ?? "" });
+    const flow = await auth_flow_model_default.create({ flow_id: flowId, phone, purpose: AuthFlowPurposeEnum.REGISTRATION, user_id: user?._id ?? null, step: user ? AuthFlowStepEnum.PIN : AuthFlowStepEnum.OTP, expires_at: new Date(now.getTime() + FLOW_TTL_MS), ip_address: context.ip ?? "" });
     await auth_event_service_default.record({ flow_id: flowId, phone, user_id: user?._id, type: AuthEventTypeEnum.PHONE_STARTED, success: true, ip_address: context.ip });
     if (user)
       return { flowId, nextStep: AuthFlowStepEnum.PIN };
     const challenge = await this.sendOtp(flow, false, context.ip);
     return { flowId, nextStep: AuthFlowStepEnum.OTP, ...challenge };
+  }
+  async startPinRecovery(phoneInput, context = {}) {
+    const phone = normalizePhone(phoneInput), now = new Date;
+    await security_rate_limit_service_default.enforce("OTP_START_PHONE", phone);
+    if (context.ip)
+      await security_rate_limit_service_default.enforce("OTP_START_IP", context.ip);
+    const user = await users_model_default.findOne({ phone, role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE }).select("_id phone role status").exec();
+    const patient2 = user ? await patients_model_default.findOne({ user_id: user._id, status: IPatientStatusEnum.ACTIVE }).select("_id").exec() : null;
+    if (!user || !patient2)
+      throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628", 400, "AUTH_RECOVERY_UNAVAILABLE");
+    let flow = null;
+    for (let attempt = 0;attempt < 3 && !flow; attempt++) {
+      await auth_flow_model_default.updateMany({ phone, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true }, { $set: { is_current: false } }).exec();
+      try {
+        flow = await auth_flow_model_default.create({
+          flow_id: crypto5.randomUUID(),
+          phone,
+          purpose: AuthFlowPurposeEnum.PIN_RECOVERY,
+          is_current: true,
+          user_id: user._id,
+          patient_id: patient2._id,
+          step: AuthFlowStepEnum.OTP,
+          expires_at: new Date(now.getTime() + FLOW_TTL_MS),
+          ip_address: context.ip ?? ""
+        });
+      } catch (error) {
+        if (!(error instanceof import_mongoose67.default.mongo.MongoServerError) || error.code !== 11000)
+          throw error;
+      }
+    }
+    if (!flow)
+      throw new DomainError("\u062A\u0639\u0630\u0631 \u0628\u062F\u0621 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A", 503, "AUTH_RECOVERY_UNAVAILABLE");
+    await auth_event_service_default.record({ flow_id: flow.flow_id, phone, user_id: user._id, patient_id: patient2._id, type: AuthEventTypeEnum.PIN_RECOVERY_STARTED, success: true, ip_address: context.ip });
+    const challenge = await this.sendRecoveryOtp(flow, false, context.ip);
+    return { flowId: flow.flow_id, nextStep: AuthFlowStepEnum.OTP, ...challenge };
+  }
+  async sendRecoveryOtp(flow, resend, ip) {
+    const otp = code(), now = new Date, expiresAt = new Date(now.getTime() + OTP_TTL_MS);
+    const updated = await auth_flow_model_default.findOneAndUpdate({ _id: flow._id, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true, step: AuthFlowStepEnum.OTP, expires_at: { $gt: now }, consumed_at: null }, {
+      $set: { otp_hash: codeHash(otp), otp_expires_at: expiresAt, otp_last_sent_at: now }
+    }, { returnDocument: "after" }).exec();
+    if (!updated)
+      throw new DomainError("\u062D\u0627\u0644\u0629 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 409, "AUTH_RECOVERY_INVALID_STATE");
+    try {
+      await otp_delivery_service_default.send(flow.phone, otp);
+      await auth_event_service_default.record({ flow_id: flow.flow_id, phone: flow.phone, user_id: flow.user_id, patient_id: flow.patient_id, type: resend ? AuthEventTypeEnum.PIN_RECOVERY_OTP_RESENT : AuthEventTypeEnum.PIN_RECOVERY_OTP_SENT, success: true, ip_address: ip });
+    } catch {
+      await auth_flow_model_default.updateOne({ _id: flow._id, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, otp_hash: codeHash(otp) }, { $unset: { otp_hash: 1, otp_expires_at: 1 } }).exec();
+      await auth_event_service_default.record({ flow_id: flow.flow_id, phone: flow.phone, user_id: flow.user_id, patient_id: flow.patient_id, type: AuthEventTypeEnum.PIN_RECOVERY_OTP_FAILED, success: false, reason_code: "PROVIDER_FAILURE", ip_address: ip });
+      throw new DomainError("\u062A\u0639\u0630\u0631 \u0625\u0631\u0633\u0627\u0644 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642", 503, "OTP_PROVIDER_FAILURE");
+    }
+    return { expiresAt: expiresAt.toISOString(), ...isOtpDebugReturnEnabled() ? { debugOtp: otp } : {} };
+  }
+  async resendPinRecovery(flowId, ip) {
+    const existing = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true }).exec();
+    this.requireFlow(existing, AuthFlowStepEnum.OTP, AuthFlowPurposeEnum.PIN_RECOVERY);
+    await security_rate_limit_service_default.enforce("OTP_RESEND_PHONE", existing.phone);
+    if (ip)
+      await security_rate_limit_service_default.enforce("OTP_RESEND_IP", ip);
+    const otp = code(), now = new Date, expiresAt = new Date(now.getTime() + OTP_TTL_MS), cooldownBefore = new Date(now.getTime() - OTP_RESEND_COOLDOWN_SECONDS * 1000);
+    const flow = await auth_flow_model_default.findOneAndUpdate({
+      flow_id: flowId,
+      purpose: AuthFlowPurposeEnum.PIN_RECOVERY,
+      is_current: true,
+      step: AuthFlowStepEnum.OTP,
+      consumed_at: null,
+      expires_at: { $gt: now },
+      resend_count: { $lt: MAX_RESENDS },
+      $or: [{ otp_last_sent_at: null }, { otp_last_sent_at: { $lte: cooldownBefore } }]
+    }, { $set: { otp_hash: codeHash(otp), otp_expires_at: expiresAt, otp_last_sent_at: now }, $inc: { resend_count: 1 } }, { returnDocument: "after" }).exec();
+    if (!flow) {
+      const current = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true }).exec();
+      this.requireFlow(current, AuthFlowStepEnum.OTP, AuthFlowPurposeEnum.PIN_RECOVERY);
+      if (current.resend_count >= MAX_RESENDS)
+        throw new DomainError("\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0639\u062F\u062F \u0645\u0631\u0627\u062A \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0625\u0631\u0633\u0627\u0644", 429, "AUTH_OTP_RESEND_LIMIT");
+      const retryAfterSeconds = Math.max(1, Math.ceil((OTP_RESEND_COOLDOWN_SECONDS * 1000 - (now.getTime() - (current.otp_last_sent_at?.getTime() ?? 0))) / 1000));
+      const error = new DomainError("\u0627\u0646\u062A\u0638\u0631 \u0642\u0628\u0644 \u0625\u0639\u0627\u062F\u0629 \u0625\u0631\u0633\u0627\u0644 \u0627\u0644\u0631\u0645\u0632", 429, "AUTH_OTP_RESEND_COOLDOWN");
+      error.retryAfterSeconds = retryAfterSeconds;
+      throw error;
+    }
+    try {
+      await otp_delivery_service_default.send(flow.phone, otp);
+      await auth_event_service_default.record({ flow_id: flowId, phone: flow.phone, user_id: flow.user_id, patient_id: flow.patient_id, type: AuthEventTypeEnum.PIN_RECOVERY_OTP_RESENT, success: true, ip_address: ip });
+    } catch {
+      await auth_flow_model_default.updateOne({ _id: flow._id, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, otp_hash: codeHash(otp) }, { $unset: { otp_hash: 1, otp_expires_at: 1 } }).exec();
+      throw new DomainError("\u062A\u0639\u0630\u0631 \u0625\u0631\u0633\u0627\u0644 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642", 503, "OTP_PROVIDER_FAILURE");
+    }
+    return { flowId, nextStep: AuthFlowStepEnum.OTP, expiresAt: expiresAt.toISOString(), ...isOtpDebugReturnEnabled() ? { debugOtp: otp } : {} };
+  }
+  async verifyPinRecoveryOtp(flowId, otp, ip) {
+    const seed = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true }).exec();
+    this.requireFlow(seed, AuthFlowStepEnum.OTP, AuthFlowPurposeEnum.PIN_RECOVERY);
+    await security_rate_limit_service_default.enforce("OTP_VERIFY_PHONE", seed.phone);
+    if (ip)
+      await security_rate_limit_service_default.enforce("OTP_VERIFY_IP", ip);
+    const now = new Date, hash2 = codeHash(otp), match = { $or: [{ otp_hash: hash2, otp_expires_at: { $gt: now } }, { support_otp_hash: hash2, support_otp_expires_at: { $gt: now } }] };
+    const consumed = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true, step: AuthFlowStepEnum.OTP, consumed_at: null, expires_at: { $gt: now }, otp_attempts: { $lt: MAX_OTP_ATTEMPTS }, ...match }, {
+      $set: { step: AuthFlowStepEnum.RESET_PIN, otp_verified_at: now },
+      $unset: { otp_hash: 1, support_otp_hash: 1, otp_expires_at: 1, support_otp_expires_at: 1 }
+    }, { returnDocument: "before" }).select("+otp_hash +support_otp_hash").exec();
+    if (!consumed)
+      return await this.rejectRecoveryOtp(flowId, hash2, now, ip);
+    await auth_event_service_default.record({ flow_id: flowId, phone: consumed.phone, user_id: consumed.user_id, patient_id: consumed.patient_id, type: consumed.support_otp_hash === hash2 ? AuthEventTypeEnum.SUPPORT_OTP_USED : AuthEventTypeEnum.PIN_RECOVERY_OTP_VERIFIED, success: true, ip_address: ip });
+    return { nextStep: AuthFlowStepEnum.RESET_PIN };
+  }
+  async rejectRecoveryOtp(flowId, hash2, now, ip) {
+    const active = { $or: [{ otp_hash: { $ne: null }, otp_expires_at: { $gt: now } }, { support_otp_hash: { $ne: null }, support_otp_expires_at: { $gt: now } }] };
+    const failed = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true, step: AuthFlowStepEnum.OTP, consumed_at: null, expires_at: { $gt: now }, otp_attempts: { $lt: MAX_OTP_ATTEMPTS }, $and: [active, { $nor: [{ otp_hash: hash2, otp_expires_at: { $gt: now } }, { support_otp_hash: hash2, support_otp_expires_at: { $gt: now } }] }] }, { $inc: { otp_attempts: 1 } }, { returnDocument: "after" }).exec();
+    if (failed) {
+      await auth_event_service_default.record({ flow_id: flowId, phone: failed.phone, user_id: failed.user_id, patient_id: failed.patient_id, type: AuthEventTypeEnum.PIN_RECOVERY_OTP_FAILED, success: false, reason_code: "OTP_INVALID", ip_address: ip });
+      throw new DomainError("\u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u063A\u064A\u0631 \u0635\u062D\u064A\u062D", 400, "AUTH_RECOVERY_OTP_INVALID");
+    }
+    const state = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true }).select("+otp_hash +support_otp_hash").exec();
+    if (state?.step !== AuthFlowStepEnum.OTP)
+      throw new DomainError("\u062A\u0645 \u0627\u0633\u062A\u062E\u062F\u0627\u0645 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0633\u0628\u0642\u0627\u064B", 409, "AUTH_OTP_ALREADY_USED");
+    if ((state?.otp_attempts ?? MAX_OTP_ATTEMPTS) >= MAX_OTP_ATTEMPTS)
+      throw new DomainError("\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0645\u062D\u0627\u0648\u0644\u0627\u062A \u0627\u0644\u062A\u062D\u0642\u0642", 429, "AUTH_RECOVERY_OTP_ATTEMPTS_EXCEEDED");
+    throw new DomainError("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u0631\u0645\u0632 \u0627\u0644\u062A\u062D\u0642\u0642", 400, "AUTH_RECOVERY_OTP_INVALID");
+  }
+  async resetRecoveredPin(flowId, pin, confirmPin, device = {}, ip) {
+    if (!PIN_PATTERN.test(pin) || pin !== confirmPin)
+      throw new DomainError("\u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u064A\u062C\u0628 \u0623\u0646 \u064A\u062A\u0643\u0648\u0646 \u0645\u0646 6 \u0623\u0631\u0642\u0627\u0645 \u0645\u062A\u0637\u0627\u0628\u0642\u0629", 400, "AUTH_PIN_INVALID");
+    const seed = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true }).exec();
+    this.requireFlow(seed, AuthFlowStepEnum.RESET_PIN, AuthFlowPurposeEnum.PIN_RECOVERY);
+    await security_rate_limit_service_default.enforce("PIN_PHONE", seed.phone);
+    if (ip)
+      await security_rate_limit_service_default.enforce("PIN_IP", ip);
+    const now = new Date;
+    const flow = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true, step: AuthFlowStepEnum.RESET_PIN, otp_verified_at: { $ne: null }, consumed_at: null, expires_at: { $gt: now } }, { $set: { consumed_at: now } }, { returnDocument: "after" }).exec();
+    if (!flow)
+      throw new DomainError("\u062A\u062F\u0641\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0645\u0633\u062A\u062E\u062F\u0645 \u0623\u0648 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 409, "AUTH_RECOVERY_ALREADY_COMPLETED");
+    const user = await users_model_default.findOne({ _id: flow.user_id, role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE }).exec();
+    const patient2 = user ? await patients_model_default.findOne({ _id: flow.patient_id, user_id: user._id, status: IPatientStatusEnum.ACTIVE }).exec() : null;
+    if (!user || !patient2)
+      throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628", 400, "AUTH_RECOVERY_UNAVAILABLE");
+    await session_service_default.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient2._id), reasonCode: "PIN_RECOVERY_SESSION_REVOCATION", ip });
+    const passwordHash = await hashPassword(pin);
+    const updatedUser = await users_model_default.findOneAndUpdate({ _id: user._id, role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE }, { $set: { password_hash: passwordHash, must_change_pin: false } }, { returnDocument: "after" }).exec();
+    if (!updatedUser)
+      throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628", 400, "AUTH_RECOVERY_UNAVAILABLE");
+    await auth_flow_model_default.updateOne({ _id: flow._id, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, consumed_at: now }, { $set: { step: AuthFlowStepEnum.COMPLETED } }).exec();
+    await auth_event_service_default.record({ flow_id: flowId, phone: updatedUser.phone, user_id: updatedUser._id, patient_id: patient2._id, type: AuthEventTypeEnum.PIN_RECOVERY_COMPLETED, success: true, metadata: device, ip_address: ip });
+    const tokens = await session_service_default.create(updatedUser, TokenAudienceEnum.MOBILE, device, ip);
+    return { ...tokens, user: { _id: String(updatedUser._id), phone: updatedUser.phone, role: updatedUser.role, status: updatedUser.status } };
   }
   async sendOtp(flow, resend, ip) {
     const otp = code(), expiresAt = new Date(Date.now() + OTP_TTL_MS);
@@ -156785,16 +156944,16 @@ class PatientAuthService {
     return { expiresAt: expiresAt.toISOString(), ...isOtpDebugReturnEnabled() ? { debugOtp: otp } : {} };
   }
   async resend(flowId, ip) {
-    const existing = await auth_flow_model_default.findOne({ flow_id: flowId }).exec();
-    this.requireFlow(existing, AuthFlowStepEnum.OTP);
+    const existing = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION }).exec();
+    this.requireFlow(existing, AuthFlowStepEnum.OTP, AuthFlowPurposeEnum.REGISTRATION);
     await security_rate_limit_service_default.enforce("OTP_RESEND_PHONE", existing.phone);
     if (ip)
       await security_rate_limit_service_default.enforce("OTP_RESEND_IP", ip);
     const otp = code(), now = new Date, expiresAt = new Date(now.getTime() + OTP_TTL_MS), cooldownBefore = new Date(now.getTime() - OTP_RESEND_COOLDOWN_SECONDS * 1000);
-    const flow = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, step: AuthFlowStepEnum.OTP, expires_at: { $gt: now }, resend_count: { $lt: MAX_RESENDS }, $or: [{ otp_last_sent_at: null }, { otp_last_sent_at: { $lte: cooldownBefore } }] }, { $set: { otp_hash: codeHash(otp), otp_expires_at: expiresAt, otp_last_sent_at: now }, $inc: { resend_count: 1 } }, { returnDocument: "after" }).exec();
+    const flow = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION, step: AuthFlowStepEnum.OTP, expires_at: { $gt: now }, resend_count: { $lt: MAX_RESENDS }, $or: [{ otp_last_sent_at: null }, { otp_last_sent_at: { $lte: cooldownBefore } }] }, { $set: { otp_hash: codeHash(otp), otp_expires_at: expiresAt, otp_last_sent_at: now }, $inc: { resend_count: 1 } }, { returnDocument: "after" }).exec();
     if (!flow) {
-      const current = await auth_flow_model_default.findOne({ flow_id: flowId }).exec();
-      this.requireFlow(current, AuthFlowStepEnum.OTP);
+      const current = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION }).exec();
+      this.requireFlow(current, AuthFlowStepEnum.OTP, AuthFlowPurposeEnum.REGISTRATION);
       if (current.resend_count >= MAX_RESENDS)
         throw new DomainError("\u062A\u0645 \u062A\u062C\u0627\u0648\u0632 \u0639\u062F\u062F \u0645\u0631\u0627\u062A \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0625\u0631\u0633\u0627\u0644", 429, "AUTH_OTP_RESEND_LIMIT");
       const retry2 = Math.max(1, Math.ceil((OTP_RESEND_COOLDOWN_SECONDS * 1000 - (now.getTime() - (current.otp_last_sent_at?.getTime() ?? 0))) / 1000));
@@ -156812,13 +156971,13 @@ class PatientAuthService {
     return { flowId, nextStep: AuthFlowStepEnum.OTP, expiresAt: expiresAt.toISOString(), ...isOtpDebugReturnEnabled() ? { debugOtp: otp } : {} };
   }
   async verifyOtp(flowId, otp, ip) {
-    const seed = await auth_flow_model_default.findOne({ flow_id: flowId }).exec();
-    this.requireFlow(seed, AuthFlowStepEnum.OTP);
+    const seed = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION }).exec();
+    this.requireFlow(seed, AuthFlowStepEnum.OTP, AuthFlowPurposeEnum.REGISTRATION);
     await security_rate_limit_service_default.enforce("OTP_VERIFY_PHONE", seed.phone);
     if (ip)
       await security_rate_limit_service_default.enforce("OTP_VERIFY_IP", ip);
     const now = new Date, hash2 = codeHash(otp), match = { $or: [{ otp_hash: hash2, otp_expires_at: { $gt: now } }, { support_otp_hash: hash2, support_otp_expires_at: { $gt: now } }] };
-    const consumed = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, step: AuthFlowStepEnum.OTP, expires_at: { $gt: now }, otp_attempts: { $lt: MAX_OTP_ATTEMPTS }, ...match }, { $set: { step: AuthFlowStepEnum.CREATE_PIN, otp_verified_at: now }, $unset: { otp_hash: 1, support_otp_hash: 1, otp_expires_at: 1, support_otp_expires_at: 1 } }, { returnDocument: "before" }).select("+otp_hash +support_otp_hash").exec();
+    const consumed = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION, step: AuthFlowStepEnum.OTP, expires_at: { $gt: now }, otp_attempts: { $lt: MAX_OTP_ATTEMPTS }, ...match }, { $set: { step: AuthFlowStepEnum.CREATE_PIN, otp_verified_at: now }, $unset: { otp_hash: 1, support_otp_hash: 1, otp_expires_at: 1, support_otp_expires_at: 1 } }, { returnDocument: "before" }).select("+otp_hash +support_otp_hash").exec();
     if (!consumed) {
       const active = { $or: [{ otp_hash: { $ne: null }, otp_expires_at: { $gt: now } }, { support_otp_hash: { $ne: null }, support_otp_expires_at: { $gt: now } }] };
       const failed = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, step: AuthFlowStepEnum.OTP, expires_at: { $gt: now }, otp_attempts: { $lt: MAX_OTP_ATTEMPTS }, $and: [active, { $nor: [{ otp_hash: hash2, otp_expires_at: { $gt: now } }, { support_otp_hash: hash2, support_otp_expires_at: { $gt: now } }] }] }, { $inc: { otp_attempts: 1 } }, { returnDocument: "after" }).exec();
@@ -156840,7 +156999,7 @@ class PatientAuthService {
     if (!PIN_PATTERN.test(pin))
       throw new DomainError("\u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u064A\u062C\u0628 \u0623\u0646 \u064A\u062A\u0643\u0648\u0646 \u0645\u0646 6 \u0623\u0631\u0642\u0627\u0645", 400);
     const now = new Date;
-    const flow = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, step: AuthFlowStepEnum.CREATE_PIN, otp_verified_at: { $ne: null }, consumed_at: null, expires_at: { $gt: now } }, { $set: { consumed_at: now } }, { returnDocument: "after" }).exec();
+    const flow = await auth_flow_model_default.findOneAndUpdate({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION, step: AuthFlowStepEnum.CREATE_PIN, otp_verified_at: { $ne: null }, consumed_at: null, expires_at: { $gt: now } }, { $set: { consumed_at: now } }, { returnDocument: "after" }).exec();
     if (!flow)
       throw new DomainError("\u062A\u062F\u0641\u0642 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D \u0623\u0648 \u0645\u0633\u062A\u062E\u062F\u0645", 409);
     await auth_event_service_default.record({ flow_id: flowId, phone: flow.phone, type: AuthEventTypeEnum.ACCOUNT_CREATION_STARTED, success: true });
@@ -156871,8 +157030,8 @@ class PatientAuthService {
   async login(flowId, pin, device = {}, ip) {
     if (!PIN_PATTERN.test(pin))
       throw new DomainError("\u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u064A\u062C\u0628 \u0623\u0646 \u064A\u062A\u0643\u0648\u0646 \u0645\u0646 6 \u0623\u0631\u0642\u0627\u0645", 400);
-    const flow = await auth_flow_model_default.findOne({ flow_id: flowId, step: AuthFlowStepEnum.PIN }).exec();
-    this.requireFlow(flow, AuthFlowStepEnum.PIN);
+    const flow = await auth_flow_model_default.findOne({ flow_id: flowId, purpose: AuthFlowPurposeEnum.REGISTRATION, step: AuthFlowStepEnum.PIN }).exec();
+    this.requireFlow(flow, AuthFlowStepEnum.PIN, AuthFlowPurposeEnum.REGISTRATION);
     await security_rate_limit_service_default.check("PIN_PHONE", flow.phone, "AUTH_PIN_RATE_LIMITED");
     if (ip)
       await security_rate_limit_service_default.check("PIN_IP", ip, "AUTH_PIN_RATE_LIMITED");
@@ -156976,11 +157135,13 @@ class PatientAuthService {
     ]);
     return { phone: user.phone, accountStatus: user.status, phoneVerified: user.is_phone_verified, mustChangePin: user.must_change_pin, createdAt: user.createdAt, lastSuccessfulLogin: lastSuccess?.createdAt ?? null, lastFailedLogin: lastFailed?.createdAt ?? null, activeSessionCount: sessions };
   }
-  requireFlow(flow, step) {
+  requireFlow(flow, step, purpose) {
     if (!flow)
       throw new DomainError("\u062A\u062F\u0641\u0642 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
     if (flow.expires_at <= new Date)
       throw new DomainError("\u0627\u0646\u062A\u0647\u062A \u0635\u0644\u0627\u062D\u064A\u0629 \u062A\u062F\u0641\u0642 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629", 400);
+    if (purpose && flow.purpose !== purpose)
+      throw new DomainError("\u062D\u0627\u0644\u0629 \u062A\u062F\u0641\u0642 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 409);
     if (flow.step !== step)
       throw new DomainError("\u062D\u0627\u0644\u0629 \u062A\u062F\u0641\u0642 \u0627\u0644\u0645\u0635\u0627\u062F\u0642\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 409);
   }
@@ -157028,6 +157189,8 @@ var authSecurityController = new Elysia({ prefix: "/auth-security", detail: { ta
     }
     if (query.journey === "registration")
       match.type = { $in: [AuthEventTypeEnum.OTP_REQUESTED, AuthEventTypeEnum.OTP_SENT, AuthEventTypeEnum.OTP_VERIFIED, AuthEventTypeEnum.ACCOUNT_CREATED, AuthEventTypeEnum.PIN_CREATED] };
+    if (query.journey === "pin_recovery")
+      match.type = { $in: [AuthEventTypeEnum.PIN_RECOVERY_STARTED, AuthEventTypeEnum.PIN_RECOVERY_OTP_SENT, AuthEventTypeEnum.PIN_RECOVERY_OTP_RESENT, AuthEventTypeEnum.PIN_RECOVERY_OTP_FAILED, AuthEventTypeEnum.PIN_RECOVERY_OTP_VERIFIED, AuthEventTypeEnum.PIN_RECOVERY_COMPLETED, AuthEventTypeEnum.SUPPORT_OTP_ISSUED, AuthEventTypeEnum.SUPPORT_OTP_USED] };
     if (query.journey === "login")
       match.type = { $in: [AuthEventTypeEnum.LOGIN_ATTEMPT, AuthEventTypeEnum.LOGIN_SUCCESS, AuthEventTypeEnum.LOGIN_FAILED] };
     const result = await auth_event_service_default.list(match, Number(query.page) || 1, Number(query.limit) || 20);
@@ -157035,7 +157198,7 @@ var authSecurityController = new Elysia({ prefix: "/auth-security", detail: { ta
   } catch (error) {
     return handle(error, set);
   }
-}, { query: t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()), phone: t.Optional(t.String()), flowId: t.Optional(t.String()), type: t.Optional(t.Enum(AuthEventTypeEnum)), success: t.Optional(t.Boolean()), journey: t.Optional(t.Union([t.Literal("registration"), t.Literal("login")])), userId: t.Optional(t.String()), patientId: t.Optional(t.String()), dateFrom: t.Optional(t.String()), dateTo: t.Optional(t.String()) }), response: { 200: GenericPaginatedResponseSchema, 403: ForbiddenResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } }).get("/flows/:flowId/timeline", async ({ params, phrase, set }) => {
+}, { query: t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()), phone: t.Optional(t.String()), flowId: t.Optional(t.String()), type: t.Optional(t.Enum(AuthEventTypeEnum)), success: t.Optional(t.Boolean()), journey: t.Optional(t.Union([t.Literal("registration"), t.Literal("login"), t.Literal("pin_recovery")])), userId: t.Optional(t.String()), patientId: t.Optional(t.String()), dateFrom: t.Optional(t.String()), dateTo: t.Optional(t.String()) }), response: { 200: GenericPaginatedResponseSchema, 403: ForbiddenResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } }).get("/flows/:flowId/timeline", async ({ params, phrase, set }) => {
   try {
     await requireAdminPermission(phrase.role, phrase._id, IAdminPermissionEnum.VIEW_AUTH_AUDIT);
     return { error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u062A\u0633\u0644\u0633\u0644 \u0627\u0644\u0632\u0645\u0646\u064A \u0628\u0646\u062C\u0627\u062D", data: await auth_event_service_default.timeline(params.flowId) };
@@ -157064,7 +157227,7 @@ var authSecurityController = new Elysia({ prefix: "/auth-security", detail: { ta
       match.createdAt = range;
     }
     const rows = await auth_event_service_default.metrics(match);
-    const wanted = [AuthEventTypeEnum.OTP_REQUESTED, AuthEventTypeEnum.OTP_SENT, AuthEventTypeEnum.OTP_SEND_FAILED, AuthEventTypeEnum.OTP_VERIFIED, AuthEventTypeEnum.ACCOUNT_CREATED, AuthEventTypeEnum.LOGIN_SUCCESS, AuthEventTypeEnum.LOGIN_FAILED, AuthEventTypeEnum.SUPPORT_OTP_ISSUED];
+    const wanted = [AuthEventTypeEnum.OTP_REQUESTED, AuthEventTypeEnum.OTP_SENT, AuthEventTypeEnum.OTP_SEND_FAILED, AuthEventTypeEnum.OTP_VERIFIED, AuthEventTypeEnum.ACCOUNT_CREATED, AuthEventTypeEnum.LOGIN_SUCCESS, AuthEventTypeEnum.LOGIN_FAILED, AuthEventTypeEnum.SUPPORT_OTP_ISSUED, AuthEventTypeEnum.PIN_RECOVERY_STARTED, AuthEventTypeEnum.PIN_RECOVERY_OTP_SENT, AuthEventTypeEnum.PIN_RECOVERY_OTP_RESENT, AuthEventTypeEnum.PIN_RECOVERY_OTP_FAILED, AuthEventTypeEnum.PIN_RECOVERY_OTP_VERIFIED, AuthEventTypeEnum.PIN_RECOVERY_COMPLETED];
     const data = Object.fromEntries(wanted.map((type) => [type, 0]));
     for (const row of rows)
       data[row._id] = row.count;
@@ -158034,6 +158197,10 @@ var authStartBodySchema = t.Object({ phone: phoneSchema }, { additionalPropertie
 var otpVerifyBodySchema = t.Object({ flowId: flowSchema, otp: otpSchema }, { additionalProperties: false });
 var pinCreateBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
 var pinLoginBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
+var pinForgotStartBodySchema = t.Object({ phone: phoneSchema }, { additionalProperties: false });
+var pinForgotResendBodySchema = t.Object({ flowId: flowSchema }, { additionalProperties: false });
+var pinForgotVerifyBodySchema = t.Object({ flowId: flowSchema, otp: otpSchema }, { additionalProperties: false });
+var pinForgotResetBodySchema = t.Object({ flowId: flowSchema, pin: pinCreateSchema, confirmPin: pinCreateSchema, ...deviceFields }, { additionalProperties: false });
 var debugOtpSchema = t.Optional(t.String({
   pattern: "^\\d{6}$",
   description: "Development/testing only. Returned only when NODE_ENV is not production and OTP_DEBUG_RETURN_CODE=true; never returned in production."
@@ -158079,7 +158246,31 @@ var mobileAuthController = new Elysia({ prefix: "/auth", detail: { tags: [SWAGGE
   } catch (error) {
     return fail(error, set);
   }
-}, { body: otpVerifyBodySchema, response: { 200: GenericDataResponseSchema, ...errors5 } }).post("/pin/create", async ({ body, request, server, set }) => {
+}, { body: otpVerifyBodySchema, response: { 200: GenericDataResponseSchema, ...errors5 } }).post("/pin/forgot/start", async ({ body, request, server, set }) => {
+  try {
+    return { error: false, message: "\u062A\u0645 \u0628\u062F\u0621 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A", data: await patient_auth_service_default.startPinRecovery(body.phone, { ip: resolveClientIp(request, server) }) };
+  } catch (error) {
+    return fail(error, set);
+  }
+}, { body: pinForgotStartBodySchema, detail: { description: "\u064A\u0628\u062F\u0623 \u062A\u062F\u0641\u0642 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 PIN \u0644\u0645\u0631\u064A\u0636 \u0646\u0634\u0637 \u0641\u0642\u0637. \u064A\u0631\u0633\u0644 OTP \u0645\u0646 6 \u0623\u0631\u0642\u0627\u0645\u061B debugOtp \u0644\u0644\u062A\u0637\u0648\u064A\u0631 \u0641\u0642\u0637 \u0648\u0644\u0627 \u064A\u0638\u0647\u0631 \u0641\u064A production." }, response: { 200: OtpResendResponseSchema, ...errors5 } }).post("/pin/forgot/resend", async ({ body, request, server, set }) => {
+  try {
+    return { error: false, message: "\u062A\u0645 \u0625\u0631\u0633\u0627\u0644 \u0631\u0645\u0632 \u062A\u062D\u0642\u0642 \u062C\u062F\u064A\u062F \u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A", data: await patient_auth_service_default.resendPinRecovery(body.flowId, resolveClientIp(request, server)) };
+  } catch (error) {
+    return fail(error, set);
+  }
+}, { body: pinForgotResendBodySchema, detail: { description: "\u064A\u0639\u064A\u062F \u0625\u0631\u0633\u0627\u0644 OTP \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0628\u0639\u062F 45 \u062B\u0627\u0646\u064A\u0629\u060C \u0648\u0628\u062D\u062F \u0623\u0642\u0635\u0649 3 \u0645\u0631\u0627\u062A. \u0627\u0644\u0631\u062F \u0627\u0644\u0645\u062D\u062F\u0648\u062F \u064A\u062A\u0636\u0645\u0646 Retry-After \u0648retryAfterSeconds." }, response: { 200: OtpResendResponseSchema, ...errors5 } }).post("/pin/forgot/verify", async ({ body, request, server, set }) => {
+  try {
+    return { error: false, message: "\u062A\u0645 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646 \u0631\u0645\u0632 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A", data: await patient_auth_service_default.verifyPinRecoveryOtp(body.flowId, body.otp, resolveClientIp(request, server)) };
+  } catch (error) {
+    return fail(error, set);
+  }
+}, { body: pinForgotVerifyBodySchema, detail: { description: "\u064A\u062A\u062D\u0642\u0642 \u0645\u0646 OTP \u0627\u0644\u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0644\u0645\u0631\u0629 \u0648\u0627\u062D\u062F\u0629 \u0641\u0642\u0637 \u0648\u0644\u0627 \u064A\u0646\u0634\u0626 \u062C\u0644\u0633\u0629 \u0642\u0628\u0644 \u0627\u062E\u062A\u064A\u0627\u0631 PIN \u062C\u062F\u064A\u062F." }, response: { 200: GenericDataResponseSchema, ...errors5 } }).post("/pin/forgot/reset", async ({ body, request, server, set }) => {
+  try {
+    return { error: false, message: "\u062A\u0645\u062A \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0648\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0646\u062C\u0627\u062D", data: await patient_auth_service_default.resetRecoveredPin(body.flowId, body.pin, body.confirmPin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, resolveClientIp(request, server)) };
+  } catch (error) {
+    return fail(error, set);
+  }
+}, { body: pinForgotResetBodySchema, detail: { description: "\u064A\u062A\u0637\u0644\u0628 OTP \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u062A\u0645 \u0627\u0644\u062A\u062D\u0642\u0642 \u0645\u0646\u0647 \u0648PIN \u0645\u0646 6 \u0623\u0631\u0642\u0627\u0645 \u0645\u062A\u0637\u0627\u0628\u0642\u0629. \u064A\u0644\u063A\u064A \u0643\u0644 \u0627\u0644\u062C\u0644\u0633\u0627\u062A \u0627\u0644\u0633\u0627\u0628\u0642\u0629 \u062B\u0645 \u064A\u0635\u062F\u0631 \u062C\u0644\u0633\u0629 \u0645\u0631\u064A\u0636 \u062C\u062F\u064A\u062F\u0629 \u063A\u064A\u0631 \u0645\u0642\u064A\u0651\u062F\u0629." }, response: { 200: GenericDataResponseSchema, ...errors5 } }).post("/pin/create", async ({ body, request, server, set }) => {
   try {
     set.status = 201;
     return { error: false, message: "\u062A\u0645 \u0625\u0646\u0634\u0627\u0621 \u0627\u0644\u062D\u0633\u0627\u0628 \u0648\u062A\u0633\u062C\u064A\u0644 \u0627\u0644\u062F\u062E\u0648\u0644 \u0628\u0646\u062C\u0627\u062D", data: await patient_auth_service_default.createPin(body.flowId, body.pin, { deviceId: body.deviceId, deviceName: body.deviceName, platform: body.platform }, resolveClientIp(request, server)) };
@@ -159571,7 +159762,7 @@ var ActivityLogPlugin = new Elysia({ name: "activity-log-plugin" }).derive({ as:
       user_type = phrase.role || "";
       user_name = `${user_type}_${phrase._id}`;
     }
-    const request_body = method !== "GET" ? body : {};
+    const request_body = method !== "GET" ? sanitizeCredentialData(body) : {};
     await activity_log_service_default.create({
       user_id: user_id ? user_id : undefined,
       user_name,
