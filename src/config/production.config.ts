@@ -73,12 +73,17 @@ export function isSwaggerEnabled(env: ProductionEnvironment = process.env): bool
 }
 
 function validateSwaggerBasicCredentials(env: ProductionEnvironment): void {
-    const username = env.SWAGGER_BASIC_USERNAME?.trim() ?? '';
-    const password = env.SWAGGER_BASIC_PASSWORD ?? '';
-    if (!username) throw new ProductionConfigurationError('SECURITY_CONFIG_MISSING', 'SWAGGER_BASIC_USERNAME');
-    if (username.length > 128) throw new ProductionConfigurationError('SECURITY_CONFIG_INVALID', 'SWAGGER_BASIC_USERNAME');
-    if (!password) throw new ProductionConfigurationError('SECURITY_CONFIG_MISSING', 'SWAGGER_BASIC_PASSWORD');
-    if (password.length < 32 || OBVIOUS_SECRET.test(password)) throw new ProductionConfigurationError('SECURITY_CONFIG_WEAK', 'SWAGGER_BASIC_PASSWORD');
+    const username = env.SWAGGER_USERNAME?.trim() ?? '';
+    const password = env.SWAGGER_PASSWORD ?? '';
+    if (!username) throw new ProductionConfigurationError('SECURITY_CONFIG_MISSING', 'SWAGGER_USERNAME');
+    if (username.length > 128) throw new ProductionConfigurationError('SECURITY_CONFIG_INVALID', 'SWAGGER_USERNAME');
+    if (!password) throw new ProductionConfigurationError('SECURITY_CONFIG_MISSING', 'SWAGGER_PASSWORD');
+    if (password.length < 32 || OBVIOUS_SECRET.test(password)) throw new ProductionConfigurationError('SECURITY_CONFIG_WEAK', 'SWAGGER_PASSWORD');
+}
+
+/** Documentation is never exposed without its separate browser Basic-Auth credentials. */
+export function assertSwaggerConfiguration(env: ProductionEnvironment = process.env): void {
+    if (isSwaggerEnabled(env)) validateSwaggerBasicCredentials(env);
 }
 
 export function assertProductionConfiguration(env: ProductionEnvironment = process.env): void {
@@ -92,7 +97,7 @@ export function assertProductionConfiguration(env: ProductionEnvironment = proce
     validateRedis(env);
     if (!flag(env, 'PUBLIC_HTTPS')) throw new ProductionConfigurationError('SECURITY_CONFIG_INSECURE', 'PUBLIC_HTTPS');
     loadR2ConfigFromEnv(env as NodeJS.ProcessEnv);
-    if (isSwaggerEnabled(env)) validateSwaggerBasicCredentials(env);
+    assertSwaggerConfiguration(env);
 }
 
 export function requestBodyLimitBytes(env: ProductionEnvironment = process.env): number {

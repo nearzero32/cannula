@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import Elysia, { t } from 'elysia';
-import { swagger } from '@elysiajs/swagger';
+import { openapi } from '@elysia/openapi';
 import { Value } from '@sinclair/typebox/value';
 import { dashboardController } from '../src/controller/dash/index';
 import { mobileController } from '../src/controller/mobile/index';
@@ -42,7 +42,7 @@ describe('API response documentation coverage', () => {
 
     test('generated OpenAPI documents responses, rate limits, and server errors for every operation', async () => {
         const app = new Elysia({ prefix: '/api' })
-            .use(swagger(swaggerConfig))
+            .use(openapi(swaggerConfig))
             .use(dashboardController)
             .use(mobileController);
         const response = await app.handle(new Request('http://localhost/api/swagger/json'));
@@ -68,7 +68,7 @@ describe('API response documentation coverage', () => {
 
     test('public routes do not falsely document authentication errors', async () => {
         const app = new Elysia({ prefix: '/api' })
-            .use(swagger(swaggerConfig))
+            .use(openapi(swaggerConfig))
             .use(dashboardController)
             .use(mobileController);
         const response = await app.handle(new Request('http://localhost/api/swagger/json'));
@@ -90,7 +90,7 @@ describe('API response documentation coverage', () => {
 
     test('uses ordered role-domain tags without generic parent-tag inheritance', async () => {
         const app = new Elysia({ prefix: '/api' })
-            .use(swagger(swaggerConfig))
+            .use(openapi(swaggerConfig))
             .use(dashboardController)
             .use(mobileController);
         const response = await app.handle(new Request('http://localhost/api/swagger/json'));

@@ -1,6 +1,6 @@
 import { Elysia } from 'elysia';
 import { cors } from '@elysiajs/cors';
-import { swagger } from '@elysiajs/swagger';
+import { openapi } from '@elysia/openapi';
 import { rateLimit } from 'elysia-rate-limit';
 import { MongoDB } from './databases/database';
 import RedisClient from './databases/redis';
@@ -23,7 +23,7 @@ import { rebuildAppointmentStorage } from './migrations/rebuild-appointments.mig
 import { assertAppointmentTransactionSupport } from './services/appointment-transaction.service';
 import { normalizeDoctorBookingSettings } from './migrations/normalize-doctor-booking-settings.migration';
 import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
-import { assertProductionConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from './config/production.config';
+import { assertProductionConfiguration, assertSwaggerConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from './config/production.config';
 import { HttpSecurityPlugin } from './middleware/http-security.middleware';
 
 const HEALTH_TIMEOUT_MS = 2_000;
@@ -37,6 +37,7 @@ async function withTimeout<T>(operation: Promise<T>, timeoutMs = HEALTH_TIMEOUT_
 
 async function bootstrap() {
     assertProductionConfiguration();
+    assertSwaggerConfiguration();
     // Connect MongoDB
     const db = MongoDB.getInstance(loadMongoConfigFromEnv());
     await db.connect();
@@ -67,7 +68,7 @@ async function bootstrap() {
         },
     })
         .use(HttpSecurityPlugin)
-        .use(isSwaggerEnabled() ? swagger(swaggerConfig) : new Elysia())
+        .use(isSwaggerEnabled() ? openapi(swaggerConfig) : new Elysia())
         .use(cors({
             origin: origins.length ? origins : ['http://localhost:3000', 'http://localhost:5173'],
             methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

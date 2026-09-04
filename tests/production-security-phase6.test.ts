@@ -1,23 +1,25 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import Elysia from 'elysia';
+import { openapi } from '@elysia/openapi';
 import { assertProductionConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from '../src/config/production.config';
 import { HttpSecurityPlugin } from '../src/middleware/http-security.middleware';
 import { ApiErrorPlugin } from '../src/middleware/api-error.middleware';
 import { safeSearchPattern } from '../src/services/search-safety.service';
+import { swaggerConfig } from '../src/constants/swagger.config';
 
 const originalNodeEnv = process.env.NODE_ENV;
 const originalPublicHttps = process.env.PUBLIC_HTTPS;
 const originalSwaggerEnabled = process.env.ENABLE_SWAGGER;
-const originalSwaggerUsername = process.env.SWAGGER_BASIC_USERNAME;
-const originalSwaggerPassword = process.env.SWAGGER_BASIC_PASSWORD;
+const originalSwaggerUsername = process.env.SWAGGER_USERNAME;
+const originalSwaggerPassword = process.env.SWAGGER_PASSWORD;
 afterEach(() => {
     if (originalNodeEnv === undefined) delete process.env.NODE_ENV;
     else process.env.NODE_ENV = originalNodeEnv;
     if (originalPublicHttps === undefined) delete process.env.PUBLIC_HTTPS;
     else process.env.PUBLIC_HTTPS = originalPublicHttps;
     if (originalSwaggerEnabled === undefined) delete process.env.ENABLE_SWAGGER; else process.env.ENABLE_SWAGGER = originalSwaggerEnabled;
-    if (originalSwaggerUsername === undefined) delete process.env.SWAGGER_BASIC_USERNAME; else process.env.SWAGGER_BASIC_USERNAME = originalSwaggerUsername;
-    if (originalSwaggerPassword === undefined) delete process.env.SWAGGER_BASIC_PASSWORD; else process.env.SWAGGER_BASIC_PASSWORD = originalSwaggerPassword;
+    if (originalSwaggerUsername === undefined) delete process.env.SWAGGER_USERNAME; else process.env.SWAGGER_USERNAME = originalSwaggerUsername;
+    if (originalSwaggerPassword === undefined) delete process.env.SWAGGER_PASSWORD; else process.env.SWAGGER_PASSWORD = originalSwaggerPassword;
 });
 
 const validProduction = {
@@ -67,9 +69,9 @@ describe('Phase 6 production configuration', () => {
     });
 
     test('requires strong Basic credentials only when production Swagger is enabled', () => {
-        expect(() => assertProductionConfiguration({ ...validProduction, ENABLE_SWAGGER: 'true' })).toThrow('SWAGGER_BASIC_USERNAME');
-        expect(() => assertProductionConfiguration({ ...validProduction, ENABLE_SWAGGER: 'true', SWAGGER_BASIC_USERNAME: 'docs', SWAGGER_BASIC_PASSWORD: 'short' })).toThrow('SWAGGER_BASIC_PASSWORD');
-        expect(() => assertProductionConfiguration({ ...validProduction, ENABLE_SWAGGER: 'true', SWAGGER_BASIC_USERNAME: 'docs-admin', SWAGGER_BASIC_PASSWORD: '8ryq2L9pX4vK7mN1cD6hJ0sT3wF5bG8eQ2zA9uR' })).not.toThrow();
+        expect(() => assertProductionConfiguration({ ...validProduction, ENABLE_SWAGGER: 'true' })).toThrow('SWAGGER_USERNAME');
+        expect(() => assertProductionConfiguration({ ...validProduction, ENABLE_SWAGGER: 'true', SWAGGER_USERNAME: 'docs', SWAGGER_PASSWORD: 'short' })).toThrow('SWAGGER_PASSWORD');
+        expect(() => assertProductionConfiguration({ ...validProduction, ENABLE_SWAGGER: 'true', SWAGGER_USERNAME: 'docs-admin', SWAGGER_PASSWORD: '8ryq2L9pX4vK7mN1cD6hJ0sT3wF5bG8eQ2zA9uR' })).not.toThrow();
     });
 
     test('search patterns are literal and bounded', () => {
@@ -106,22 +108,32 @@ describe('Phase 6 HTTP boundary', () => {
 
     test('production Swagger is hidden when disabled and Basic-authenticated when enabled', async () => {
         process.env.NODE_ENV = 'production'; process.env.PUBLIC_HTTPS = 'true'; process.env.ENABLE_SWAGGER = 'false';
-        const app = new Elysia({ prefix: '/api' }).use(HttpSecurityPlugin).get('/swagger', () => ({ docs: true })).get('/swagger/json', () => ({ openapi: '3.0.0' })).get('/probe', () => ({ ok: true }));
+        const app = new Elysia({ prefix: '/api' }).use(HttpSecurityPlugin).use(openapi(swaggerConfig)).get('/probe', () => ({ ok: true }));
         for (const path of ['/api/swagger', '/api/swagger/json', '/api/swagger/assets/example.js']) {
             const response = await app.handle(new Request(`http://localhost${path}`));
             expect(response.status).toBe(404);
             expect(await response.json()).toMatchObject({ error: true, message: 'المسار غير موجود' });
         }
 
-        process.env.ENABLE_SWAGGER = 'true'; process.env.SWAGGER_BASIC_USERNAME = 'docs-admin'; process.env.SWAGGER_BASIC_PASSWORD = '8ryq2L9pX4vK7mN1cD6hJ0sT3wF5bG8eQ2zA9uR';
+        process.env.ENABLE_SWAGGER = 'true'; process.env.SWAGGER_USERNAME = 'docs-admin'; process.env.SWAGGER_PASSWORD = '8ryq2L9pX4vK7mN1cD6hJ0sT3wF5bG8eQ2zA9uR';
         const unauthorized = await app.handle(new Request('http://localhost/api/swagger'));
         expect(unauthorized.status).toBe(401); expect(unauthorized.headers.get('www-authenticate')).toBe('Basic realm="Cannula Swagger", charset="UTF-8"'); expect(unauthorized.headers.get('cache-control')).toBe('no-store');
         for (const header of ['Basic bad!', 'Bearer unrelated-token', 'Basic ZG9jcy1hZG1pbg==', `Basic ${Buffer.from('wrong:wrong-password').toString('base64')}`]) {
             expect((await app.handle(new Request('http://localhost/api/swagger', { headers: { authorization: header } }))).status).toBe(401);
         }
-        const authorization = `Basic ${Buffer.from(`${process.env.SWAGGER_BASIC_USERNAME}:${process.env.SWAGGER_BASIC_PASSWORD}`).toString('base64')}`;
-        expect((await app.handle(new Request('http://localhost/api/swagger', { headers: { authorization } }))).status).toBe(200);
-        expect((await app.handle(new Request('http://localhost/api/swagger/json', { headers: { authorization } }))).status).toBe(200);
+        const authorization = `Basic ${Buffer.from(`${process.env.SWAGGER_USERNAME}:${process.env.SWAGGER_PASSWORD}`).toString('base64')}`;
+        const html = await app.handle(new Request('http://localhost/api/swagger', { headers: { authorization } }));
+        expect(html.status).toBe(200); expect(html.headers.get('content-security-policy')).toBeNull(); expect(await html.text()).toContain('api-reference');
+        const spec = await app.handle(new Request('http://localhost/api/swagger/json', { headers: { authorization } }));
+        expect(spec.status).toBe(200); expect(await spec.json()).toMatchObject({ openapi: expect.any(String), components: { securitySchemes: { bearerAuth: { scheme: 'bearer' } } } });
         expect((await app.handle(new Request('http://localhost/api/probe'))).status).toBe(200);
+    });
+
+    test('Swagger Basic Auth is also enforced in development', async () => {
+        process.env.NODE_ENV = 'development'; process.env.ENABLE_SWAGGER = 'true'; process.env.SWAGGER_USERNAME = 'docs-admin'; process.env.SWAGGER_PASSWORD = '8ryq2L9pX4vK7mN1cD6hJ0sT3wF5bG8eQ2zA9uR';
+        const app = new Elysia({ prefix: '/api' }).use(HttpSecurityPlugin).get('/swagger', () => ({ docs: true }));
+        expect((await app.handle(new Request('http://localhost/api/swagger'))).status).toBe(401);
+        const authorization = `Basic ${Buffer.from(`${process.env.SWAGGER_USERNAME}:${process.env.SWAGGER_PASSWORD}`).toString('base64')}`;
+        expect((await app.handle(new Request('http://localhost/api/swagger', { headers: { authorization } }))).status).toBe(200);
     });
 });

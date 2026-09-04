@@ -1,6 +1,8 @@
 import { SWAGGER_TAG_DEFINITIONS, SWAGGER_TAG_GROUPS } from './swagger-tags';
 
 export const swaggerConfig = {
+  path: '/swagger',
+  specPath: '/swagger/json',
   documentation: {
     info: {
       title: "Canona API",

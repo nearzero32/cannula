@@ -14,7 +14,7 @@ Production startup fails before database connections when critical configuration
 - Non-empty `REDIS_PASSWORD`. Use `REDIS_TLS=true` (`rediss://` is selected by the adapter) for remote Redis, or `REDIS_INTERNAL_NETWORK=true` for the private same-host Compose network.
 - Complete HTTPS R2 settings whenever any R2 value is supplied. R2 tokens should be bucket-scoped Object Read/Write credentials, with a separate private bucket. Cloudflare must enforce HTTPS and limit request size consistently with the API.
 
-Swagger is enabled by default only outside production. `ENABLE_SWAGGER=true` in production additionally requires `SWAGGER_BASIC_USERNAME` and a random 32+ character `SWAGGER_BASIC_PASSWORD`. Swagger UI and JSON are protected with browser-native HTTP Basic authentication; API JWT Bearer authentication remains separate. Prefer leaving both UI and JSON disabled publicly.
+Swagger is enabled by default only outside production. Whenever enabled, it requires `SWAGGER_USERNAME` and a random 32+ character `SWAGGER_PASSWORD`. Swagger UI and JSON are protected with browser-native HTTP Basic authentication; API JWT Bearer authentication remains separate. Prefer leaving both UI and JSON disabled publicly.
 
 The default API body limit is 2 MiB (`REQUEST_BODY_LIMIT_BYTES`, bounded to 64 KiB–10 MiB). Upload bytes go directly to R2. Query strings over 8 KiB are rejected. Security headers and a server-generated `X-Request-Id` are returned on normal and error paths. HSTS is emitted only in production, where the supported topology guarantees public HTTPS.
 

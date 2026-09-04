@@ -35,8 +35,8 @@ function safeEqual(left: string, right: string): boolean {
 
 export function swaggerBasicAuthorized(request: Request): boolean {
     const credentials = parseBasicAuthorization(request);
-    const username = process.env.SWAGGER_BASIC_USERNAME?.trim() ?? '';
-    const password = process.env.SWAGGER_BASIC_PASSWORD ?? '';
+    const username = process.env.SWAGGER_USERNAME?.trim() ?? '';
+    const password = process.env.SWAGGER_PASSWORD ?? '';
     return Boolean(credentials) && safeEqual(username, credentials.username) && safeEqual(password, credentials.password);
 }
 
@@ -45,9 +45,7 @@ function applyHeaders(headers: Record<string, string | number>, swaggerPath: boo
     headers['Referrer-Policy'] = 'no-referrer';
     headers['X-Frame-Options'] = 'DENY';
     headers['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()';
-    headers['Content-Security-Policy'] = swaggerPath
-        ? "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; frame-ancestors 'none'; base-uri 'none'"
-        : "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
+    if (!swaggerPath) headers['Content-Security-Policy'] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'";
     if (process.env.NODE_ENV === 'production' && process.env.PUBLIC_HTTPS === 'true') headers['Strict-Transport-Security'] = 'max-age=31536000';
 }
 
@@ -65,7 +63,7 @@ export const HttpSecurityPlugin = new Elysia({ name: 'http-security-plugin' })
         requestStarts.set(request, Date.now());
         set.headers['X-Request-Id'] = requestId;
         if (url.search.length > 8192) return new Response(JSON.stringify({ error: true, message: 'عنوان الطلب طويل جدًا', requestId }), { status: 414, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } });
-        if (process.env.NODE_ENV === 'production' && isSwaggerPath(url.pathname)) {
+        if (isSwaggerPath(url.pathname)) {
             if (!isSwaggerEnabled()) return swaggerResponse(404, requestId);
             if (!swaggerBasicAuthorized(request)) return swaggerResponse(401, requestId);
         }

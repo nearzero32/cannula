@@ -38,7 +38,7 @@ Future phases can extend with:
 | Database           | MongoDB (Mongoose)            |
 | Cache / sessions   | Redis                         |
 | Push notifications | OneSignal                     |
-| API docs           | Swagger (`@elysiajs/swagger`) |
+| API docs           | OpenAPI / Scalar (`@elysia/openapi`) |
 
 ### Request Lifecycle
 
