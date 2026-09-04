@@ -1,13 +1,12 @@
 import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
-import doctorService, { PATIENT_DOCTOR_SORT } from '../../services/doctor.service';
+import doctorService, { PATIENT_DOCTOR_SORT, PUBLIC_DOCTOR_MATCH } from '../../services/doctor.service';
 import {
     IDoctorGenderEnum,
-    IDoctorStatusEnum,
     type IDoctor,
 } from '../../interfaces/doctor.interface';
-import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
+import { BadRequestResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 import { doctorSpecialtyMap } from '../../services/doctor-specialty.service';
 import Specialty from '../../models/specialties.model';
 import { safeSearchPattern } from '../../services/search-safety.service';
@@ -15,6 +14,9 @@ import availableDoctorsService, { AVAILABLE_DOCTORS_CACHE_TTL_SECONDS, available
 import RedisClient from '../../databases/redis';
 import { DomainError } from '../../services/domain-error';
 import { toBaghdadLocal } from '../../services/appointment-time.service';
+import Clinic from '../../models/clinics.model';
+import { IClinicStatusEnum } from '../../interfaces/clinic.interface';
+import { ISpecialtyStatusEnum } from '../../interfaces/specialty.interface';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -35,6 +37,19 @@ const availableDoctorsResponseSchema = t.Object({
     pagination: t.Object({ page: t.Integer(), limit: t.Integer(), total: t.Integer(), pages: t.Integer(), hasNext: t.Boolean(), hasPrev: t.Boolean() }),
 });
 
+const doctorDetailResponseSchema = t.Object({
+    error: t.Literal(false),
+    message: t.String(),
+    data: t.Object({
+        _id: t.String(),
+        display_name: t.String(),
+        clinics: t.Array(t.Object({
+            _id: t.String(), name: t.String(), address: t.String(), icon: t.Nullable(t.String()),
+            map_location: t.Object({ lat: t.Nullable(t.Number()), lng: t.Nullable(t.Number()) }),
+        })),
+    }, { additionalProperties: true }),
+});
+
 export function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specialties: Map<string, { _id: string; name: string; icon: string | null }>, detailed = false) {
     const base = {
         _id: String(doctor._id),
@@ -49,8 +64,7 @@ export function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specia
         currency: doctor.currency,
         is_featured: doctor.is_featured,
         accepting_new_patients: doctor.accepting_new_patients,
-        license_verified: doctor.license_verified,
-        verification_status: doctor.verification_status,
+        is_verified: true,
     };
 
     if (!detailed) return base;
@@ -59,14 +73,8 @@ export function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specia
         ...base,
         bio: doctor.bio,
         languages: doctor.languages,
-        clinic_ids: doctor.clinic_ids,
         map_location: doctor.map_location,
         appointment_duration: doctor.appointment_duration,
-        slot_interval: doctor.slot_interval,
-        accept_auto_booking: doctor.accept_auto_booking,
-        allow_reschedule: doctor.allow_reschedule,
-        booking_lead_time_hours: doctor.booking_lead_time_hours,
-        cancellation_window_hours: doctor.cancellation_window_hours,
     };
 }
 
@@ -81,23 +89,26 @@ export const mobileDoctorsController = new Elysia({
             const page = Math.max(1, Number(query.page) || 1);
             const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
 
-            const main_match: Record<string, unknown> = {
-                status: IDoctorStatusEnum.ACTIVE,
-            };
+            const main_match: Record<string, unknown> = { ...PUBLIC_DOCTOR_MATCH };
 
-            if (query.specialty_id && ObjectId.isValid(query.specialty_id)) main_match.specialty_ids = new ObjectId(query.specialty_id);
+            if (query.specialty_id) {
+                if (!ObjectId.isValid(query.specialty_id)) throw new DomainError('معرف التخصص غير صالح', 400, 'SPECIALTY_INVALID');
+                main_match.specialty_ids = new ObjectId(query.specialty_id);
+            }
 
             if (query.gender) main_match.gender = query.gender;
 
+            if (query.is_featured && query.is_featured !== 'true' && query.is_featured !== 'false') throw new DomainError('قيمة المميز غير صالحة', 400, 'INVALID_FEATURED_FILTER');
             if (query.is_featured === 'true') main_match.is_featured = true;
 
-            if (query.clinic_id && ObjectId.isValid(query.clinic_id)) {
+            if (query.clinic_id) {
+                if (!ObjectId.isValid(query.clinic_id)) throw new DomainError('معرف العيادة غير صالح', 400, 'CLINIC_INVALID');
                 main_match.clinic_ids = new ObjectId(query.clinic_id);
             }
 
             if (query.search) {
                 const search = safeSearchPattern(query.search);
-                const matchingSpecialties = await Specialty.find({ name: { $regex: search, $options: 'i' } }).select('_id').lean().exec();
+                const matchingSpecialties = await Specialty.find({ name: { $regex: search, $options: 'i' }, status: ISpecialtyStatusEnum.ACTIVE }).select('_id').lean().exec();
                 main_match.$or = [
                     { display_name: { $regex: search, $options: 'i' } },
                     ...(matchingSpecialties.length ? [{ specialty_ids: { $in: matchingSpecialties.map(item => item._id) } }] : []),
@@ -107,7 +118,7 @@ export const mobileDoctorsController = new Elysia({
             const { data, count } = await doctorService.getPaginated({ main_match, sort: PATIENT_DOCTOR_SORT, page, limit });
             const totalPages = Math.ceil(count / limit);
 
-            const specialties = await doctorSpecialtyMap(data);
+            const specialties = await doctorSpecialtyMap(data, { publicOnly: true });
             return {
                 error: false,
                 message: 'تم جلب الأطباء بنجاح',
@@ -125,7 +136,7 @@ export const mobileDoctorsController = new Elysia({
                 is_featured: t.Optional(t.String()),
                 search: t.Optional(t.String()),
             }),
-            response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
+            response: { 200: GenericPaginatedResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
         }
     )
 
@@ -160,7 +171,7 @@ export const mobileDoctorsController = new Elysia({
             if (cached && typeof cached === 'object') return cached as any;
 
             const available = await availableDoctorsService.discover(filters, now);
-            const specialties = await doctorSpecialtyMap(available.map(item => item.doctor));
+            const specialties = await doctorSpecialtyMap(available.map(item => item.doctor), { publicOnly: true });
             const total = available.length;
             const pages = Math.ceil(total / limit);
             const data = available.slice((page - 1) * limit, page * limit).map(item => ({
@@ -201,21 +212,32 @@ export const mobileDoctorsController = new Elysia({
                 return { error: true, message: 'معرف الطبيب غير صالح' };
             }
 
-            const doctor = await doctorService.getById(params.id);
-            if (!doctor || doctor.status !== IDoctorStatusEnum.ACTIVE) {
+            const doctor = await doctorService.getOneBy({ main_match: { $match: { _id: new ObjectId(params.id), ...PUBLIC_DOCTOR_MATCH } } });
+            if (!doctor) {
                 set.status = 404;
                 return { error: true, message: 'الطبيب غير موجود' };
             }
 
-            const specialties = await doctorSpecialtyMap([doctor]);
+            const [specialties, clinics] = await Promise.all([
+                doctorSpecialtyMap([doctor], { publicOnly: true }),
+                Clinic.find({ _id: { $in: doctor.clinic_ids ?? [] }, status: IClinicStatusEnum.ACTIVE })
+                    .select('_id name address icon map_location').lean().exec(),
+            ]);
+            const clinicsById = new Map(clinics.map(clinic => [String(clinic._id), {
+                _id: String(clinic._id), name: clinic.name, address: clinic.address, icon: clinic.icon ?? null,
+                map_location: clinic.map_location ?? { lat: null, lng: null },
+            }]));
             return {
                 error: false,
                 message: 'تم جلب الطبيب بنجاح',
-                data: formatDoctorForMobile(doctor, specialties, true),
+                data: {
+                    ...formatDoctorForMobile(doctor, specialties, true),
+                    clinics: (doctor.clinic_ids ?? []).map(id => clinicsById.get(String(id))).filter(Boolean),
+                },
             };
         },
         {
             params: t.Object({ id: t.String() }),
-            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses },
+            response: { 200: doctorDetailResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses },
         }
     );

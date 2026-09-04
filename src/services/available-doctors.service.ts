@@ -6,7 +6,7 @@ import DoctorAvailabilityException from '../models/doctor-availability-exception
 import Appointment, { APPOINTMENT_BLOCKING_STATUSES } from '../models/appointments.model';
 import { generateAppointmentSlots } from './appointment-slot.service';
 import { localDateRangeUtc, localDayOfWeek, toBaghdadLocal } from './appointment-time.service';
-import { PATIENT_DOCTOR_SORT } from './doctor.service';
+import { PATIENT_DOCTOR_SORT, PUBLIC_DOCTOR_MATCH } from './doctor.service';
 import { APPOINTMENT_DAILY_CAP_COUNTING_STATUSES, APPOINTMENT_TIMEZONE } from '../interfaces/appointment.interface';
 import { AvailabilityExceptionTypeEnum, type AvailabilityPeriod } from '../interfaces/doctor-availability.interface';
 import { DEFAULT_MAX_APPOINTMENTS_PER_DAY, IDoctorStatusEnum, IDoctorVerificationStatusEnum } from '../interfaces/doctor.interface';
@@ -41,9 +41,7 @@ export class AvailableDoctorsService {
     async discover(filters: AvailableDoctorsFilters = {}, now = new Date()): Promise<AvailableDoctorResult[]> {
         const local = toBaghdadLocal(now);
         const doctorMatch: Record<string, unknown> = {
-            status: IDoctorStatusEnum.ACTIVE,
-            verification_status: IDoctorVerificationStatusEnum.VERIFIED,
-            license_verified: true,
+            ...PUBLIC_DOCTOR_MATCH,
             accepting_new_patients: true,
         };
         if (filters.specialty_id) doctorMatch.specialty_ids = new mongoose.Types.ObjectId(filters.specialty_id);

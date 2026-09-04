@@ -244,6 +244,7 @@ doctorSchema.pre('validate', function () {
 
 // Patient listings filter first, then use the shared stable display ordering.
 doctorSchema.index({ status: 1, display_order: 1, _id: 1 });
+doctorSchema.index({ status: 1, verification_status: 1, license_verified: 1, display_order: 1, _id: 1 });
 doctorSchema.index({ specialty_ids: 1, status: 1, display_order: 1, _id: 1 });
 doctorSchema.index({ primary_specialty_id: 1, status: 1 });
 // Admin verification queue

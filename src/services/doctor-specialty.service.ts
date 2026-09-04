@@ -16,8 +16,8 @@ export async function validateDoctorSpecialties(primaryId: string, ids: string[]
     return { primary_specialty_id: asObjectId(primaryId), specialty_ids: objectIds };
 }
 
-export async function doctorSpecialtyMap(doctors: Array<{ primary_specialty_id: unknown; specialty_ids: unknown[] }>) {
+export async function doctorSpecialtyMap(doctors: Array<{ primary_specialty_id: unknown; specialty_ids: unknown[] }>, options: { publicOnly?: boolean } = {}) {
     const ids = [...new Set(doctors.flatMap(doctor => [doctor.primary_specialty_id, ...(doctor.specialty_ids ?? [])]).filter(Boolean).map(String))];
-    const rows = ids.length ? await Specialty.find({ _id: { $in: ids.map(asObjectId) } }).select('name icon status').lean().exec() : [];
+    const rows = ids.length ? await Specialty.find({ _id: { $in: ids.map(asObjectId) }, ...(options.publicOnly ? { status: ISpecialtyStatusEnum.ACTIVE } : {}) }).select('name icon status').lean().exec() : [];
     return new Map(rows.map(row => [String(row._id), { _id: String(row._id), name: row.name, icon: row.icon ?? null }]));
 }

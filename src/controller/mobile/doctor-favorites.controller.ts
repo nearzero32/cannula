@@ -5,9 +5,8 @@ import { AuthPlugin } from '../../middleware/auth.middleware';
 import { TokenAudienceEnum } from '../../constants/jwt';
 import doctorFavoriteService from '../../services/doctor-favorite.service';
 import patientService from '../../services/patient.service';
-import doctorService, { patientDoctorSort } from '../../services/doctor.service';
+import doctorService, { patientDoctorSort, publicDoctorMatch } from '../../services/doctor.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
-import { IDoctorStatusEnum } from '../../interfaces/doctor.interface';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
 import { BadRequestResponseSchema, ConflictResponseSchema, ForbiddenResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../schemas/api-response.schema';
 
@@ -27,8 +26,8 @@ const doctorLookupPipeline = [
         },
     },
     { $unwind: { path: '$doctor', preserveNullAndEmptyArrays: false } },
-    { $match: { 'doctor.status': IDoctorStatusEnum.ACTIVE } },
-    { $lookup: { from: 'specialties', localField: 'doctor.specialty_ids', foreignField: '_id', as: 'specialties' } },
+    { $match: publicDoctorMatch('doctor') },
+    { $lookup: { from: 'specialties', let: { ids: '$doctor.specialty_ids' }, pipeline: [{ $match: { $expr: { $in: ['$_id', '$$ids'] }, status: 'active' } }], as: 'specialties' } },
 ];
 
 const doctorFavoriteProjection = {
@@ -42,10 +41,13 @@ const doctorFavoriteProjection = {
         primary_specialty_id: '$doctor.primary_specialty_id',
         specialties: { $map: { input: '$specialties', as: 'item', in: { _id: '$$item._id', name: '$$item.name', icon: '$$item.icon' } } },
         experience_years: '$doctor.experience_years',
+        gender: '$doctor.gender',
         consultation_fee: '$doctor.consultation_fee',
+        follow_up_fee: '$doctor.follow_up_fee',
         currency: '$doctor.currency',
         is_featured: '$doctor.is_featured',
-        status: '$doctor.status',
+        accepting_new_patients: '$doctor.accepting_new_patients',
+        is_verified: { $literal: true },
     },
 };
 
@@ -130,8 +132,8 @@ export const mobileDoctorFavoritesController = new Elysia({
                 return { error: true, message: 'الملف الشخصي غير موجود' };
             }
 
-            const doctor = await doctorService.getById(body.doctor_id);
-            if (!doctor || doctor.status !== IDoctorStatusEnum.ACTIVE) {
+            const doctor = await doctorService.getOneBy({ main_match: { $match: { _id: new ObjectId(body.doctor_id), ...publicDoctorMatch() } } });
+            if (!doctor) {
                 set.status = 404;
                 return { error: true, message: 'الطبيب غير موجود' };
             }

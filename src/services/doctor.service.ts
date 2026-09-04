@@ -4,7 +4,7 @@ import type { PipelineStage } from 'mongoose';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import sessionService from './session.service';
-import { IDoctorStatusEnum } from '../interfaces/doctor.interface';
+import { IDoctorStatusEnum, IDoctorVerificationStatusEnum } from '../interfaces/doctor.interface';
 import uploadPolicyService from './upload-policy.service';
 import { UploadPurposeEnum } from '../constants/upload-policy';
 import mongoose from 'mongoose';
@@ -15,6 +15,18 @@ import { DomainError } from './domain-error';
  * presentation. Keep the _id tie-breaker for stable pagination.
  */
 export const PATIENT_DOCTOR_SORT = Object.freeze({ display_order: 1, _id: 1 } as const);
+
+/** A profile is public independently from whether it accepts new bookings. */
+export const PUBLIC_DOCTOR_MATCH = Object.freeze({
+    status: IDoctorStatusEnum.ACTIVE,
+    verification_status: IDoctorVerificationStatusEnum.VERIFIED,
+    license_verified: true,
+} as const);
+
+export function publicDoctorMatch(prefix = ''): Record<string, unknown> {
+    if (!prefix) return { ...PUBLIC_DOCTOR_MATCH };
+    return Object.fromEntries(Object.entries(PUBLIC_DOCTOR_MATCH).map(([key, value]) => [`${prefix}.${key}`, value]));
+}
 
 /** Builds the canonical doctor sort for a document produced by a $lookup. */
 export function patientDoctorSort(prefix = ''): Record<string, 1> {
