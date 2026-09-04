@@ -34,7 +34,7 @@ const homeCareServiceSchema = new Schema(
             enum: Object.values(IHomeCareStatusEnum),
             default: IHomeCareStatusEnum.ACTIVE,
         },
-        display_order: { type: Number, min: 0, default: 0, validate: Number.isInteger },
+        display_order: { type: Number, min: 0, default: 1000, validate: Number.isInteger },
         created_by: { type: Schema.Types.ObjectId, ref: 'User', default: null },
     },
     { timestamps: true, versionKey: false, collection: 'home_care_services' }

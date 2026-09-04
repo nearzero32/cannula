@@ -372,7 +372,7 @@
                 ],
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"name\": \"Cardiology\",\n  \"description\": \"Heart specialists\",\n  \"icon\": null,\n  \"sort_order\": 1,\n  \"status\": \"active\"\n}"
+                  "raw": "{\n  \"name\": \"Cardiology\",\n  \"description\": \"Heart specialists\",\n  \"icon\": null,\n  \"sortOrder\": 1000,\n  \"status\": \"active\"\n}"
                 },
                 "url": {
                   "raw": "{{baseUrl}}/dash/admin/specialties",

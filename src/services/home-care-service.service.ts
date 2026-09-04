@@ -4,6 +4,14 @@ import HomeCareService, { type HomeCareServiceDocument } from '../models/home-ca
 import { IHomeCareStatusEnum, type IHomeCareService, type IHomeCareStatus } from '../interfaces/home-care.interface';
 import { HomeCareValidationError, normalizeHomeCareName, validateHomeCareServiceNumbers } from './home-care.validation';
 import uploadPolicyService from './upload-policy.service'; import {UploadPurposeEnum} from '../constants/upload-policy';
+import RedisClient from '../databases/redis';
+import { DomainError } from './domain-error';
+import ActivityLogService from './activity-log.service';
+import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
+import { PATIENT_HOME_CARE_SORT } from './home-care-category.service';
+
+export const MOBILE_HOME_CARE_SERVICES_CACHE_PREFIX = 'cache:mobile:home-care:services:v1';
+export const mobileHomeCareServicesCacheKey = (categoryId?: string) => `${MOBILE_HOME_CARE_SERVICES_CACHE_PREFIX}:category=${categoryId ?? 'all'}`;
 
 export interface HomeCareServiceInput {
     categoryId: string;
@@ -43,7 +51,7 @@ export class HomeCareServiceService {
             filter.$or = [{ name: search }, { short_description: search }, { description: search }];
         }
         const [data, count] = await Promise.all([
-            HomeCareService.find(filter).sort({ display_order: 1, createdAt: 1, _id: 1 }).skip((page - 1) * limit).limit(limit).exec(),
+            HomeCareService.find(filter).sort(PATIENT_HOME_CARE_SORT).skip((page - 1) * limit).limit(limit).exec(),
             HomeCareService.countDocuments(filter).exec(),
         ]);
         return { data, count };
@@ -57,7 +65,7 @@ export class HomeCareServiceService {
         return HomeCareService.find({
             category_id: { $in: activeCategoryIds },
             status: IHomeCareStatusEnum.ACTIVE,
-        }).sort({ display_order: 1, createdAt: 1, _id: 1 }).exec();
+        }).sort(PATIENT_HOME_CARE_SORT).exec();
     }
 
     public async getById(id: string): Promise<HomeCareServiceDocument | null> {
@@ -73,12 +81,13 @@ export class HomeCareServiceService {
         });
         return categoryIsActive ? service : null;
     }
+    public async invalidateMobileCache() { try { await RedisClient.getInstance().deleteByPattern('cache:mobile:home-care:*'); } catch { console.warn('Unable to invalidate mobile home-care cache'); } }
 
     public async create(input: HomeCareServiceInput): Promise<HomeCareServiceDocument> {
         const media=input.image?await uploadPolicyService.requireReadyReference(input.image,UploadPurposeEnum.HOME_CARE_SERVICE_IMAGE,'HOME_CARE_SERVICE','000000000000000000000001'):null;
         const normalizedName = normalizeHomeCareName(input.name).name;
         const status = input.status ?? IHomeCareStatusEnum.ACTIVE;
-        const displayOrder = input.displayOrder ?? 0;
+        const displayOrder = input.displayOrder ?? 1000;
         validateHomeCareServiceNumbers({
             price: input.price,
             durationMin: input.durationMin,
@@ -98,7 +107,7 @@ export class HomeCareServiceService {
             status,
             display_order: displayOrder,
             created_by: input.createdBy ?? null,
-        });await uploadPolicyService.finalizeReplacement(media,null,String(created._id),'image');return created;
+        });await uploadPolicyService.finalizeReplacement(media,null,String(created._id),'image');await this.invalidateMobileCache();return created;
     }
 
     public async update(id: string, input: Partial<HomeCareServiceInput>): Promise<HomeCareServiceDocument> {
@@ -127,8 +136,16 @@ export class HomeCareServiceService {
 
         const updated = await HomeCareService.findByIdAndUpdate(id, payload, { new: true, runValidators: true }).exec();
         if (!updated) throw new HomeCareValidationError('الخدمة غير موجودة', 404);
-        if(input.image!==undefined)await uploadPolicyService.finalizeReplacement(media,current.image,id,'image');
-        return updated;
+        if(input.image!==undefined)await uploadPolicyService.finalizeReplacement(media,current.image,id,'image'); await this.invalidateMobileCache();
+        await this.invalidateMobileCache(); return updated;
+    }
+    public async reorder(serviceIds: string[], meta?: { user_id?: string; user_name?: string; user_type?: string; endpoint?: string; source?: string }) {
+        if (!serviceIds.length || serviceIds.length > 500) throw new DomainError('قائمة خدمات الرعاية المنزلية غير صالحة', 400, 'INVALID_HOME_CARE_SERVICE_ORDER');
+        if (serviceIds.some(id => !mongoose.Types.ObjectId.isValid(id))) throw new DomainError('معرف خدمة غير صالح', 400, 'INVALID_HOME_CARE_SERVICE_ID');
+        if (new Set(serviceIds).size !== serviceIds.length) throw new DomainError('لا يمكن تكرار الخدمة في الترتيب', 400, 'DUPLICATE_HOME_CARE_SERVICE_ID');
+        const ids = serviceIds.map(id => new mongoose.Types.ObjectId(id)), session = HomeCareService.db.startSession ? await HomeCareService.db.startSession() : null; let oldOrders: any[] = [];
+        try { if (!session) throw new DomainError('تعذر تحديث الترتيب', 409, 'HOME_CARE_SERVICE_ORDER_CONFLICT'); await session.withTransaction(async () => { oldOrders = await HomeCareService.find({ _id: { $in: ids } }).select('_id display_order').session(session).lean().exec(); if (oldOrders.length !== serviceIds.length) throw new DomainError('يوجد خدمة غير موجودة', 404, 'HOME_CARE_SERVICE_NOT_FOUND'); const result = await HomeCareService.bulkWrite(serviceIds.map((id, index) => ({ updateOne: { filter: { _id: new mongoose.Types.ObjectId(id) }, update: { $set: { display_order: (index + 1) * 10 } } } })), { ordered: true, session }); if (result.matchedCount !== serviceIds.length) throw new DomainError('تعذر تحديث الترتيب', 409, 'HOME_CARE_SERVICE_ORDER_CONFLICT'); }); } finally { if (session) await session.endSession(); }
+        const displayOrders = serviceIds.map((_, index) => (index + 1) * 10); await this.invalidateMobileCache(); try { await ActivityLogService.logActivity({ user_id: meta?.user_id, user_name: meta?.user_name, user_type: meta?.user_type, method: 'PATCH', endpoint: meta?.endpoint || '/home-care/services/order', action: IActivityLogActionEnum.BULK_UPDATE, collection_name: 'home_care_services', old_data: oldOrders, new_data: serviceIds.map((id, index) => ({ id, display_order: displayOrders[index] })), changed_fields: ['display_order'], request_body: { serviceIds }, source: meta?.source || IActivityLogSourceEnum.DASHBOARD }); } catch {} return { serviceIds, displayOrders };
     }
 
     public async updateStatus(id: string, status: IHomeCareStatus): Promise<HomeCareServiceDocument> {

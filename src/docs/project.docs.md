@@ -285,7 +285,7 @@ type Specialty = {
   description?: string;
   icon?: string;
   status: "active" | "inactive";
-  sortOrder?: number;
+  sort_order: number;
   created_by?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -528,6 +528,7 @@ All routes require authentication.
 | GET    | `/:id`        | Get specialty by ID          |
 | POST   | `/`           | Create specialty             |
 | PUT    | `/:id`        | Update specialty             |
+| PATCH  | `/order`      | Set Admin display ordering   |
 | PATCH  | `/:id/status` | Update specialty status      |
 
 #### Doctors — `/doctors`

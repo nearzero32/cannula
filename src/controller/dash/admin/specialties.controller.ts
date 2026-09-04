@@ -5,7 +5,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import mongoose from 'mongoose';
 import specialtyService from '../../../services/specialty.service';
 import { ISpecialtyStatusEnum } from '../../../interfaces/specialty.interface';
-import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
+import { BadRequestResponseSchema, ConflictResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
 import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 
@@ -15,7 +15,7 @@ const specialtyBodySchema = t.Object({
     name: t.String({ minLength: 1, maxLength: 150 }),
     description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
     icon: t.Optional(t.Nullable(t.String())),
-    sortOrder: t.Optional(t.Number({ minimum: 0 })),
+    sortOrder: t.Optional(t.Integer({ minimum: 0, maximum: 2_147_483_647 })),
     status: t.Optional(t.Enum(ISpecialtyStatusEnum)),
 });
 
@@ -64,6 +64,22 @@ export const specialtiesController = new Elysia({
         }
     )
 
+    .patch(
+        '/order',
+        async ({ body, phrase }) => ({
+            error: false,
+            message: 'تم تحديث ترتيب التخصصات بنجاح',
+            data: await specialtyService.reorder(body.specialtyIds, {
+                user_id: phrase._id, user_name: phrase.role + '_' + phrase._id, user_type: phrase.role,
+                endpoint: '/dash/admin/specialties/order', source: 'dashboard',
+            }),
+        }),
+        {
+            body: t.Object({ specialtyIds: t.Array(t.String(), { minItems: 1, maxItems: 500 }) }, { additionalProperties: false }),
+            response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
+    )
+
     .get(
         '/:id',
         async ({ params, set }) => {
@@ -94,7 +110,7 @@ export const specialtiesController = new Elysia({
                 description: body.description,
                 icon: body.icon,
                 status: body.status ?? ISpecialtyStatusEnum.ACTIVE,
-                sort_order: body.sortOrder ?? 0,
+                sort_order: body.sortOrder ?? 1000,
                 created_by: new ObjectId(phrase._id),
             }, {
                 user_id: phrase._id,

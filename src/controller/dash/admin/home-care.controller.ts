@@ -12,6 +12,7 @@ import {
     BadRequestResponseSchema,
     ConflictResponseSchema,
     ForbiddenResponseSchema,
+    GenericDataResponseSchema,
     InternalServerErrorResponseSchema,
     NotFoundResponseSchema,
     RateLimitResponseSchema,
@@ -170,6 +171,10 @@ const categoriesController = new Elysia({
         }),
         response: { 200: HomeCareCategoryListResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses },
     })
+    .patch('/order', async ({ body, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'إدارة الرعاية المنزلية متاحة للمشرف الرئيسي فقط' }; }
+        return { error: false, message: 'تم تحديث ترتيب أنواع الرعاية المنزلية بنجاح', data: await homeCareCategoryService.reorder(body.categoryIds, { user_id: phrase._id, user_name: phrase.role + '_' + phrase._id, user_type: phrase.role, endpoint: '/dash/admin/home-care/categories/order', source: 'dashboard' }) };
+    }, { body: t.Object({ categoryIds: t.Array(t.String(), { minItems: 1, maxItems: 500 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
     .get('/:id', async ({ params, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'read')) {
             set.status = 403;
@@ -295,6 +300,10 @@ const servicesController = new Elysia({
             422: ValidationErrorResponseSchema, ...protectedResponses,
         },
     })
+    .patch('/order', async ({ body, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'إدارة الرعاية المنزلية متاحة للمشرف الرئيسي فقط' }; }
+        return { error: false, message: 'تم تحديث ترتيب خدمات الرعاية المنزلية بنجاح', data: await homeCareServiceService.reorder(body.serviceIds, { user_id: phrase._id, user_name: phrase.role + '_' + phrase._id, user_type: phrase.role, endpoint: '/dash/admin/home-care/services/order', source: 'dashboard' }) };
+    }, { body: t.Object({ serviceIds: t.Array(t.String(), { minItems: 1, maxItems: 500 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
     .get('/:id', async ({ params, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'read')) {
             set.status = 403;

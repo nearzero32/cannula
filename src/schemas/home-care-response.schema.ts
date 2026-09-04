@@ -23,7 +23,6 @@ export const MobileHomeCareCategorySchema = t.Object({
     description: nullableString,
     icon: nullableString,
     image: nullableString,
-    display_order: t.Integer(),
 });
 
 export const HomeCareServiceSchema = t.Object({
@@ -53,7 +52,6 @@ export const MobileHomeCareServiceSchema = t.Object({
     duration_min: t.Nullable(t.Integer()),
     duration_max: t.Nullable(t.Integer()),
     price: t.Integer(),
-    display_order: t.Integer(),
 });
 
 export const HomeCareCategoryResponseSchema = successResponse(HomeCareCategorySchema, 'تم جلب نوع الرعاية المنزلية بنجاح');
