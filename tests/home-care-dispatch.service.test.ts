@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import mongoose from 'mongoose';
 import HomeCareRequest from '../src/models/home-care-request.model';
 import nurseService from '../src/services/nurse.service';
@@ -9,6 +9,11 @@ import { IHomeCareDispatchModeEnum, IHomeCareDispatchStatusEnum, IHomeCareReques
 import { HomeCareHistoryEventEnum } from '../src/interfaces/home-care-request-history.interface';
 
 afterEach(() => mock.restore());
+/** Unit-only transaction boundary; replica-set tests use a real ClientSession. */
+beforeEach(() => {
+    const session: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} };
+    spyOn(mongoose, 'startSession').mockResolvedValue(session);
+});
 
 const requestId = new mongoose.Types.ObjectId('507f191e810c19729de86101');
 const serviceId = new mongoose.Types.ObjectId('507f191e810c19729de86102');
@@ -20,7 +25,7 @@ const adminId = '507f191e810c19729de86107';
 
 function query<T>(result: T) {
     const chain: any = { exec: async () => result };
-    for (const method of ['select', 'populate', 'sort', 'skip', 'limit']) chain[method] = () => chain;
+    for (const method of ['select', 'populate', 'sort', 'skip', 'limit', 'session']) chain[method] = () => chain;
     return chain;
 }
 function nurse(id = nurseAId, userId = userA, qualified = [serviceId]) {

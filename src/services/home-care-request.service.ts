@@ -95,11 +95,13 @@ export function assertHomeCareRequestTransition(
 
 export async function nextHomeCareRequestNumber(now = new Date(), session?: ClientSession): Promise<string> {
     const year = now.getUTCFullYear();
-    const counter = await HomeCareRequestCounter.findOneAndUpdate(
+    const counterQuery = HomeCareRequestCounter.findOneAndUpdate(
         { _id: `home_care_request:${year}` },
         { $inc: { sequence: 1 } },
         { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true }
-    ).session(session ?? null).exec();
+    );
+    if (session) counterQuery.session(session);
+    const counter = await counterQuery.exec();
     if (!counter) throw new Error('Failed to allocate a Home Care request number');
     return `HC-${year}-${String(counter.sequence).padStart(6, '0')}`;
 }

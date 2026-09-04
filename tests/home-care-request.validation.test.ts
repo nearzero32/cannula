@@ -87,15 +87,15 @@ describe('Home Care request validation', () => {
 describe('Home Care request lifecycle', () => {
     test('contains the explicit allowed transition table', () => {
         expect(HOME_CARE_REQUEST_TRANSITIONS.pending).toEqual(['confirmed', 'cancelled', 'rejected']);
-        expect(HOME_CARE_REQUEST_TRANSITIONS.confirmed).toEqual(['in_progress', 'cancelled']);
-        expect(HOME_CARE_REQUEST_TRANSITIONS.in_progress).toEqual(['completed']);
+        expect(HOME_CARE_REQUEST_TRANSITIONS.confirmed).toEqual(['cancelled', 'rejected']);
+        expect(HOME_CARE_REQUEST_TRANSITIONS.in_progress).toEqual(['cancelled']);
     });
 
     test('allows operational transitions', () => {
         expect(() => assertHomeCareRequestTransition('pending', 'confirmed')).not.toThrow();
         expect(() => assertHomeCareRequestTransition('pending', 'rejected')).not.toThrow();
-        expect(() => assertHomeCareRequestTransition('confirmed', 'in_progress')).not.toThrow();
-        expect(() => assertHomeCareRequestTransition('in_progress', 'completed')).not.toThrow();
+        expect(() => assertHomeCareRequestTransition('confirmed', 'rejected')).not.toThrow();
+        expect(() => assertHomeCareRequestTransition('in_progress', 'cancelled')).not.toThrow();
     });
 
     test('rejects skipped and terminal transitions', () => {

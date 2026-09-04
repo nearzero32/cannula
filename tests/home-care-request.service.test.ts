@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, mock, spyOn, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import mongoose from 'mongoose';
 import HomeCareRequest from '../src/models/home-care-request.model';
 import HomeCareRequestCounter from '../src/models/home-care-request-counter.model';
@@ -15,6 +15,10 @@ import { PatientChildStatusEnum } from '../src/interfaces/patient-child.interfac
 import { IHomeCareRequestStatusEnum } from '../src/interfaces/home-care-request.interface';
 
 afterEach(() => mock.restore());
+beforeEach(() => {
+    const session: any = { withTransaction: async (work: any) => work(), endSession: async () => {} };
+    spyOn(mongoose, 'startSession').mockResolvedValue(session);
+});
 
 const patientId = new mongoose.Types.ObjectId('507f1f77bcf86cd799439011');
 const childId = new mongoose.Types.ObjectId('507f191e810c19729de860ea');
@@ -80,6 +84,7 @@ function requestDocument(overrides: Record<string, unknown> = {}) {
 function mockCounter(start = 0) {
     let sequence = start;
     return spyOn(HomeCareRequestCounter, 'findOneAndUpdate').mockImplementation((filter, update, options) => ({
+        session: () => ({ exec: async () => ({ sequence: ++sequence, filter, update, options }) }),
         exec: async () => ({ sequence: ++sequence, filter, update, options }),
     }) as never);
 }
@@ -106,10 +111,9 @@ describe('Home Care request creation', () => {
         const requestService = new HomeCareRequestService();
         mockCreateFoundation(requestService);
         let createdPayload: any;
-        spyOn(HomeCareRequest, 'create').mockImplementation(async (payload) => {
-            createdPayload = payload;
-            return requestDocument(payload as any);
-        });
+        spyOn(HomeCareRequest, 'create').mockImplementation((async (payload) => {
+            createdPayload = (payload as any)[0]; return [requestDocument(createdPayload)];
+        }) as never);
 
         const result = await requestService.createForPatient(patientId, input, actor);
         expect(result.request_number).toMatch(/^HC-\d{4}-000001$/);
@@ -133,10 +137,9 @@ describe('Home Care request creation', () => {
             status: PatientChildStatusEnum.ACTIVE,
         } as never);
         let createdPayload: any;
-        spyOn(HomeCareRequest, 'create').mockImplementation(async (payload) => {
-            createdPayload = payload;
-            return requestDocument(payload as any);
-        });
+        spyOn(HomeCareRequest, 'create').mockImplementation((async (payload) => {
+            createdPayload = (payload as any)[0]; return [requestDocument(createdPayload)];
+        }) as never);
 
         await requestService.createForPatient(patientId, { ...input, child_id: childId.toString() }, actor);
         expect(owned).toHaveBeenCalledWith(patientId, childId.toString());
