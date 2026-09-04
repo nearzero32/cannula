@@ -174,6 +174,7 @@ describe('API response documentation coverage', () => {
             ['post', '/api/mobile/auth/pin/forgot/reset', SWAGGER_TAGS.MOBILE.AUTH],
             ['get', '/api/dash/admin/auth-security/events', SWAGGER_TAGS.ADMIN.AUTH_SECURITY],
             ['get', '/api/mobile/doctors/', SWAGGER_TAGS.MOBILE.DOCTORS],
+            ['get', '/api/mobile/doctors/available', SWAGGER_TAGS.MOBILE.DOCTORS],
             ['post', '/api/mobile/appointments/', SWAGGER_TAGS.MOBILE.APPOINTMENTS],
             ['get', '/api/mobile/home-care/categories', SWAGGER_TAGS.MOBILE.HOME_CARE],
             ['get', '/api/mobile/home-care/requests/', SWAGGER_TAGS.MOBILE.HOME_CARE],

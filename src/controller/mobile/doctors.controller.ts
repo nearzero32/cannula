@@ -11,10 +11,31 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedRe
 import { doctorSpecialtyMap } from '../../services/doctor-specialty.service';
 import Specialty from '../../models/specialties.model';
 import { safeSearchPattern } from '../../services/search-safety.service';
+import availableDoctorsService, { AVAILABLE_DOCTORS_CACHE_TTL_SECONDS, availableDoctorsCacheKey } from '../../services/available-doctors.service';
+import RedisClient from '../../databases/redis';
+import { DomainError } from '../../services/domain-error';
+import { toBaghdadLocal } from '../../services/appointment-time.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
-function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specialties: Map<string, { _id: string; name: string; icon: string | null }>, detailed = false) {
+const availableDoctorsResponseSchema = t.Object({
+    error: t.Literal(false),
+    message: t.String(),
+    data: t.Array(t.Object({
+        _id: t.String(),
+        display_name: t.String(),
+        availability: t.Object({
+            date: t.String({ format: 'date' }),
+            timezone: t.Literal('Asia/Baghdad'),
+            clinicId: t.String(),
+            nextSlot: t.Object({ startsAt: t.String(), endsAt: t.String(), localStartsAt: t.String(), localEndsAt: t.String() }),
+            availableSlotCount: t.Integer({ minimum: 1 }),
+        }),
+    }, { additionalProperties: true })),
+    pagination: t.Object({ page: t.Integer(), limit: t.Integer(), total: t.Integer(), pages: t.Integer(), hasNext: t.Boolean(), hasPrev: t.Boolean() }),
+});
+
+export function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specialties: Map<string, { _id: string; name: string; icon: string | null }>, detailed = false) {
     const base = {
         _id: String(doctor._id),
         display_name: doctor.display_name,
@@ -105,6 +126,70 @@ export const mobileDoctorsController = new Elysia({
                 search: t.Optional(t.String()),
             }),
             response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
+        }
+    )
+
+    .get(
+        '/available',
+        async ({ query }) => {
+            const page = Math.max(1, Number(query.page) || 1);
+            const limit = Math.min(50, Math.max(1, Number(query.limit) || 10));
+            for (const [name, value] of [['specialty_id', query.specialty_id], ['clinic_id', query.clinic_id]] as const) {
+                if (value && !ObjectId.isValid(value)) throw new DomainError(`معرف ${name === 'specialty_id' ? 'التخصص' : 'العيادة'} غير صالح`, 400, 'INVALID_OBJECT_ID');
+            }
+            if (query.is_featured && query.is_featured !== 'true' && query.is_featured !== 'false') {
+                throw new DomainError('قيمة المميز غير صالحة', 400, 'INVALID_FEATURED_FILTER');
+            }
+
+            const now = new Date();
+            const date = toBaghdadLocal(now).date;
+            const filters = {
+                specialty_id: query.specialty_id,
+                clinic_id: query.clinic_id,
+                gender: query.gender,
+                is_featured: query.is_featured === 'true',
+            };
+            const key = availableDoctorsCacheKey({ ...filters, date, page, limit });
+            let cached: unknown = null;
+            try {
+                const raw = await RedisClient.getInstance().get(key);
+                if (raw) cached = JSON.parse(raw);
+            } catch {
+                console.warn(JSON.stringify({ level: 'warn', event: 'available_doctors_cache_get_failed' }));
+            }
+            if (cached && typeof cached === 'object') return cached as any;
+
+            const available = await availableDoctorsService.discover(filters, now);
+            const specialties = await doctorSpecialtyMap(available.map(item => item.doctor));
+            const total = available.length;
+            const pages = Math.ceil(total / limit);
+            const data = available.slice((page - 1) * limit, page * limit).map(item => ({
+                ...formatDoctorForMobile(item.doctor, specialties),
+                availability: item.availability,
+            }));
+            const response = {
+                error: false,
+                message: 'تم جلب الأطباء المتاحين بنجاح',
+                data,
+                pagination: { page, limit, total, pages, hasNext: page < pages, hasPrev: page > 1 },
+            };
+            try {
+                await RedisClient.getInstance().set(key, JSON.stringify(response), AVAILABLE_DOCTORS_CACHE_TTL_SECONDS);
+            } catch {
+                console.warn(JSON.stringify({ level: 'warn', event: 'available_doctors_cache_set_failed' }));
+            }
+            return response;
+        },
+        {
+            query: t.Object({
+                page: t.Optional(t.String()),
+                limit: t.Optional(t.String()),
+                specialty_id: t.Optional(t.String()),
+                clinic_id: t.Optional(t.String()),
+                gender: t.Optional(t.Enum(IDoctorGenderEnum)),
+                is_featured: t.Optional(t.String()),
+            }),
+            response: { 200: availableDoctorsResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
         }
     )
 
