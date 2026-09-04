@@ -12,6 +12,8 @@ import {
 import { HomeCareHistoryActorTypeEnum, HomeCareHistoryEventEnum, type HomeCareHistoryEvent } from '../interfaces/home-care-request-history.interface';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 import { normalizeOptionalRequestText } from './home-care-request.validation';
+import { homeCareBaghdadDateRange } from './home-care-date.service';
+import { runHomeCareTransaction } from './home-care-transaction.service';
 
 export interface DispatchActor {
     user_id: string;
@@ -42,16 +44,7 @@ function openDispatchFilter(): Record<string, unknown> {
 }
 
 function dateFilter(query: DispatchListQuery): Record<string, Date> | undefined {
-    if (!query.dateFrom && !query.dateTo) return undefined;
-    const result: Record<string, Date> = {};
-    for (const [key, value, suffix] of [['$gte', query.dateFrom, 'T00:00:00.000Z'], ['$lte', query.dateTo, 'T23:59:59.999Z']] as const) {
-        if (!value) continue;
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) throw new DomainError('التاريخ غير صالح', 400);
-        const parsed = new Date(`${value}${suffix}`);
-        if (Number.isNaN(parsed.getTime())) throw new DomainError('التاريخ غير صالح', 400);
-        result[key] = parsed;
-    }
-    return result;
+    return homeCareBaghdadDateRange(query.dateFrom, query.dateTo);
 }
 
 export class HomeCareDispatchService {
@@ -95,17 +88,20 @@ export class HomeCareDispatchService {
     public async claim(userId: string, requestId: string, actor: DispatchActor): Promise<HomeCareRequestDocument> {
         if (!mongoose.Types.ObjectId.isValid(requestId)) throw new DomainError('معرف الطلب غير صالح', 400);
         const nurse = await nurseService.requireActiveByUserId(userId);
-        const snapshot = await HomeCareRequest.findById(requestId).select('service_id status request_number dispatch').exec();
-        if (!snapshot) throw new DomainError('الطلب غير موجود', 404);
-        if (!nurse.qualified_service_ids.some(id => String((id as any)._id ?? id) === String(snapshot.service_id))) throw new DomainError('أنت غير مؤهل لتنفيذ هذه الخدمة', 422);
-        const now = new Date();
-        const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: snapshot._id, status: { $in: CLAIMABLE }, ...openDispatchFilter() },
-            { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.mode': IHomeCareDispatchModeEnum.OPEN_POOL, 'dispatch.nurse_id': nurse._id, 'dispatch.assigned_at': now, 'dispatch.assigned_by_user_id': null }, $inc: { 'dispatch.version': 1 } },
-            { returnDocument: 'after', runValidators: true }
-        ).exec();
-        if (!updated) throw new DomainError('تم استلام هذا الطلب مسبقاً', 409);
-        await this.record(updated, HomeCareHistoryEventEnum.CLAIMED_BY_NURSE, actor, snapshot.status, updated.status, null, String(nurse._id), IHomeCareDispatchModeEnum.OPEN_POOL);
+        const updated = await runHomeCareTransaction(async session => {
+            const snapshot = await HomeCareRequest.findById(requestId).select('service_id status request_number dispatch').session(session).exec();
+            if (!snapshot) throw new DomainError('الطلب غير موجود', 404);
+            if (!nurse.qualified_service_ids.some(id => String((id as any)._id ?? id) === String(snapshot.service_id))) throw new DomainError('أنت غير مؤهل لتنفيذ هذه الخدمة', 422);
+            const result = await HomeCareRequest.findOneAndUpdate(
+                { _id: snapshot._id, status: { $in: CLAIMABLE }, ...openDispatchFilter() },
+                { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.mode': IHomeCareDispatchModeEnum.OPEN_POOL, 'dispatch.nurse_id': nurse._id, 'dispatch.assigned_at': new Date(), 'dispatch.assigned_by_user_id': null }, $inc: { 'dispatch.version': 1 } },
+                { returnDocument: 'after', runValidators: true, session }
+            ).exec();
+            if (!result) throw new DomainError('تم استلام هذا الطلب مسبقاً', 409);
+            await historyService.append({ request_id: new mongoose.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.CLAIMED_BY_NURSE, actor: { type: HomeCareHistoryActorTypeEnum.NURSE, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: new mongoose.Types.ObjectId(String(nurse._id)) }, from_status: snapshot.status, to_status: result.status, from_nurse_id: null, to_nurse_id: new mongoose.Types.ObjectId(String(nurse._id)), dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: null, metadata: null }, { session, critical: true });
+            return result;
+        });
+        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: `${actor.user_type}_${actor.user_id}`, user_type: actor.user_type, method: 'PATCH', endpoint: actor.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: 'home_care_requests', document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ['status', 'dispatch'], request_body: { event: HomeCareHistoryEventEnum.CLAIMED_BY_NURSE }, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
         return await populate(HomeCareRequest.findById(updated._id)).exec() ?? updated;
     }
 
