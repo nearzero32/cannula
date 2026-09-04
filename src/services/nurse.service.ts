@@ -1,4 +1,4 @@
-import mongoose, { type FilterQuery } from 'mongoose';
+import mongoose, { type ClientSession, type FilterQuery } from 'mongoose';
 import Nurse, { type NurseDocument } from '../models/nurse.model';
 import User from '../models/users.model';
 import HomeCareService from '../models/home-care-service.model';
@@ -33,9 +33,9 @@ export class NurseService {
         if (nurse.status !== INurseStatusEnum.ACTIVE) throw new DomainError('حساب الممرض غير فعال', 403);
         return nurse;
     }
-    public async requireActiveQualified(nurseId: string, serviceId: unknown): Promise<NurseDocument> {
+    public async requireActiveQualified(nurseId: string, serviceId: unknown, session?: ClientSession): Promise<NurseDocument> {
         if (!mongoose.Types.ObjectId.isValid(nurseId)) throw new DomainError('معرف الممرض غير صالح', 400);
-        const nurse = await Nurse.findOne({ _id: nurseId, status: INurseStatusEnum.ACTIVE }).exec();
+        const nurse = await Nurse.findOne({ _id: nurseId, status: INurseStatusEnum.ACTIVE }).session(session ?? null).exec();
         if (!nurse) throw new DomainError('الممرض غير موجود أو غير فعال', 404);
         if (!nurse.qualified_service_ids.some(id => String(id) === String(serviceId))) {
             throw new DomainError('الممرض غير مؤهل لتنفيذ هذه الخدمة', 422);

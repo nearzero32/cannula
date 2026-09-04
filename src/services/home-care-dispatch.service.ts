@@ -119,69 +119,71 @@ export class HomeCareDispatchService {
     }
 
     public async assign(requestId: string, nurseId: string, actor: DispatchActor) {
-        const snapshot = await this.requestSnapshot(requestId);
-        const nurse = await nurseService.requireActiveQualified(nurseId, snapshot.service_id);
-        const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: snapshot._id, status: { $in: CLAIMABLE }, ...openDispatchFilter() },
-            { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.mode': IHomeCareDispatchModeEnum.ADMIN_DIRECT, 'dispatch.nurse_id': nurse._id, 'dispatch.assigned_at': new Date(), 'dispatch.assigned_by_user_id': new mongoose.Types.ObjectId(actor.user_id) }, $inc: { 'dispatch.version': 1 } },
-            { returnDocument: 'after', runValidators: true }
-        ).exec();
-        if (!updated) throw new DomainError('تم استلام هذا الطلب مسبقاً', 409);
-        await this.record(updated, HomeCareHistoryEventEnum.ASSIGNED_BY_ADMIN, actor, snapshot.status, updated.status, null, String(nurse._id), IHomeCareDispatchModeEnum.ADMIN_DIRECT);
+        if (!mongoose.Types.ObjectId.isValid(requestId)) throw new DomainError('معرف الطلب غير صالح', 400);
+        const updated = await runHomeCareTransaction(async session => {
+            const snapshot = await HomeCareRequest.findById(requestId).session(session).exec();
+            if (!snapshot) throw new DomainError('الطلب غير موجود', 404);
+            const nurse = await nurseService.requireActiveQualified(nurseId, snapshot.service_id, session);
+            const result = await HomeCareRequest.findOneAndUpdate(
+                { _id: snapshot._id, status: { $in: CLAIMABLE }, 'dispatch.status': IHomeCareDispatchStatusEnum.OPEN, 'dispatch.nurse_id': null, 'dispatch.version': snapshot.dispatch.version },
+                { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.mode': IHomeCareDispatchModeEnum.ADMIN_DIRECT, 'dispatch.nurse_id': nurse._id, 'dispatch.assigned_at': new Date(), 'dispatch.assigned_by_user_id': new mongoose.Types.ObjectId(actor.user_id) }, $inc: { 'dispatch.version': 1 } },
+                { returnDocument: 'after', runValidators: true, session }
+            ).exec();
+            if (!result) throw new DomainError('تم استلام هذا الطلب مسبقاً', 409);
+            await historyService.append({ request_id: new mongoose.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.ASSIGNED_BY_ADMIN, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: null, to_nurse_id: new mongoose.Types.ObjectId(String(nurse._id)), dispatch_mode: IHomeCareDispatchModeEnum.ADMIN_DIRECT, reason: null, metadata: null }, { session, critical: true });
+            return result;
+        });
+        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: `${actor.user_type}_${actor.user_id}`, user_type: actor.user_type, method: 'PATCH', endpoint: actor.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: 'home_care_requests', document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ['status', 'dispatch'], request_body: { event: HomeCareHistoryEventEnum.ASSIGNED_BY_ADMIN }, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
         return await populate(HomeCareRequest.findById(updated._id)).exec() ?? updated;
     }
 
     public async reassign(requestId: string, nurseId: string, reason: string | null | undefined, actor: DispatchActor) {
-        const snapshot = await this.requestSnapshot(requestId);
-        if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status as any) || !snapshot.dispatch?.nurse_id) throw new DomainError('لا يمكن إعادة تعيين الطلب في حالته الحالية', 409);
         const normalized = normalizeOptionalRequestText(reason, 1000, 'سبب إعادة التعيين طويل جداً');
-        if (snapshot.status !== IHomeCareRequestStatusEnum.ASSIGNED && !normalized) throw new DomainError('سبب إعادة التعيين مطلوب', 400);
-        if (String(snapshot.dispatch.nurse_id) === nurseId) throw new DomainError('الممرض الجديد هو الممرض الحالي', 409);
-        const nurse = await nurseService.requireActiveQualified(nurseId, snapshot.service_id);
-        const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: snapshot._id, status: snapshot.status, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.nurse_id': snapshot.dispatch.nurse_id },
-            { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, 'dispatch.mode': IHomeCareDispatchModeEnum.ADMIN_REASSIGN, 'dispatch.nurse_id': nurse._id, 'dispatch.assigned_at': new Date(), 'dispatch.assigned_by_user_id': new mongoose.Types.ObjectId(actor.user_id) }, $inc: { 'dispatch.version': 1 } },
-            { returnDocument: 'after', runValidators: true }
-        ).exec();
-        if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
-        await this.record(updated, HomeCareHistoryEventEnum.REASSIGNED_BY_ADMIN, actor, snapshot.status, updated.status, String(snapshot.dispatch.nurse_id), String(nurse._id), IHomeCareDispatchModeEnum.ADMIN_REASSIGN, normalized);
+        const updated = await runHomeCareTransaction(async session => {
+            const snapshot = await this.requestSnapshot(requestId, session);
+            if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status as any) || !snapshot.dispatch?.nurse_id) throw new DomainError('لا يمكن إعادة تعيين الطلب في حالته الحالية', 409);
+            if (snapshot.status !== IHomeCareRequestStatusEnum.ASSIGNED && !normalized) throw new DomainError('سبب إعادة التعيين مطلوب', 400);
+            if (String(snapshot.dispatch.nurse_id) === nurseId) throw new DomainError('الممرض الجديد هو الممرض الحالي', 409);
+            const nurse = await nurseService.requireActiveQualified(nurseId, snapshot.service_id, session);
+            const result = await HomeCareRequest.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.nurse_id': snapshot.dispatch.nurse_id, 'dispatch.version': snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, 'dispatch.mode': IHomeCareDispatchModeEnum.ADMIN_REASSIGN, 'dispatch.nurse_id': nurse._id, 'dispatch.assigned_at': new Date(), 'dispatch.assigned_by_user_id': new mongoose.Types.ObjectId(actor.user_id) }, $inc: { 'dispatch.version': 1 } }, { returnDocument: 'after', runValidators: true, session }).exec();
+            if (!result) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
+            await historyService.append({ request_id: new mongoose.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.REASSIGNED_BY_ADMIN, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: snapshot.dispatch.nurse_id, to_nurse_id: nurse._id, dispatch_mode: IHomeCareDispatchModeEnum.ADMIN_REASSIGN, reason: normalized, metadata: null }, { session, critical: true }); return result;
+        });
+        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: `${actor.user_type}_${actor.user_id}`, user_type: actor.user_type, method: 'PATCH', endpoint: actor.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: 'home_care_requests', document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ['status', 'dispatch'], request_body: { event: HomeCareHistoryEventEnum.REASSIGNED_BY_ADMIN, reason: normalized }, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
         return await populate(HomeCareRequest.findById(updated._id)).exec() ?? updated;
     }
 
     public async unassign(requestId: string, reason: string, actor: DispatchActor) {
-        const snapshot = await this.requestSnapshot(requestId);
         const normalized = normalizeOptionalRequestText(reason, 1000, 'سبب إلغاء التعيين طويل جداً');
         if (!normalized) throw new DomainError('سبب إلغاء التعيين مطلوب', 400);
-        if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status as any) || !snapshot.dispatch?.nurse_id) throw new DomainError('لا يمكن إلغاء تعيين الطلب في حالته الحالية', 409);
-        const oldNurse = String(snapshot.dispatch.nurse_id);
-        const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: snapshot._id, status: snapshot.status, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.nurse_id': snapshot.dispatch.nurse_id },
-            { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, 'dispatch.status': IHomeCareDispatchStatusEnum.OPEN, 'dispatch.mode': IHomeCareDispatchModeEnum.OPEN_POOL, 'dispatch.nurse_id': null, 'dispatch.assigned_at': null, 'dispatch.assigned_by_user_id': null }, $inc: { 'dispatch.version': 1 } },
-            { returnDocument: 'after', runValidators: true }
-        ).exec();
-        if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
-        await this.record(updated, HomeCareHistoryEventEnum.UNASSIGNED_BY_ADMIN, actor, snapshot.status, updated.status, oldNurse, null, IHomeCareDispatchModeEnum.OPEN_POOL, normalized);
+        const updated = await runHomeCareTransaction(async session => {
+            const snapshot = await this.requestSnapshot(requestId, session);
+            if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status as any) || !snapshot.dispatch?.nurse_id) throw new DomainError('لا يمكن إلغاء تعيين الطلب في حالته الحالية', 409);
+            const result = await HomeCareRequest.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.nurse_id': snapshot.dispatch.nurse_id, 'dispatch.version': snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, 'dispatch.status': IHomeCareDispatchStatusEnum.OPEN, 'dispatch.mode': IHomeCareDispatchModeEnum.OPEN_POOL, 'dispatch.nurse_id': null, 'dispatch.assigned_at': null, 'dispatch.assigned_by_user_id': null }, $inc: { 'dispatch.version': 1 } }, { returnDocument: 'after', runValidators: true, session }).exec();
+            if (!result) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
+            await historyService.append({ request_id: new mongoose.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.UNASSIGNED_BY_ADMIN, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: snapshot.dispatch.nurse_id, to_nurse_id: null, dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: normalized, metadata: null }, { session, critical: true }); return result;
+        });
+        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: `${actor.user_type}_${actor.user_id}`, user_type: actor.user_type, method: 'PATCH', endpoint: actor.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: 'home_care_requests', document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ['status', 'dispatch'], request_body: { event: HomeCareHistoryEventEnum.UNASSIGNED_BY_ADMIN, reason: normalized }, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
         return await populate(HomeCareRequest.findById(updated._id)).exec() ?? updated;
     }
 
     public async reopen(requestId: string, reason: string, actor: DispatchActor) {
-        const snapshot = await this.requestSnapshot(requestId);
         const normalized = normalizeOptionalRequestText(reason, 1000, 'سبب إعادة الفتح طويل جداً');
         if (!normalized) throw new DomainError('سبب إعادة فتح الطلب مطلوب', 400);
-        if (![IHomeCareRequestStatusEnum.CANCELLED, IHomeCareRequestStatusEnum.REJECTED].includes(snapshot.status as any)) throw new DomainError('لا يمكن إعادة فتح الطلب في حالته الحالية', 409);
-        const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: snapshot._id, status: snapshot.status },
-            { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, 'dispatch.status': IHomeCareDispatchStatusEnum.OPEN, 'dispatch.mode': IHomeCareDispatchModeEnum.OPEN_POOL, 'dispatch.nurse_id': null, 'dispatch.assigned_at': null, 'dispatch.assigned_by_user_id': null, cancelled_at: null, cancelled_by: null, cancellation_reason: null }, $inc: { 'dispatch.version': 1 } },
-            { returnDocument: 'after', runValidators: true }
-        ).exec();
-        if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
-        await this.record(updated, HomeCareHistoryEventEnum.REQUEST_REOPENED, actor, snapshot.status, updated.status, snapshot.dispatch?.nurse_id ? String(snapshot.dispatch.nurse_id) : null, null, IHomeCareDispatchModeEnum.OPEN_POOL, normalized);
+        const updated = await runHomeCareTransaction(async session => {
+            const snapshot = await this.requestSnapshot(requestId, session);
+            if (![IHomeCareRequestStatusEnum.CANCELLED, IHomeCareRequestStatusEnum.REJECTED].includes(snapshot.status as any)) throw new DomainError('لا يمكن إعادة فتح الطلب في حالته الحالية', 409);
+            const result = await HomeCareRequest.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, 'dispatch.version': snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, 'dispatch.status': IHomeCareDispatchStatusEnum.OPEN, 'dispatch.mode': IHomeCareDispatchModeEnum.OPEN_POOL, 'dispatch.nurse_id': null, 'dispatch.assigned_at': null, 'dispatch.assigned_by_user_id': null, cancelled_at: null, cancelled_by: null, cancellation_reason: null }, $inc: { 'dispatch.version': 1 } }, { returnDocument: 'after', runValidators: true, session }).exec();
+            if (!result) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
+            await historyService.append({ request_id: new mongoose.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.REQUEST_REOPENED, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: snapshot.dispatch?.nurse_id ?? null, to_nurse_id: null, dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: normalized, metadata: null }, { session, critical: true }); return result;
+        });
+        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: `${actor.user_type}_${actor.user_id}`, user_type: actor.user_type, method: 'PATCH', endpoint: actor.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: 'home_care_requests', document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ['status', 'dispatch'], request_body: { event: HomeCareHistoryEventEnum.REQUEST_REOPENED, reason: normalized }, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
         return await populate(HomeCareRequest.findById(updated._id)).exec() ?? updated;
     }
 
-    private async requestSnapshot(requestId: string) {
+    private async requestSnapshot(requestId: string, session?: mongoose.ClientSession) {
         if (!mongoose.Types.ObjectId.isValid(requestId)) throw new DomainError('معرف الطلب غير صالح', 400);
-        const request = await HomeCareRequest.findById(requestId).exec();
+        const request = await HomeCareRequest.findById(requestId).session(session ?? null).exec();
         if (!request) throw new DomainError('الطلب غير موجود', 404);
         return request;
     }

@@ -153,7 +153,8 @@ describe('Home Care lifecycle and Admin CAS operations', () => {
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(snapshot) as never); spyOn(nurseService, 'requireActiveQualified').mockResolvedValue(nurse()); quietWrites();
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(updated) as never);
         await service.assign(String(requestId), String(nurseAId), actor(adminId, 'admin'));
-        expect((update.mock.calls[0] as any)[0].$and).toBeDefined();
+        expect((update.mock.calls[0] as any)[0]).toMatchObject({ _id: requestId, 'dispatch.status': IHomeCareDispatchStatusEnum.OPEN, 'dispatch.nurse_id': null, 'dispatch.version': 0 });
+        expect((update.mock.calls[0] as any)[0].status.$in).toEqual([IHomeCareRequestStatusEnum.PENDING, IHomeCareRequestStatusEnum.CONFIRMED]);
         expect((update.mock.calls[0] as any)[1].$set['dispatch.mode']).toBe(IHomeCareDispatchModeEnum.ADMIN_DIRECT);
     });
 
@@ -173,7 +174,7 @@ describe('Home Care lifecycle and Admin CAS operations', () => {
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(opened) as never);
         await service.unassign(String(requestId), 'إعادة إلى الحوض', actor(adminId, 'admin'));
         expect((update.mock.calls[0] as any)[1].$set).toMatchObject({ status: 'confirmed', 'dispatch.status': 'OPEN', 'dispatch.nurse_id': null });
-        mock.restore(); spyOn(HomeCareRequest, 'findById').mockReturnValue(query(request(IHomeCareRequestStatusEnum.COMPLETED, nurseAId)) as never);
+        mock.restore(); const session: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} }; spyOn(mongoose, 'startSession').mockResolvedValue(session); spyOn(HomeCareRequest, 'findById').mockReturnValue(query(request(IHomeCareRequestStatusEnum.COMPLETED, nurseAId)) as never);
         await expect(service.reopen(String(requestId), 'تصحيح', actor(adminId, 'admin'))).rejects.toThrow('لا يمكن');
     });
 });

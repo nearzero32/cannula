@@ -73,6 +73,7 @@ function requestDocument(overrides: Record<string, unknown> = {}) {
         cancelled_at: null,
         cancelled_by: null,
         cancellation_reason: null,
+        dispatch: { status: 'OPEN', mode: 'OPEN_POOL', nurse_id: null, version: 0 },
         createdAt: now,
         updatedAt: now,
         ...overrides,
@@ -88,6 +89,7 @@ function mockCounter(start = 0) {
         exec: async () => ({ sequence: ++sequence, filter, update, options }),
     }) as never);
 }
+function sessionQuery(value: unknown) { return { session: () => ({ exec: async () => value }) }; }
 
 function mockCreateFoundation(requestService: HomeCareRequestService) {
     spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(serviceDocument() as never);
@@ -111,7 +113,7 @@ describe('Home Care request creation', () => {
         const requestService = new HomeCareRequestService();
         mockCreateFoundation(requestService);
         let createdPayload: any;
-        spyOn(HomeCareRequest, 'create').mockImplementation((async (payload) => {
+        spyOn(HomeCareRequest, 'create').mockImplementation((async (payload: any) => {
             createdPayload = (payload as any)[0]; return [requestDocument(createdPayload)];
         }) as never);
 
@@ -137,7 +139,7 @@ describe('Home Care request creation', () => {
             status: PatientChildStatusEnum.ACTIVE,
         } as never);
         let createdPayload: any;
-        spyOn(HomeCareRequest, 'create').mockImplementation((async (payload) => {
+        spyOn(HomeCareRequest, 'create').mockImplementation((async (payload: any) => {
             createdPayload = (payload as any)[0]; return [requestDocument(createdPayload)];
         }) as never);
 
@@ -229,10 +231,8 @@ describe('Home Care patient ownership and cancellation', () => {
             const requestService = new HomeCareRequestService();
             const current = requestDocument({ status });
             const updated = requestDocument({ status: IHomeCareRequestStatusEnum.CANCELLED });
-            let lookups = 0;
-            spyOn(requestService, 'getForPatient').mockImplementation(async () =>
-                ++lookups === 1 ? current : updated
-            );
+            spyOn(HomeCareRequest, 'findOne').mockReturnValue(sessionQuery(current) as never);
+            spyOn(requestService, 'getForPatient').mockResolvedValue(updated);
             const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue({
                 exec: async () => updated,
             } as never);
@@ -257,9 +257,7 @@ describe('Home Care patient ownership and cancellation', () => {
 
     test('patient cannot cancel an in-progress request', async () => {
         const requestService = new HomeCareRequestService();
-        spyOn(requestService, 'getForPatient').mockResolvedValue(requestDocument({
-            status: IHomeCareRequestStatusEnum.IN_PROGRESS,
-        }));
+        spyOn(HomeCareRequest, 'findOne').mockReturnValue(sessionQuery(null) as never);
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate');
         await expect(requestService.cancelForPatient(
             patientId,
@@ -283,10 +281,8 @@ describe('Home Care dashboard request operations', () => {
         const requestService = new HomeCareRequestService();
         const current = requestDocument({ status: IHomeCareRequestStatusEnum.PENDING });
         const updated = requestDocument({ status: IHomeCareRequestStatusEnum.CONFIRMED });
-        let lookups = 0;
-        spyOn(requestService, 'getForDashboard').mockImplementation(async () =>
-            ++lookups === 1 ? current : updated
-        );
+        spyOn(HomeCareRequest, 'findById').mockReturnValue(sessionQuery(current) as never);
+        spyOn(requestService, 'getForDashboard').mockResolvedValue(updated);
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue({
             exec: async () => updated,
         } as never);
@@ -302,6 +298,8 @@ describe('Home Care dashboard request operations', () => {
         expect(update.mock.calls[0][0]).toEqual({
             _id: current._id,
             status: IHomeCareRequestStatusEnum.PENDING,
+            'dispatch.status': 'OPEN',
+            'dispatch.nurse_id': null,
         });
     });
 
@@ -315,7 +313,7 @@ describe('Home Care dashboard request operations', () => {
             '507f191e810c19729de860ef',
             IHomeCareRequestStatusEnum.COMPLETED,
             adminActor
-        )).rejects.toThrow('غير مسموح');
+        )).rejects.toThrow('تأكيد الطلب فقط');
         expect(update).not.toHaveBeenCalled();
     });
 
@@ -323,10 +321,8 @@ describe('Home Care dashboard request operations', () => {
         const requestService = new HomeCareRequestService();
         const current = requestDocument({ status: IHomeCareRequestStatusEnum.CONFIRMED });
         const updated = requestDocument({ status: IHomeCareRequestStatusEnum.CANCELLED });
-        let lookups = 0;
-        spyOn(requestService, 'getForDashboard').mockImplementation(async () =>
-            ++lookups === 1 ? current : updated
-        );
+        spyOn(HomeCareRequest, 'findById').mockReturnValue(sessionQuery(current) as never);
+        spyOn(requestService, 'getForDashboard').mockResolvedValue(updated);
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue({
             exec: async () => updated,
         } as never);
