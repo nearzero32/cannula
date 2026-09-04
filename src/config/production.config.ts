@@ -72,6 +72,15 @@ export function isSwaggerEnabled(env: ProductionEnvironment = process.env): bool
     return env.NODE_ENV !== 'production' ? env.ENABLE_SWAGGER !== 'false' : flag(env, 'ENABLE_SWAGGER');
 }
 
+function validateSwaggerBasicCredentials(env: ProductionEnvironment): void {
+    const username = env.SWAGGER_BASIC_USERNAME?.trim() ?? '';
+    const password = env.SWAGGER_BASIC_PASSWORD ?? '';
+    if (!username) throw new ProductionConfigurationError('SECURITY_CONFIG_MISSING', 'SWAGGER_BASIC_USERNAME');
+    if (username.length > 128) throw new ProductionConfigurationError('SECURITY_CONFIG_INVALID', 'SWAGGER_BASIC_USERNAME');
+    if (!password) throw new ProductionConfigurationError('SECURITY_CONFIG_MISSING', 'SWAGGER_BASIC_PASSWORD');
+    if (password.length < 32 || OBVIOUS_SECRET.test(password)) throw new ProductionConfigurationError('SECURITY_CONFIG_WEAK', 'SWAGGER_BASIC_PASSWORD');
+}
+
 export function assertProductionConfiguration(env: ProductionEnvironment = process.env): void {
     assertTrustedProxyConfiguration(env as NodeJS.ProcessEnv);
     if (env.NODE_ENV !== 'production') return;
@@ -83,10 +92,7 @@ export function assertProductionConfiguration(env: ProductionEnvironment = proce
     validateRedis(env);
     if (!flag(env, 'PUBLIC_HTTPS')) throw new ProductionConfigurationError('SECURITY_CONFIG_INSECURE', 'PUBLIC_HTTPS');
     loadR2ConfigFromEnv(env as NodeJS.ProcessEnv);
-    if (isSwaggerEnabled(env)) {
-        const token = env.SWAGGER_ADMIN_TOKEN?.trim() ?? '';
-        if (token.length < 32 || OBVIOUS_SECRET.test(token)) throw new ProductionConfigurationError('SECURITY_CONFIG_WEAK', 'SWAGGER_ADMIN_TOKEN');
-    }
+    if (isSwaggerEnabled(env)) validateSwaggerBasicCredentials(env);
 }
 
 export function requestBodyLimitBytes(env: ProductionEnvironment = process.env): number {

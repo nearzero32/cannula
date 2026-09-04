@@ -156918,14 +156918,25 @@ class PatientAuthService {
     if (!user || !patient2)
       throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628", 400, "AUTH_RECOVERY_UNAVAILABLE");
     await session_service_default.revokeAll(String(user._id), { phone: user.phone, patientId: String(patient2._id), reasonCode: "PIN_RECOVERY_SESSION_REVOCATION", ip });
-    const passwordHash = await hashPassword(pin);
+    let passwordHash;
+    try {
+      passwordHash = await hashPassword(pin);
+    } catch (error) {
+      await this.releaseRecoveryClaim(flow._id, now);
+      throw error;
+    }
     const updatedUser = await users_model_default.findOneAndUpdate({ _id: user._id, role: IUserRoleEnum.PATIENT, status: IUserStatusEnum.ACTIVE }, { $set: { password_hash: passwordHash, must_change_pin: false } }, { returnDocument: "after" }).exec();
-    if (!updatedUser)
+    if (!updatedUser) {
+      await this.releaseRecoveryClaim(flow._id, now);
       throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0627\u0633\u062A\u0639\u0627\u062F\u0629 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0644\u0647\u0630\u0627 \u0627\u0644\u062D\u0633\u0627\u0628", 400, "AUTH_RECOVERY_UNAVAILABLE");
+    }
     await auth_flow_model_default.updateOne({ _id: flow._id, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, consumed_at: now }, { $set: { step: AuthFlowStepEnum.COMPLETED } }).exec();
     await auth_event_service_default.record({ flow_id: flowId, phone: updatedUser.phone, user_id: updatedUser._id, patient_id: patient2._id, type: AuthEventTypeEnum.PIN_RECOVERY_COMPLETED, success: true, metadata: device, ip_address: ip });
     const tokens = await session_service_default.create(updatedUser, TokenAudienceEnum.MOBILE, device, ip);
     return { ...tokens, user: { _id: String(updatedUser._id), phone: updatedUser.phone, role: updatedUser.role, status: updatedUser.status } };
+  }
+  async releaseRecoveryClaim(flowId, claimedAt) {
+    await auth_flow_model_default.updateOne({ _id: flowId, purpose: AuthFlowPurposeEnum.PIN_RECOVERY, step: AuthFlowStepEnum.RESET_PIN, consumed_at: claimedAt }, { $set: { consumed_at: null } }).exec();
   }
   async sendOtp(flow, resend, ip) {
     const otp = code(), expiresAt = new Date(Date.now() + OTP_TTL_MS);
