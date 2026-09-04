@@ -1,7 +1,7 @@
 import Elysia, { t } from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import mongoose from 'mongoose';
-import doctorService from '../../services/doctor.service';
+import doctorService, { PATIENT_DOCTOR_SORT } from '../../services/doctor.service';
 import {
     IDoctorGenderEnum,
     IDoctorStatusEnum,
@@ -83,7 +83,7 @@ export const mobileDoctorsController = new Elysia({
                 ];
             }
 
-            const { data, count } = await doctorService.getPaginated({ main_match, page, limit });
+            const { data, count } = await doctorService.getPaginated({ main_match, sort: PATIENT_DOCTOR_SORT, page, limit });
             const totalPages = Math.ceil(count / limit);
 
             const specialties = await doctorSpecialtyMap(data);

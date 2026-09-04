@@ -65,5 +65,7 @@ export interface IDoctor extends IBaseDocument, IWithNotesInternal {
     assistant_ids: mongoose.Types.ObjectId[];
     accepting_new_patients: boolean;
     is_featured: boolean;
+    /** Admin-controlled position in every patient-facing doctor collection. */
+    display_order: number;
     status: IDoctorStatus;
 }

@@ -42,6 +42,7 @@ const doctorBodySchema = t.Object({
     currency: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
     assistant_ids: t.Optional(t.Array(t.String())),
     is_featured: t.Optional(t.Boolean()),
+    display_order: t.Optional(t.Integer({ minimum: 0, maximum: 2_147_483_647 })),
     status: t.Optional(t.Enum(IDoctorStatusEnum)),
     notes_internal: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 });
@@ -72,9 +73,19 @@ const doctorUpdateSchema = t.Partial(
         currency: t.Nullable(t.String({ maxLength: 10 })),
         assistant_ids: t.Array(t.String()),
         is_featured: t.Boolean(),
+        display_order: t.Integer({ minimum: 0, maximum: 2_147_483_647 }),
         notes_internal: t.Nullable(t.String({ maxLength: 2000 })),
     })
 );
+
+const doctorOrderResponseSchema = t.Object({
+    error: t.Literal(false),
+    message: t.String(),
+    data: t.Object({
+        doctorIds: t.Array(t.String()),
+        displayOrders: t.Array(t.Integer({ minimum: 10 })),
+    }),
+}, { description: 'تم تحديث ترتيب عرض الأطباء بنجاح' });
 
 export const doctorsController = new Elysia({
     prefix: '/doctors',
@@ -129,6 +140,37 @@ export const doctorsController = new Elysia({
                 search: t.Optional(t.String()),
             }),
             response: { 200: GenericPaginatedResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses },
+        }
+    )
+
+    .patch(
+        '/order',
+        async ({ body, phrase }) => {
+            const result = await doctorService.reorder(body.doctorIds, {
+                user_id: phrase._id,
+                user_name: phrase.role + '_' + phrase._id,
+                user_type: phrase.role,
+                endpoint: '/dash/admin/doctors/order',
+                source: 'dashboard',
+            });
+            return {
+                error: false,
+                message: 'تم تحديث ترتيب ظهور الأطباء بنجاح',
+                data: result,
+            };
+        },
+        {
+            body: t.Object({
+                doctorIds: t.Array(t.String(), { minItems: 1, maxItems: 500 }),
+            }, { additionalProperties: false }),
+            response: {
+                200: doctorOrderResponseSchema,
+                400: BadRequestResponseSchema,
+                404: NotFoundResponseSchema,
+                409: ConflictResponseSchema,
+                422: ValidationErrorResponseSchema,
+                ...ProtectedApiErrorResponses,
+            },
         }
     )
 
@@ -198,6 +240,7 @@ export const doctorsController = new Elysia({
                     currency: body.currency ?? 'IQD',
                     assistant_ids: body.assistant_ids?.map((id) => new ObjectId(id)) ?? [],
                     is_featured: body.is_featured ?? false,
+                    display_order: body.display_order,
                     status: body.status ?? IDoctorStatusEnum.DRAFT,
                     notes_internal: body.notes_internal,
                 },
@@ -269,6 +312,7 @@ export const doctorsController = new Elysia({
             if (body.currency !== undefined) payload.currency = body.currency;
             if (body.assistant_ids !== undefined) payload.assistant_ids = body.assistant_ids.map((id) => new ObjectId(id));
             if (body.is_featured !== undefined) payload.is_featured = body.is_featured;
+            if (body.display_order !== undefined) payload.display_order = body.display_order;
             if (body.notes_internal !== undefined) payload.notes_internal = body.notes_internal;
 
             const updated = await doctorService.update(params.id, payload, {

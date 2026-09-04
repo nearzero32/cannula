@@ -10,16 +10,20 @@ class DoctorFavoriteService {
 
     public async getPaginated({
         main_match,
+        pre_facet_pipeline = [],
         additional_pipeline = [],
         projection,
         page = 1,
         limit = 10,
+        sort = { createdAt: -1 },
     }: {
         main_match: Record<string, unknown>;
+        pre_facet_pipeline?: PipelineStage[];
         additional_pipeline?: PipelineStage.FacetPipelineStage[];
         projection?: PipelineStage.Project['$project'] | null;
         page?: number;
         limit?: number;
+        sort?: Record<string, 1 | -1>;
     }): Promise<{ data: DoctorFavoriteDocument[]; count: number }> {
         const safePage = Math.max(1, page);
         const safeLimit = Math.min(100, Math.max(1, limit));
@@ -27,10 +31,11 @@ class DoctorFavoriteService {
 
         const pipeline: PipelineStage[] = [
             { $match: main_match },
+            ...pre_facet_pipeline,
             {
                 $facet: {
                     data: [
-                        { $sort: { createdAt: -1 } },
+                        { $sort: sort },
                         { $skip: skip },
                         { $limit: safeLimit },
                         ...additional_pipeline,

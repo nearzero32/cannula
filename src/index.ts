@@ -22,6 +22,7 @@ import { assertPharmacyTransactionSupport } from './services/pharmacy-transactio
 import { rebuildAppointmentStorage } from './migrations/rebuild-appointments.migration';
 import { assertAppointmentTransactionSupport } from './services/appointment-transaction.service';
 import { normalizeDoctorBookingSettings } from './migrations/normalize-doctor-booking-settings.migration';
+import { backfillDoctorDisplayOrder } from './migrations/backfill-doctor-display-order.migration';
 import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
 import { assertProductionConfiguration, assertSwaggerConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from './config/production.config';
 import { HttpSecurityPlugin } from './middleware/http-security.middleware';
@@ -52,6 +53,7 @@ async function bootstrap() {
     await backfillPharmacyWorkflow();
     await rebuildAppointmentStorage();
     await normalizeDoctorBookingSettings();
+    await backfillDoctorDisplayOrder();
     registerAppointmentNotificationHandler();
 
     // Connect Redis

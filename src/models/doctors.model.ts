@@ -192,6 +192,18 @@ const doctorSchema = new Schema(
         currency: { type: String, trim: true, default: 'IQD', maxlength: 10 },
         accepting_new_patients: { type: Boolean, default: true },
         is_featured: { type: Boolean, default: false },
+        /** Lower values appear first in patient-facing doctor lists. */
+        display_order: {
+            type: Number,
+            required: true,
+            default: 1000,
+            min: 0,
+            max: 2_147_483_647,
+            validate: {
+                validator: Number.isSafeInteger,
+                message: 'display_order must be an integer',
+            },
+        },
 
         // ── Staff & visibility ───────────────────────────────────────────────────
 
@@ -230,13 +242,14 @@ doctorSchema.pre('validate', function () {
     if (!this.primary_specialty_id || !ids.includes(String(this.primary_specialty_id)) || new Set(ids).size !== ids.length) this.invalidate('specialty_ids', 'specialty_ids must contain the unique primary_specialty_id');
 });
 
-// Listing/filter queries by specialty and operational state
-doctorSchema.index({ specialty_ids: 1, status: 1 });
+// Patient listings filter first, then use the shared stable display ordering.
+doctorSchema.index({ status: 1, display_order: 1, _id: 1 });
+doctorSchema.index({ specialty_ids: 1, status: 1, display_order: 1, _id: 1 });
 doctorSchema.index({ primary_specialty_id: 1, status: 1 });
 // Admin verification queue
 doctorSchema.index({ verification_status: 1, status: 1 });
-// Find doctors assigned to a clinic
-doctorSchema.index({ clinic_ids: 1 });
+// Clinic-filtered patient listings use the same ordering.
+doctorSchema.index({ clinic_ids: 1, status: 1, display_order: 1, _id: 1 });
 
 export const Doctor = (models.Doctor as mongoose.Model<DoctorDocument>) || model<DoctorDocument>('Doctor', doctorSchema);
 export default Doctor;

@@ -5,7 +5,7 @@ import { AuthPlugin } from '../../middleware/auth.middleware';
 import { TokenAudienceEnum } from '../../constants/jwt';
 import doctorFavoriteService from '../../services/doctor-favorite.service';
 import patientService from '../../services/patient.service';
-import doctorService from '../../services/doctor.service';
+import doctorService, { patientDoctorSort } from '../../services/doctor.service';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { IDoctorStatusEnum } from '../../interfaces/doctor.interface';
 import { IActivityLogSourceEnum } from '../../interfaces/activity-log.interface';
@@ -26,28 +26,28 @@ const doctorLookupPipeline = [
             as: 'doctor',
         },
     },
-    { $unwind: { path: '$doctor', preserveNullAndEmptyArrays: true } },
+    { $unwind: { path: '$doctor', preserveNullAndEmptyArrays: false } },
+    { $match: { 'doctor.status': IDoctorStatusEnum.ACTIVE } },
     { $lookup: { from: 'specialties', localField: 'doctor.specialty_ids', foreignField: '_id', as: 'specialties' } },
-    {
-        $project: {
-            _id: 1,
-            doctor_id: 1,
-            createdAt: 1,
-            doctor: {
-                _id: '$doctor._id',
-                display_name: '$doctor.display_name',
-                profile_photo: '$doctor.profile_photo',
-                primary_specialty_id: '$doctor.primary_specialty_id',
-                specialties: { $map: { input: '$specialties', as: 'item', in: { _id: '$$item._id', name: '$$item.name', icon: '$$item.icon' } } },
-                experience_years: '$doctor.experience_years',
-                consultation_fee: '$doctor.consultation_fee',
-                currency: '$doctor.currency',
-                is_featured: '$doctor.is_featured',
-                status: '$doctor.status',
-            },
-        },
-    },
 ];
+
+const doctorFavoriteProjection = {
+    _id: 1,
+    doctor_id: 1,
+    createdAt: 1,
+    doctor: {
+        _id: '$doctor._id',
+        display_name: '$doctor.display_name',
+        profile_photo: '$doctor.profile_photo',
+        primary_specialty_id: '$doctor.primary_specialty_id',
+        specialties: { $map: { input: '$specialties', as: 'item', in: { _id: '$$item._id', name: '$$item.name', icon: '$$item.icon' } } },
+        experience_years: '$doctor.experience_years',
+        consultation_fee: '$doctor.consultation_fee',
+        currency: '$doctor.currency',
+        is_featured: '$doctor.is_featured',
+        status: '$doctor.status',
+    },
+};
 
 function activityMeta(phrase: { _id: string; role: string }, endpoint: string) {
     return {
@@ -84,7 +84,9 @@ export const mobileDoctorFavoritesController = new Elysia({
 
             const { data, count } = await doctorFavoriteService.getPaginated({
                 main_match: { patient_id: patient._id },
-                additional_pipeline: doctorLookupPipeline,
+                pre_facet_pipeline: doctorLookupPipeline,
+                projection: doctorFavoriteProjection,
+                sort: patientDoctorSort('doctor'),
                 page,
                 limit,
             });

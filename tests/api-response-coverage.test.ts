@@ -150,6 +150,7 @@ describe('API response documentation coverage', () => {
             ['post', '/api/dash/upload/intents', SWAGGER_TAGS.DASHBOARD.SHARED],
             ['get', '/api/dash/admin/clinics/', SWAGGER_TAGS.ADMIN.CLINICS],
             ['get', '/api/dash/admin/doctors/', SWAGGER_TAGS.ADMIN.DOCTORS],
+            ['patch', '/api/dash/admin/doctors/order', SWAGGER_TAGS.ADMIN.DOCTORS],
             ['get', '/api/dash/admin/patients/', SWAGGER_TAGS.ADMIN.PATIENTS],
             ['get', '/api/dash/admin/appointments/', SWAGGER_TAGS.ADMIN.APPOINTMENTS],
             ['get', '/api/dash/admin/home-care/categories/', SWAGGER_TAGS.ADMIN.HOME_CARE],
