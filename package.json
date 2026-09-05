@@ -6,7 +6,8 @@
     "start": "bun run src/index.ts",
     "test": "bun test",
     "typecheck": "bunx --bun typescript@5.9.3 --noEmit",
-    "build": "bun build src/index.ts --target=bun --outdir=dist"
+    "build": "bun build src/index.ts --target=bun --outdir=dist",
+    "seed:mobile": "bun run scripts/seed-mobile.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1075.0",

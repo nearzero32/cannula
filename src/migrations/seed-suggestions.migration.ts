@@ -4,7 +4,7 @@ import Suggestion from '../models/suggestions.model';
 import { IUserRoleEnum } from '../interfaces/user.interface';
 import Admin from '../models/admins.model';
 
-const SUGGESTIONS_SEED: string[] = [
+export const SUGGESTIONS_SEED: string[] = [
     'أقترح إضافة تذكير بالمواعيد عبر رسائل SMS قبل الموعد بـ 24 ساعة.',
     'يفضل توفير خيار حجز المواعيد في عطلة نهاية الأسبوع.',
     'أتمنى إضافة خاصية البحث عن الأطباء حسب التقييمات.',
