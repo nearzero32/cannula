@@ -1,0 +1,128 @@
+{
+  "info": {
+    "_postman_id": "b065cb49-1c26-4ceb-a2cc-9202b202622d",
+    "name": "Cannula Mobile API",
+    "description": "Current 66-route Patient/Mobile API. Collection bearer auth uses {{accessToken}}; public and guest requests override it. Demo values are non-production.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        { "name": "Start", "request": { "auth": {"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"phone\": \"{{demoPhone}}\"\n}"}, "url":"{{baseUrl}}/mobile/auth/start" } },
+        { "name": "Resend OTP", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\"\n}"}, "url":"{{baseUrl}}/mobile/auth/otp/resend" } },
+        { "name": "Verify OTP", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\",\n  \"otp\": \"000000\"\n}"}, "url":"{{baseUrl}}/mobile/auth/otp/verify" } },
+        { "name": "Forgot PIN Start", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"phone\": \"{{demoPhone}}\"\n}"}, "url":"{{baseUrl}}/mobile/auth/pin/forgot/start" } },
+        { "name": "Forgot PIN Resend", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\"\n}"}, "url":"{{baseUrl}}/mobile/auth/pin/forgot/resend" } },
+        { "name": "Forgot PIN Verify", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\",\n  \"otp\": \"000000\"\n}"}, "url":"{{baseUrl}}/mobile/auth/pin/forgot/verify" } },
+        { "name": "Forgot PIN Reset", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\",\n  \"pin\": \"654321\",\n  \"confirmPin\": \"654321\",\n  \"platform\": \"android\"\n}"}, "url":"{{baseUrl}}/mobile/auth/pin/forgot/reset" } },
+        { "name": "Create PIN", "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\",\n  \"pin\": \"123456\",\n  \"platform\": \"android\"\n}"}, "url":"{{baseUrl}}/mobile/auth/pin/create" } },
+        { "name": "PIN Login", "event":[{"listen":"test","script":{"exec":["const j=pm.response.json(); if(!j.error&&j.data){pm.environment.set('accessToken',j.data.accessToken);pm.environment.set('refreshToken',j.data.refreshToken);}"]}}], "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"flowId\": \"{{flowId}}\",\n  \"pin\": \"{{demoPin}}\",\n  \"deviceId\": \"{{installationId}}\",\n  \"platform\": \"android\"\n}"}, "url":"{{baseUrl}}/mobile/auth/pin/login" } },
+        { "name": "Refresh", "event":[{"listen":"test","script":{"exec":["const j=pm.response.json(); if(!j.error&&j.data){pm.environment.set('accessToken',j.data.accessToken);pm.environment.set('refreshToken',j.data.refreshToken);}"]}}], "request": { "auth":{"type":"noauth"}, "method":"POST", "header":[{"key":"Content-Type","value":"application/json"}], "body":{"mode":"raw","raw":"{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"}, "url":"{{baseUrl}}/mobile/auth/refresh" } },
+        { "name":"Change Required PIN", "request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"pin\": \"654321\"\n}"},"url":"{{baseUrl}}/mobile/auth/pin/change-required"} },
+        { "name":"Sessions", "request":{"method":"GET","url":"{{baseUrl}}/mobile/auth/sessions"} },
+        { "name":"Logout", "request":{"method":"POST","url":"{{baseUrl}}/mobile/auth/logout"} },
+        { "name":"Logout All", "request":{"method":"POST","url":"{{baseUrl}}/mobile/auth/logout-all"} }
+      ]
+    },
+    {
+      "name":"Profile and Health",
+      "item":[
+        {"name":"Get Profile","request":{"method":"GET","url":"{{baseUrl}}/mobile/profile"}},
+        {"name":"Complete Profile","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"full_name\": \"مريض كانيولا التجريبي\",\n  \"gender\": \"male\",\n  \"date_of_birth\": \"1992-04-15\",\n  \"address\": \"بغداد - المنصور\"\n}"},"url":"{{baseUrl}}/mobile/profile/complete-profile"}},
+        {"name":"Get Health","request":{"method":"GET","url":"{{baseUrl}}/mobile/profile/health"}},
+        {"name":"Update Health","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"blood_type\": \"O+\",\n  \"allergies\": [],\n  \"chronic_condition_ids\": []\n}"},"url":"{{baseUrl}}/mobile/profile/health"}}
+      ]
+    },
+    {
+      "name":"Children",
+      "item":[
+        {"name":"List Children","request":{"method":"GET","url":"{{baseUrl}}/mobile/children?include_inactive=false"}},
+        {"name":"Create Child","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"full_name\": \"زينب علي\",\n  \"date_of_birth\": \"2018-04-20\",\n  \"gender\": \"female\",\n  \"relationship\": \"daughter\",\n  \"photo\": null\n}"},"url":"{{baseUrl}}/mobile/children"}},
+        {"name":"Child Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/children/{{childId}}"}},
+        {"name":"Update Child","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"full_name\": \"زينب علي\"\n}"},"url":"{{baseUrl}}/mobile/children/{{childId}}"}},
+        {"name":"Update Child Status","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"status\": \"inactive\"\n}"},"url":"{{baseUrl}}/mobile/children/{{childId}}/status"}},
+        {"name":"Child Health","request":{"method":"GET","url":"{{baseUrl}}/mobile/children/{{childId}}/health-profile"}},
+        {"name":"Update Child Health","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"blood_type\": \"A+\",\n  \"allergies\": [],\n  \"chronic_condition_ids\": []\n}"},"url":"{{baseUrl}}/mobile/children/{{childId}}/health-profile"}}
+      ]
+    },
+    {
+      "name":"Public Catalogs",
+      "item":[
+        {"name":"About Us","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/about-us"}},
+        {"name":"Ads","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/ads?page=1&limit=10"}},
+        {"name":"Ad Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/ads/{{adId}}"}},
+        {"name":"Chronic Conditions","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/chronic-conditions"}},
+        {"name":"Specialties","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/specialties?page=1&limit=10"}},
+        {"name":"Specialty Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/specialties/{{specialtyId}}"}},
+        {"name":"Doctors","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/doctors?page=1&limit=10&specialty_id={{specialtyId}}"}},
+        {"name":"Available Doctors","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/doctors/available?page=1&limit=10"}},
+        {"name":"Doctor Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/doctors/{{doctorId}}"}},
+        {"name":"Home Care Categories","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/categories"}},
+        {"name":"Home Care Services","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/services?categoryId={{homeCareCategoryId}}"}},
+        {"name":"Home Care Service Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/services/{{homeCareServiceId}}"}}
+      ]
+    },
+    {
+      "name":"Favorites and Suggestions",
+      "item":[
+        {"name":"List Favorites","request":{"method":"GET","url":"{{baseUrl}}/mobile/doctor-favorites?page=1&limit=10"}},
+        {"name":"Add Favorite","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"doctor_id\": \"{{doctorId}}\"\n}"},"url":"{{baseUrl}}/mobile/doctor-favorites"}},
+        {"name":"Remove Favorite","request":{"method":"DELETE","url":"{{baseUrl}}/mobile/doctor-favorites/{{doctorId}}"}},
+        {"name":"List Suggestions","request":{"method":"GET","url":"{{baseUrl}}/mobile/suggestions?page=1&limit=10"}},
+        {"name":"Create Suggestion","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"suggestion\": \"إضافة فلتر للمواعيد الصباحية\"\n}"},"url":"{{baseUrl}}/mobile/suggestions"}}
+      ]
+    },
+    {
+      "name":"Appointments",
+      "item":[
+        {"name":"Availability","request":{"method":"GET","url":"{{baseUrl}}/mobile/appointments/availability?doctorId={{doctorId}}&clinicId={{clinicId}}&specialtyId={{specialtyId}}&date={{bookingDate}}"}},
+        {"name":"List Appointments","request":{"method":"GET","url":"{{baseUrl}}/mobile/appointments?page=1&limit=20&view=upcoming"}},
+        {"name":"Book SELF","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"doctorId\": \"{{doctorId}}\",\n  \"clinicId\": \"{{clinicId}}\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"date\": \"{{bookingDate}}\",\n  \"startsAt\": \"{{slotStartsAt}}\",\n  \"beneficiary\": {\"type\": \"SELF\"},\n  \"reason\": \"متابعة دورية\"\n}"},"url":"{{baseUrl}}/mobile/appointments"}},
+        {"name":"Appointment Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/appointments/{{appointmentId}}"}},
+        {"name":"Appointment History","request":{"method":"GET","url":"{{baseUrl}}/mobile/appointments/{{appointmentId}}/history"}},
+        {"name":"Cancel Appointment","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"reason\": \"تعذر الحضور\"\n}"},"url":"{{baseUrl}}/mobile/appointments/{{appointmentId}}/cancel"}},
+        {"name":"Reschedule Appointment","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"doctorId\": \"{{doctorId}}\",\n  \"clinicId\": \"{{clinicId}}\",\n  \"specialtyId\": \"{{specialtyId}}\",\n  \"date\": \"{{bookingDate}}\",\n  \"startsAt\": \"{{slotStartsAt}}\",\n  \"reason\": \"تغيير الوقت\"\n}"},"url":"{{baseUrl}}/mobile/appointments/{{appointmentId}}/reschedule"}}
+      ]
+    },
+    {
+      "name":"Home Care Requests",
+      "item":[
+        {"name":"Create Home Care Request","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"service_id\": \"{{homeCareServiceId}}\",\n  \"child_id\": null,\n  \"requested_date\": \"{{bookingDate}}\",\n  \"preferred_time\": \"10:30\",\n  \"address\": {\"address_text\": \"بغداد - المنصور\", \"lat\": 33.3128, \"lng\": 44.3615},\n  \"notes\": \"يرجى الاتصال قبل الوصول\"\n}"},"url":"{{baseUrl}}/mobile/home-care/requests"}},
+        {"name":"List Home Care Requests","request":{"method":"GET","url":"{{baseUrl}}/mobile/home-care/requests?page=1&limit=10"}},
+        {"name":"Home Care Request Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/home-care/requests/{{homeCareRequestId}}"}},
+        {"name":"Cancel Home Care Request","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"reason\": \"لم تعد الخدمة مطلوبة\"\n}"},"url":"{{baseUrl}}/mobile/home-care/requests/{{homeCareRequestId}}/cancel"}}
+      ]
+    },
+    {
+      "name":"Pharmacy Requests",
+      "item":[
+        {"name":"Create Pharmacy Request","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"child_id\": null,\n  \"prescription_images\": [],\n  \"treatment_details\": \"دواء الضغط حسب الوصفة\",\n  \"delivery_address\": {\"address_text\": \"بغداد - الكرادة\", \"lat\": 33.3024, \"lng\": 44.409},\n  \"delivery_phone\": \"07711111111\",\n  \"notes\": \"الاتصال قبل التوصيل\",\n  \"preferred_payment_method\": \"cash_on_delivery\"\n}"},"url":"{{baseUrl}}/mobile/pharmacy-requests"}},
+        {"name":"List Pharmacy Requests","request":{"method":"GET","url":"{{baseUrl}}/mobile/pharmacy-requests?page=1&limit=10"}},
+        {"name":"Pharmacy Request Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/pharmacy-requests/{{pharmacyRequestId}}"}},
+        {"name":"Cancel Pharmacy Request","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"reason\": \"لم يعد مطلوباً\"\n}"},"url":"{{baseUrl}}/mobile/pharmacy-requests/{{pharmacyRequestId}}/cancel"}},
+        {"name":"Accept Quote","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"quotation_version\": {{quotationVersion}}\n}"},"url":"{{baseUrl}}/mobile/pharmacy-requests/{{pharmacyRequestId}}/accept-quote"}},
+        {"name":"Reject Quote","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"quotation_version\": {{quotationVersion}},\n  \"reason\": \"السعر غير مناسب\"\n}"},"url":"{{baseUrl}}/mobile/pharmacy-requests/{{pharmacyRequestId}}/reject-quote"}}
+      ]
+    },
+    {
+      "name":"Notifications (Guest)",
+      "description":"For authenticated Patient behavior, remove noauth and X-Installation-Id overrides and inherit collection bearer auth.",
+      "item":[
+        {"name":"Inbox","request":{"auth":{"type":"noauth"},"method":"GET","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications?page=1&limit=20&category=all"}},
+        {"name":"Unread Count","request":{"auth":{"type":"noauth"},"method":"GET","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications/unread-count"}},
+        {"name":"Mark All Read","request":{"auth":{"type":"noauth"},"method":"PATCH","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications/read-all"}},
+        {"name":"Mark One Read","request":{"auth":{"type":"noauth"},"method":"PATCH","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications/{{notificationId}}/read"}}
+      ]
+    },
+    {
+      "name":"Uploads",
+      "item":[
+        {"name":"Create Profile Photo Intent","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"purpose\": \"PATIENT_PROFILE_PHOTO\",\n  \"targetId\": \"{{patientId}}\",\n  \"contentType\": \"image/jpeg\"\n}"},"url":"{{baseUrl}}/mobile/upload/intents"}},
+        {"name":"Complete Upload","request":{"method":"POST","url":"{{baseUrl}}/mobile/upload/intents/{{uploadId}}/complete"}},
+        {"name":"Access Asset","request":{"method":"GET","url":"{{baseUrl}}/mobile/upload/assets/{{uploadId}}/access"}}
+      ]
+    }
+  ]
+}
