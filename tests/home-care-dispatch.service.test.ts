@@ -127,25 +127,41 @@ describe('Home Care open-pool atomic claim', () => {
 
 describe('Home Care lifecycle and Admin CAS operations', () => {
     test('allows only each owned Nurse lifecycle step and closes completion', async () => {
-        const service = new HomeCareDispatchService(); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse()); quietWrites();
+        const service = new HomeCareDispatchService();
         const transitions = [
             ['assigned', 'on_the_way'], ['on_the_way', 'arrived'], ['arrived', 'in_progress'], ['in_progress', 'completed'],
         ] as const;
         for (const [from, to] of transitions) {
+            mock.restore();
+            const fakeSession: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} };
+            spyOn(mongoose, 'startSession').mockResolvedValue(fakeSession); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse()); quietWrites();
+            const snapshot = request(from, nurseAId, 1);
             const updated = request(to as any, nurseAId, 2);
             const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(updated) as never);
-            spyOn(HomeCareRequest, 'findById').mockReturnValue(query(updated) as never);
+            let reads = 0; spyOn(HomeCareRequest, 'findById').mockImplementation(() => query(reads++ === 0 ? snapshot : updated) as never);
             await service.transition(userA, String(requestId), from as any, to as any, actor(userA, 'nurse', String(nurseAId)));
-            expect((update.mock.calls[0] as any)[0]).toMatchObject({ status: from, 'dispatch.nurse_id': nurseAId });
+            expect((update.mock.calls[0] as any)[0]).toMatchObject({ status: from, 'dispatch.status': 'CLAIMED', 'dispatch.nurse_id': nurseAId, 'dispatch.version': 1 });
+            expect((update.mock.calls[0] as any)[2].session).toBe(fakeSession);
+            expect((update.mock.calls[0] as any)[1].$inc['dispatch.version']).toBe(1);
             if (to === 'completed') expect((update.mock.calls[0] as any)[1].$set['dispatch.status']).toBe('CLOSED');
-            mock.restore(); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse()); quietWrites();
+            expect((historyService.append as any).mock.calls[0][1]).toEqual({ session: fakeSession, critical: true });
         }
     });
 
     test('stale lifecycle update loses after Admin changes current state', async () => {
-        const service = new HomeCareDispatchService(); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
+        const service = new HomeCareDispatchService(), fakeSession: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} }; mock.restore(); spyOn(mongoose, 'startSession').mockResolvedValue(fakeSession); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
+        spyOn(HomeCareRequest, 'findById').mockReturnValue(query(request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 2)) as never);
         spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(null) as never);
         await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
+    });
+
+    test('rejects skipped, replayed, completed, and wrong-Nurse operational actions', async () => {
+        const service = new HomeCareDispatchService();
+        await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ARRIVED, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
+        await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.ON_THE_WAY, IHomeCareRequestStatusEnum.COMPLETED, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
+        await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.COMPLETED, IHomeCareRequestStatusEnum.ON_THE_WAY, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
+        mock.restore(); const fakeSession: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} }; spyOn(mongoose, 'startSession').mockResolvedValue(fakeSession); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse(nurseBId, userB)); spyOn(HomeCareRequest, 'findById').mockReturnValue(query(request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1)) as never); spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(null) as never);
+        await expect(service.transition(userB, String(requestId), IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, actor(userB, 'nurse', String(nurseBId)))).rejects.toMatchObject({ status: 409 });
     });
 
     test('Admin direct assignment competes on the same OPEN state', async () => {

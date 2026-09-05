@@ -48,7 +48,7 @@ describeWithMongo('Home Care Phase 7B1 admin dispatch transactions against Mongo
         nurseA = await Nurse.create({ user_id: users[2]._id, full_name: 'Nurse A', status: 'active', qualified_service_ids: [care._id] });
         nurseB = await Nurse.create({ user_id: users[3]._id, full_name: 'Nurse B', status: 'active', qualified_service_ids: [care._id] });
     });
-    async function request(status: string = Status.PENDING, nurse: any = null, version = 0, mode = Mode.OPEN_POOL) {
+    async function request(status: string = Status.PENDING, nurse: any = null, version = 0, mode: string = Mode.OPEN_POOL) {
         return HomeCareRequest.create({ request_number: `HC-B1-${new mongoose.Types.ObjectId().toString().slice(-8)}`, patient_id: patient._id, category_id: category._id, service_id: care._id, service_name: care.name, service_price: care.price, requested_date: new Date('2099-01-02'), preferred_time: '12:00', address: { address_text: 'Baghdad', lat: 33.3, lng: 44.3 }, status, dispatch: { status: nurse ? Dispatch.CLAIMED : Dispatch.OPEN, mode, nurse_id: nurse?._id ?? null, assigned_at: nurse ? new Date() : null, assigned_by_user_id: null, version }, cancelled_at: null, cancelled_by: null, cancellation_reason: null });
     }
     function fail(event: string) { return spyOn(historyService, 'append').mockImplementation(async (payload: any, options?: any) => { if (options?.critical && payload.event_type === event) throw new Error(`FORCED_${event}`); }); }

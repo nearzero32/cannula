@@ -225,14 +225,14 @@ export const mobileDoctorsController = new Elysia({
             ]);
             const clinicsById = new Map(clinics.map(clinic => [String(clinic._id), {
                 _id: String(clinic._id), name: clinic.name, address: clinic.address, icon: clinic.icon ?? null,
-                map_location: clinic.map_location ?? { lat: null, lng: null },
+                map_location: { lat: clinic.map_location?.lat ?? null, lng: clinic.map_location?.lng ?? null },
             }]));
             return {
                 error: false,
                 message: 'تم جلب الطبيب بنجاح',
                 data: {
                     ...formatDoctorForMobile(doctor, specialties, true),
-                    clinics: (doctor.clinic_ids ?? []).map(id => clinicsById.get(String(id))).filter(Boolean),
+                    clinics: (doctor.clinic_ids ?? []).map(id => clinicsById.get(String(id))).filter((clinic): clinic is NonNullable<typeof clinic> => clinic !== undefined),
                 },
             };
         },

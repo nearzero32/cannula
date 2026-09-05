@@ -35,9 +35,10 @@ function safeEqual(left: string, right: string): boolean {
 
 export function swaggerBasicAuthorized(request: Request): boolean {
     const credentials = parseBasicAuthorization(request);
+    if (!credentials) return false;
     const username = process.env.SWAGGER_USERNAME?.trim() ?? '';
     const password = process.env.SWAGGER_PASSWORD ?? '';
-    return Boolean(credentials) && safeEqual(username, credentials.username) && safeEqual(password, credentials.password);
+    return safeEqual(username, credentials.username) && safeEqual(password, credentials.password);
 }
 
 function applyHeaders(headers: Record<string, string | number>, swaggerPath: boolean): void {

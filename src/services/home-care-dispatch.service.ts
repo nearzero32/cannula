@@ -107,14 +107,26 @@ export class HomeCareDispatchService {
 
     public async transition(userId: string, requestId: string, expected: IHomeCareRequestStatus, next: IHomeCareRequestStatus, actor: DispatchActor) {
         if (!mongoose.Types.ObjectId.isValid(requestId)) throw new DomainError('معرف الطلب غير صالح', 400);
+        const allowed: Partial<Record<IHomeCareRequestStatus, IHomeCareRequestStatus>> = {
+            [IHomeCareRequestStatusEnum.ASSIGNED]: IHomeCareRequestStatusEnum.ON_THE_WAY,
+            [IHomeCareRequestStatusEnum.ON_THE_WAY]: IHomeCareRequestStatusEnum.ARRIVED,
+            [IHomeCareRequestStatusEnum.ARRIVED]: IHomeCareRequestStatusEnum.IN_PROGRESS,
+            [IHomeCareRequestStatusEnum.IN_PROGRESS]: IHomeCareRequestStatusEnum.COMPLETED,
+        };
+        if (allowed[expected] !== next) throw new DomainError('لا يمكنك تنفيذ هذا الإجراء في حالة الطلب الحالية', 409);
         const nurse = await nurseService.requireActiveByUserId(userId);
-        const updated = await HomeCareRequest.findOneAndUpdate(
-            { _id: requestId, 'dispatch.nurse_id': nurse._id, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, status: expected },
-            { $set: { status: next, ...(next === IHomeCareRequestStatusEnum.COMPLETED ? { 'dispatch.status': IHomeCareDispatchStatusEnum.CLOSED } : {}) }, $inc: { 'dispatch.version': 1 } },
-            { returnDocument: 'after', runValidators: true }
-        ).exec();
-        if (!updated) throw new DomainError('لا يمكنك تنفيذ هذا الإجراء في حالة الطلب الحالية', 409);
-        await this.record(updated, next === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED, actor, expected, next, String(nurse._id), String(nurse._id), updated.dispatch.mode);
+        const updated = await runHomeCareTransaction(async session => {
+            const snapshot = await this.requestSnapshot(requestId, session);
+            const result = await HomeCareRequest.findOneAndUpdate(
+                { _id: snapshot._id, status: expected, 'dispatch.status': IHomeCareDispatchStatusEnum.CLAIMED, 'dispatch.nurse_id': nurse._id, 'dispatch.version': snapshot.dispatch.version },
+                { $set: { status: next, ...(next === IHomeCareRequestStatusEnum.COMPLETED ? { 'dispatch.status': IHomeCareDispatchStatusEnum.CLOSED } : {}) }, $inc: { 'dispatch.version': 1 } },
+                { returnDocument: 'after', runValidators: true, session }
+            ).exec();
+            if (!result) throw new DomainError('لا يمكنك تنفيذ هذا الإجراء في حالة الطلب الحالية', 409);
+            await historyService.append({ request_id: new mongoose.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: next === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED, actor: { type: HomeCareHistoryActorTypeEnum.NURSE, user_id: new mongoose.Types.ObjectId(actor.user_id), nurse_id: new mongoose.Types.ObjectId(String(nurse._id)) }, from_status: expected, to_status: next, from_nurse_id: new mongoose.Types.ObjectId(String(nurse._id)), to_nurse_id: new mongoose.Types.ObjectId(String(nurse._id)), dispatch_mode: result.dispatch.mode, reason: null, metadata: null }, { session, critical: true });
+            return result;
+        });
+        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: `${actor.user_type}_${actor.user_id}`, user_type: actor.user_type, method: 'PATCH', endpoint: actor.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: 'home_care_requests', document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ['status', 'dispatch'], request_body: { event: next === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED }, source: IActivityLogSourceEnum.DASHBOARD }); } catch {}
         return await populate(HomeCareRequest.findById(updated._id)).exec() ?? updated;
     }
 
