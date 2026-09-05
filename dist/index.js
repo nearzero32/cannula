@@ -136129,7 +136129,8 @@ var SWAGGER_TAGS = {
     CHRONIC_CONDITIONS: "Mobile - Chronic Conditions",
     SUGGESTIONS: "Mobile - Suggestions",
     ADS: "Mobile - Ads",
-    ABOUT_US: "Mobile - About Us"
+    ABOUT_US: "Mobile - About Us",
+    NOTIFICATIONS: "Mobile - Notifications"
   }
 };
 var SWAGGER_TAG_DEFINITIONS = [
@@ -136173,7 +136174,8 @@ var SWAGGER_TAG_DEFINITIONS = [
   { name: SWAGGER_TAGS.MOBILE.CHRONIC_CONDITIONS, "x-displayName": "Chronic Conditions", description: "\u0627\u0633\u062A\u0639\u0631\u0627\u0636 \u0627\u0644\u0623\u0645\u0631\u0627\u0636 \u0627\u0644\u0645\u0632\u0645\u0646\u0629" },
   { name: SWAGGER_TAGS.MOBILE.SUGGESTIONS, "x-displayName": "Suggestions", description: "\u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u0627\u0644\u0645\u0631\u064A\u0636" },
   { name: SWAGGER_TAGS.MOBILE.ADS, "x-displayName": "Ads", description: "\u0639\u0631\u0636 \u0627\u0644\u0625\u0639\u0644\u0627\u0646\u0627\u062A \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" },
-  { name: SWAGGER_TAGS.MOBILE.ABOUT_US, "x-displayName": "About Us", description: "\u0639\u0631\u0636 \u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u0646\u062D\u0646 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" }
+  { name: SWAGGER_TAGS.MOBILE.ABOUT_US, "x-displayName": "About Us", description: "\u0639\u0631\u0636 \u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u0646\u062D\u0646 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" },
+  { name: SWAGGER_TAGS.MOBILE.NOTIFICATIONS, "x-displayName": "Notifications", description: "\u0635\u0646\u062F\u0648\u0642 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u0639\u0627\u0645 \u0648\u0627\u0644\u0645\u0648\u062C\u0651\u0647" }
 ];
 var SWAGGER_TAG_GROUPS = [
   { name: "Dashboard", tags: [SWAGGER_TAGS.DASHBOARD.AUTH, SWAGGER_TAGS.DASHBOARD.SHARED] },
@@ -136232,7 +136234,8 @@ var SWAGGER_TAG_GROUPS = [
       SWAGGER_TAGS.MOBILE.CHRONIC_CONDITIONS,
       SWAGGER_TAGS.MOBILE.SUGGESTIONS,
       SWAGGER_TAGS.MOBILE.ADS,
-      SWAGGER_TAGS.MOBILE.ABOUT_US
+      SWAGGER_TAGS.MOBILE.ABOUT_US,
+      SWAGGER_TAGS.MOBILE.NOTIFICATIONS
     ]
   }
 ];
@@ -137264,6 +137267,24 @@ function AuthPlugin(audience = TokenAudienceEnum.DASHBOARD) {
     return { phrase: { _id: bearer._id, role: bearer.role, sid: bearer.sid, audience, mustChangePin: session.restricted } };
   });
 }
+var OptionalMobileAuthPlugin = new Elysia().derive({ as: "scoped" }, async ({ headers, request, status: status2 }) => {
+  const auth = headers.authorization;
+  if (!auth || auth === "null" || auth === "undefined" || auth.length === 0)
+    return { notificationViewer: { kind: "guest" } };
+  const bearer = verifyAccessToken(auth, TokenAudienceEnum.MOBILE);
+  if (!bearer)
+    return status2(401, { error: true, message: "Invalid token" });
+  const session = await session_service_default.validateAccess(bearer);
+  if (!session)
+    return status2(401, { error: true, message: "Session revoked" });
+  const path = new URL(request.url).pathname;
+  const restrictedAllowed = path.endsWith("/mobile/auth/pin/change-required") || path.endsWith("/mobile/auth/logout") || path.endsWith("/mobile/auth/logout-all");
+  if (session.restricted && !restrictedAllowed)
+    return status2(403, { error: true, message: "\u064A\u062C\u0628 \u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u0631\u0645\u0632 \u0627\u0644\u0633\u0631\u064A \u0642\u0628\u0644 \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629" });
+  if (bearer.role !== IUserRoleEnum.PATIENT)
+    return status2(403, { error: true, message: "\u063A\u064A\u0631 \u0645\u0635\u0631\u062D \u0644\u0643 \u0628\u0627\u0644\u0648\u0635\u0648\u0644" });
+  return { notificationViewer: { kind: "user", userId: bearer._id } };
+});
 
 // src/models/activity-log.model.ts
 var import_mongoose9 = __toESM(require_mongoose2(), 1);
@@ -148707,7 +148728,8 @@ var AUTH_RATE_POLICIES = {
   PIN_IP: { limit: 30, window: 600 },
   SUPPORT_ADMIN: { limit: 10, window: 3600 },
   SUPPORT_FLOW: { limit: 2, window: 600 },
-  UPLOAD_USER: { limit: 10, window: 60 }
+  UPLOAD_USER: { limit: 10, window: 60 },
+  NOTIFICATION_GUEST_WRITE: { limit: 30, window: 60 }
 };
 function secret() {
   const value = process.env.OTP_HASH_SECRET?.trim();
@@ -151713,7 +151735,7 @@ async function operation(id2, userId, action) {
 }
 
 // src/controller/dash/admin/notifications.controller.ts
-var import_mongoose47 = __toESM(require_mongoose2(), 1);
+var import_mongoose49 = __toESM(require_mongoose2(), 1);
 
 // src/models/notifications.model.ts
 var import_mongoose45 = __toESM(require_mongoose2(), 1);
@@ -151743,9 +151765,26 @@ var INotificationRecipientModelEnum = {
   SECRETARY: "Secretary",
   ALL: "all"
 };
+var INotificationAudienceEnum = { PUBLIC: "public", TARGETED: "targeted" };
+var INotificationCategoryEnum = {
+  APPOINTMENTS: "appointments",
+  MEDICATIONS: "medications",
+  RESULTS: "results",
+  SERVICES: "services",
+  ACCOUNT: "account",
+  SYSTEM: "system"
+};
+var INotificationPrivacyEnum = { NORMAL: "normal", SENSITIVE: "sensitive" };
 
 // src/models/notifications.model.ts
 var notificationSchema = new import_mongoose45.Schema({
+  audience: { type: String, enum: Object.values(INotificationAudienceEnum), default: INotificationAudienceEnum.TARGETED, index: true },
+  category: { type: String, enum: Object.values(INotificationCategoryEnum), default: INotificationCategoryEnum.SYSTEM, index: true },
+  privacy: { type: String, enum: Object.values(INotificationPrivacyEnum), default: INotificationPrivacyEnum.NORMAL },
+  source: { type: new import_mongoose45.Schema({ domain: { type: String, enum: ["appointment"] }, id: { type: import_mongoose45.Schema.Types.ObjectId } }, { _id: false }), default: null },
+  target: { type: new import_mongoose45.Schema({ type: { type: String, enum: ["appointment"] }, id: { type: import_mongoose45.Schema.Types.ObjectId } }, { _id: false }), default: null },
+  visible_at: { type: Date, default: Date.now, index: true },
+  expires_at: { type: Date, default: () => new Date(Date.now() + 7776000000) },
   dedupe_key: { type: String, trim: true, default: null },
   recipient_ids: {
     type: [import_mongoose45.Schema.Types.ObjectId],
@@ -151821,13 +151860,14 @@ var notificationSchema = new import_mongoose45.Schema({
 notificationSchema.index({ recipient_ids: 1, is_read: 1, createdAt: -1 });
 notificationSchema.index({ status: 1, scheduled_at: 1 });
 notificationSchema.index({ recipient_ids: 1, createdAt: -1 });
-notificationSchema.index({ dedupe_key: 1 }, { unique: true, sparse: true });
-notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+notificationSchema.index({ dedupe_key: 1 }, { unique: true, partialFilterExpression: { dedupe_key: { $type: "string" } } });
+notificationSchema.index({ audience: 1, category: 1, visible_at: 1, createdAt: -1, _id: -1 });
+notificationSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 var Notification = import_mongoose45.models.Notification || import_mongoose45.model("Notification", notificationSchema);
 var notifications_model_default = Notification;
 
 // src/services/notification.service.ts
-var import_mongoose46 = __toESM(require_mongoose2(), 1);
+var import_mongoose48 = __toESM(require_mongoose2(), 1);
 
 // src/lib/onesignal.ts
 var ONESIGNAL_API_URL = "https://api.onesignal.com/notifications";
@@ -151872,7 +151912,47 @@ async function sendPush(payload) {
 }
 var oneSignal = { sendPush };
 
+// src/models/notification-recipient.model.ts
+var import_mongoose46 = __toESM(require_mongoose2(), 1);
+var schema10 = new import_mongoose46.Schema({
+  notification_id: { type: import_mongoose46.Schema.Types.ObjectId, ref: "Notification", required: true },
+  user_id: { type: import_mongoose46.Schema.Types.ObjectId, ref: "User", required: true },
+  expires_at: { type: Date, required: true }
+}, { timestamps: { createdAt: true, updatedAt: false }, versionKey: false });
+schema10.index({ notification_id: 1, user_id: 1 }, { unique: true });
+schema10.index({ user_id: 1, notification_id: 1 });
+schema10.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+var NotificationRecipient = import_mongoose46.models.NotificationRecipient || import_mongoose46.model("NotificationRecipient", schema10);
+var notification_recipient_model_default = NotificationRecipient;
+
+// src/models/notification-read.model.ts
+var import_mongoose47 = __toESM(require_mongoose2(), 1);
+var INotificationReaderTypeEnum = { USER: "user", INSTALLATION: "installation" };
+var schema11 = new import_mongoose47.Schema({
+  notification_id: { type: import_mongoose47.Schema.Types.ObjectId, ref: "Notification", required: true },
+  reader_type: { type: String, enum: Object.values(INotificationReaderTypeEnum), required: true },
+  user_id: { type: import_mongoose47.Schema.Types.ObjectId, ref: "User", default: null },
+  installation_key_hash: { type: String, default: null, select: false },
+  read_at: { type: Date, required: true, default: Date.now },
+  expires_at: { type: Date, required: true }
+}, { timestamps: { createdAt: true, updatedAt: false }, versionKey: false });
+schema11.pre("validate", function() {
+  const isUser = this.reader_type === INotificationReaderTypeEnum.USER;
+  if (isUser ? !this.user_id || this.installation_key_hash : !this.installation_key_hash || this.user_id) {
+    this.invalidate("reader_type", "Read identity must contain exactly one matching reader key");
+  }
+});
+schema11.index({ notification_id: 1, user_id: 1 }, { unique: true, partialFilterExpression: { reader_type: INotificationReaderTypeEnum.USER } });
+schema11.index({ notification_id: 1, installation_key_hash: 1 }, { unique: true, partialFilterExpression: { reader_type: INotificationReaderTypeEnum.INSTALLATION } });
+schema11.index({ user_id: 1, notification_id: 1 }, { partialFilterExpression: { reader_type: INotificationReaderTypeEnum.USER } });
+schema11.index({ installation_key_hash: 1, notification_id: 1 }, { partialFilterExpression: { reader_type: INotificationReaderTypeEnum.INSTALLATION } });
+schema11.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+var NotificationRead = import_mongoose47.models.NotificationRead || import_mongoose47.model("NotificationRead", schema11);
+var notification_read_model_default = NotificationRead;
+
 // src/services/notification.service.ts
+var NOTIFICATION_READ_ALL_BATCH_SIZE = 500;
+
 class NotificationService {
   model = notifications_model_default;
   async getPaginated({
@@ -151911,13 +151991,138 @@ class NotificationService {
   }
   async getUnreadCount(recipient_id, recipient_model) {
     return this.model.countDocuments({
-      recipient_ids: new import_mongoose46.default.Types.ObjectId(recipient_id),
+      recipient_ids: new import_mongoose48.default.Types.ObjectId(recipient_id),
       recipient_model,
       is_read: false
     }).exec();
   }
   async create(payload) {
     return this.model.create(payload);
+  }
+  async createPublic(input) {
+    return this.create({ ...input, audience: INotificationAudienceEnum.PUBLIC, recipient_ids: [], recipient_model: INotificationRecipientModelEnum.ALL, status: INotificationStatusEnum.PENDING, is_read: false, visible_at: input.visible_at ?? new Date, expires_at: input.expires_at ?? new Date(Date.now() + 7776000000) });
+  }
+  async createTargeted(input, userIds) {
+    const uniqueUserIds = [...new Set(userIds.map(String))];
+    if (!uniqueUserIds.length)
+      throw new Error("Targeted notifications require at least one User recipient");
+    if (uniqueUserIds.some((id2) => !import_mongoose48.default.Types.ObjectId.isValid(id2)))
+      throw new Error("Invalid User recipient");
+    const session = await import_mongoose48.default.startSession();
+    try {
+      let notification;
+      await session.withTransaction(async () => {
+        const expires = input.expires_at ?? new Date(Date.now() + 7776000000);
+        const created = await this.model.create([{ ...input, audience: INotificationAudienceEnum.TARGETED, recipient_ids: [], recipient_model: INotificationRecipientModelEnum.USER, status: INotificationStatusEnum.PENDING, is_read: false, visible_at: input.visible_at ?? new Date, expires_at: expires }], { session });
+        notification = created[0];
+        await notification_recipient_model_default.insertMany(uniqueUserIds.map((user_id) => ({ notification_id: notification._id, user_id: new import_mongoose48.default.Types.ObjectId(user_id), expires_at: expires })), { session, ordered: true });
+      });
+      return notification;
+    } finally {
+      await session.endSession();
+    }
+  }
+  async createTargetedOnce(input, userIds) {
+    if (!input.dedupe_key)
+      return { notification: await this.createTargeted(input, userIds), created: true };
+    try {
+      return { notification: await this.createTargeted(input, userIds), created: true };
+    } catch (error) {
+      if (error?.code !== 11000)
+        throw error;
+      const notification = await this.model.findOne({ dedupe_key: input.dedupe_key }).exec();
+      if (!notification)
+        throw error;
+      return { notification, created: false };
+    }
+  }
+  visibleMatch(now, category) {
+    const match = { visible_at: { $lte: now }, expires_at: { $gt: now }, status: { $ne: INotificationStatusEnum.CANCELLED } };
+    if (category && category !== "all")
+      match.category = category;
+    return match;
+  }
+  visiblePipeline(viewer, now, category) {
+    const visible = this.visibleMatch(now, category);
+    if ("installationHash" in viewer)
+      return [{ $match: { ...visible, audience: INotificationAudienceEnum.PUBLIC } }];
+    const userId = new import_mongoose48.default.Types.ObjectId(viewer.userId);
+    return [
+      { $match: { ...visible, audience: INotificationAudienceEnum.PUBLIC } },
+      { $unionWith: { coll: notification_recipient_model_default.collection.name, pipeline: [
+        { $match: { user_id: userId } },
+        { $lookup: { from: notifications_model_default.collection.name, localField: "notification_id", foreignField: "_id", as: "notification" } },
+        { $unwind: "$notification" },
+        { $replaceRoot: { newRoot: "$notification" } },
+        { $match: { ...visible, audience: INotificationAudienceEnum.TARGETED } }
+      ] } }
+    ];
+  }
+  readLookup(viewer) {
+    const identity = "userId" in viewer ? [{ $eq: ["$user_id", new import_mongoose48.default.Types.ObjectId(viewer.userId)] }] : [{ $eq: ["$installation_key_hash", viewer.installationHash] }];
+    const readerType = "userId" in viewer ? INotificationReaderTypeEnum.USER : INotificationReaderTypeEnum.INSTALLATION;
+    return { $lookup: { from: notification_read_model_default.collection.name, let: { notificationId: "$_id" }, pipeline: [{ $match: { $expr: { $and: [{ $eq: ["$notification_id", "$$notificationId"] }, { $eq: ["$reader_type", readerType] }, ...identity] } } }, { $limit: 1 }], as: "_read" } };
+  }
+  async getMobileInbox(viewer, options) {
+    const now = new Date, skip = (options.page - 1) * options.limit;
+    const result = await this.model.aggregate([
+      ...this.visiblePipeline(viewer, now, options.category),
+      { $sort: { createdAt: -1, _id: -1 } },
+      { $facet: { data: [{ $skip: skip }, { $limit: options.limit }, this.readLookup(viewer), { $project: { category: 1, type: 1, title: 1, body: 1, target: 1, privacy: 1, createdAt: 1, is_read: { $gt: [{ $size: "$_read" }, 0] }, read_at: { $ifNull: [{ $arrayElemAt: ["$_read.read_at", 0] }, null] } } }], count: [{ $count: "total" }] } }
+    ]).exec();
+    const aggregate = result[0] ?? { data: [], count: [] };
+    const unread_count = await this.unreadCount(viewer, now);
+    return { data: aggregate.data, total: aggregate.count[0]?.total ?? 0, unread_count };
+  }
+  async unreadCount(viewer, now = new Date) {
+    const result = await this.model.aggregate([
+      ...this.visiblePipeline(viewer, now),
+      this.readLookup(viewer),
+      { $match: { "_read.0": { $exists: false } } },
+      { $count: "total" }
+    ]).exec();
+    return result[0]?.total ?? 0;
+  }
+  async findVisibleNotification(viewer, id2, now) {
+    const visible = this.visibleMatch(now);
+    if ("installationHash" in viewer)
+      return this.model.findOne({ _id: id2, ...visible, audience: INotificationAudienceEnum.PUBLIC }).select("expires_at").lean().exec();
+    return this.model.aggregate([...this.visiblePipeline(viewer, now), { $match: { _id: id2 } }, { $limit: 1 }, { $project: { expires_at: 1 } }]).exec().then((rows) => rows[0] ?? null);
+  }
+  async markRead(viewer, notificationId) {
+    if (!import_mongoose48.default.Types.ObjectId.isValid(notificationId))
+      return false;
+    const id2 = new import_mongoose48.default.Types.ObjectId(notificationId), notification = await this.findVisibleNotification(viewer, id2, new Date);
+    if (!notification)
+      return false;
+    const identity = "userId" in viewer ? { reader_type: INotificationReaderTypeEnum.USER, user_id: new import_mongoose48.default.Types.ObjectId(viewer.userId), installation_key_hash: null } : { reader_type: INotificationReaderTypeEnum.INSTALLATION, user_id: null, installation_key_hash: viewer.installationHash };
+    await notification_read_model_default.updateOne({ notification_id: id2, reader_type: identity.reader_type, ...identity.user_id ? { user_id: identity.user_id } : { installation_key_hash: identity.installation_key_hash } }, { $setOnInsert: { ...identity, notification_id: id2, read_at: new Date, expires_at: notification.expires_at } }, { upsert: true }).exec();
+    return true;
+  }
+  async markAllRead(viewer, cutoff = new Date) {
+    const identity = "userId" in viewer ? { reader_type: INotificationReaderTypeEnum.USER, user_id: new import_mongoose48.default.Types.ObjectId(viewer.userId), installation_key_hash: null } : { reader_type: INotificationReaderTypeEnum.INSTALLATION, user_id: null, installation_key_hash: viewer.installationHash };
+    const cursor = this.model.aggregate([
+      ...this.visiblePipeline(viewer, cutoff),
+      { $match: { createdAt: { $lte: cutoff } } },
+      this.readLookup(viewer),
+      { $match: { "_read.0": { $exists: false } } },
+      { $project: { _id: 1, expires_at: 1 } }
+    ]).cursor({ batchSize: NOTIFICATION_READ_ALL_BATCH_SIZE });
+    let marked = 0, batch = [];
+    const flush = async () => {
+      if (!batch.length)
+        return;
+      const result = await notification_read_model_default.bulkWrite(batch.map((notification) => ({ updateOne: { filter: { notification_id: notification._id, reader_type: identity.reader_type, ...identity.user_id ? { user_id: identity.user_id } : { installation_key_hash: identity.installation_key_hash } }, update: { $setOnInsert: { ...identity, notification_id: notification._id, read_at: cutoff, expires_at: notification.expires_at } }, upsert: true } })), { ordered: false });
+      marked += result.upsertedCount;
+      batch = [];
+    };
+    for await (const notification of cursor) {
+      batch.push(notification);
+      if (batch.length === NOTIFICATION_READ_ALL_BATCH_SIZE)
+        await flush();
+    }
+    await flush();
+    return marked;
   }
   async update(id2, payload) {
     return this.model.findByIdAndUpdate(id2, payload, { returnDocument: "after" }).exec();
@@ -151927,7 +152132,7 @@ class NotificationService {
   }
   async markAllAsRead(recipient_id, recipient_model) {
     const result = await this.model.updateMany({
-      recipient_ids: new import_mongoose46.default.Types.ObjectId(recipient_id),
+      recipient_ids: new import_mongoose48.default.Types.ObjectId(recipient_id),
       recipient_model,
       is_read: false
     }, { $set: { is_read: true, read_at: new Date } }).exec();
@@ -151999,7 +152204,7 @@ class NotificationService {
 var notification_service_default = new NotificationService;
 
 // src/controller/dash/admin/notifications.controller.ts
-var ObjectId8 = import_mongoose47.default.Types.ObjectId;
+var ObjectId8 = import_mongoose49.default.Types.ObjectId;
 var notificationsController = new Elysia({
   prefix: "/notifications",
   detail: { tags: [SWAGGER_TAGS.ADMIN.NOTIFICATIONS] }
@@ -152159,11 +152364,11 @@ var notificationsController = new Elysia({
 });
 
 // src/controller/dash/admin/doctors.controller.ts
-var import_mongoose50 = __toESM(require_mongoose2(), 1);
+var import_mongoose52 = __toESM(require_mongoose2(), 1);
 
 // src/services/doctor.service.ts
 init_domain_error();
-var import_mongoose48 = __toESM(require_mongoose2(), 1);
+var import_mongoose50 = __toESM(require_mongoose2(), 1);
 var PATIENT_DOCTOR_SORT = Object.freeze({ display_order: 1, _id: 1 });
 var PUBLIC_DOCTOR_MATCH = Object.freeze({
   status: IDoctorStatusEnum.ACTIVE,
@@ -152297,13 +152502,13 @@ class DoctorService {
     if (!doctorIds.length || doctorIds.length > 500) {
       throw new DomainError("\u0642\u0627\u0626\u0645\u0629 \u0627\u0644\u0623\u0637\u0628\u0627\u0621 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 400, "INVALID_DOCTOR_ORDER");
     }
-    if (doctorIds.some((id2) => !import_mongoose48.default.Types.ObjectId.isValid(id2))) {
+    if (doctorIds.some((id2) => !import_mongoose50.default.Types.ObjectId.isValid(id2))) {
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0637\u0628\u064A\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "INVALID_DOCTOR_ID");
     }
     if (new Set(doctorIds).size !== doctorIds.length) {
       throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0643\u0631\u0627\u0631 \u0627\u0644\u0637\u0628\u064A\u0628 \u0641\u064A \u0627\u0644\u062A\u0631\u062A\u064A\u0628", 400, "DUPLICATE_DOCTOR_ID");
     }
-    const objectIds = doctorIds.map((id2) => new import_mongoose48.default.Types.ObjectId(id2));
+    const objectIds = doctorIds.map((id2) => new import_mongoose50.default.Types.ObjectId(id2));
     const session = await this.model.db.startSession();
     try {
       let oldOrders = [];
@@ -152314,7 +152519,7 @@ class DoctorService {
         }
         const result = await this.model.bulkWrite(doctorIds.map((id2, index) => ({
           updateOne: {
-            filter: { _id: new import_mongoose48.default.Types.ObjectId(id2) },
+            filter: { _id: new import_mongoose50.default.Types.ObjectId(id2) },
             update: { $set: { display_order: (index + 1) * 10 } }
           }
         })), { ordered: true, session });
@@ -152348,12 +152553,12 @@ class DoctorService {
 var doctor_service_default = new DoctorService;
 
 // src/services/doctor-specialty.service.ts
-var import_mongoose49 = __toESM(require_mongoose2(), 1);
+var import_mongoose51 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 var asObjectId = (value) => {
-  if (!import_mongoose49.default.Types.ObjectId.isValid(value))
+  if (!import_mongoose51.default.Types.ObjectId.isValid(value))
     throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u062A\u062E\u0635\u0635 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "SPECIALTY_INVALID");
-  return new import_mongoose49.default.Types.ObjectId(value);
+  return new import_mongoose51.default.Types.ObjectId(value);
 };
 async function validateDoctorSpecialties(primaryId, ids) {
   const unique = [...new Set([primaryId, ...ids])];
@@ -152370,7 +152575,7 @@ async function doctorSpecialtyMap(doctors, options = {}) {
 }
 
 // src/controller/dash/admin/doctors.controller.ts
-var ObjectId9 = import_mongoose50.default.Types.ObjectId;
+var ObjectId9 = import_mongoose52.default.Types.ObjectId;
 var doctorBodySchema = t.Object({
   user_id: t.String({ minLength: 1 }),
   full_name: t.String({ minLength: 1, maxLength: 120 }),
@@ -152699,13 +152904,13 @@ var doctorsController = new Elysia({
 });
 
 // src/controller/dash/admin/suggestions.controller.ts
-var import_mongoose52 = __toESM(require_mongoose2(), 1);
+var import_mongoose54 = __toESM(require_mongoose2(), 1);
 
 // src/models/suggestions.model.ts
-var import_mongoose51 = __toESM(require_mongoose2(), 1);
-var suggestionSchema = new import_mongoose51.Schema({
+var import_mongoose53 = __toESM(require_mongoose2(), 1);
+var suggestionSchema = new import_mongoose53.Schema({
   user_id: {
-    type: import_mongoose51.Schema.Types.ObjectId,
+    type: import_mongoose53.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
@@ -152724,7 +152929,7 @@ var suggestionSchema = new import_mongoose51.Schema({
     default: null
   },
   deleted_by: {
-    type: import_mongoose51.Schema.Types.ObjectId,
+    type: import_mongoose53.Schema.Types.ObjectId,
     ref: "User",
     default: null
   }
@@ -152734,7 +152939,7 @@ var suggestionSchema = new import_mongoose51.Schema({
 });
 suggestionSchema.index({ user_id: 1, is_deleted: 1, createdAt: -1 });
 suggestionSchema.index({ is_deleted: 1, createdAt: -1 });
-var Suggestion = import_mongoose51.models.Suggestion || import_mongoose51.model("Suggestion", suggestionSchema);
+var Suggestion = import_mongoose53.models.Suggestion || import_mongoose53.model("Suggestion", suggestionSchema);
 var suggestions_model_default = Suggestion;
 
 // src/services/suggestion.service.ts
@@ -152859,7 +153064,7 @@ class SuggestionService {
 var suggestion_service_default = new SuggestionService;
 
 // src/controller/dash/admin/suggestions.controller.ts
-var ObjectId10 = import_mongoose52.default.Types.ObjectId;
+var ObjectId10 = import_mongoose54.default.Types.ObjectId;
 var userLookupPipeline = [
   {
     $lookup: {
@@ -153014,7 +153219,7 @@ var suggestionsController = new Elysia({
 });
 
 // src/controller/dash/admin/home-care.controller.ts
-var import_mongoose65 = __toESM(require_mongoose2(), 1);
+var import_mongoose67 = __toESM(require_mongoose2(), 1);
 
 // src/services/home-care-policy.service.ts
 function resolveHomeCareAccess(role, admin2) {
@@ -153034,7 +153239,7 @@ class HomeCarePolicyService {
 var home_care_policy_service_default = new HomeCarePolicyService;
 
 // src/services/home-care-category.service.ts
-var import_mongoose53 = __toESM(require_mongoose2(), 1);
+var import_mongoose55 = __toESM(require_mongoose2(), 1);
 
 // src/services/home-care.validation.ts
 class HomeCareValidationError extends Error {
@@ -153221,18 +153426,18 @@ class HomeCareCategoryService {
   async reorder(categoryIds, meta2) {
     if (!categoryIds.length || categoryIds.length > 500)
       throw new DomainError("\u0642\u0627\u0626\u0645\u0629 \u0623\u0646\u0648\u0627\u0639 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 400, "INVALID_HOME_CARE_CATEGORY_ORDER");
-    if (categoryIds.some((id2) => !import_mongoose53.default.Types.ObjectId.isValid(id2)))
+    if (categoryIds.some((id2) => !import_mongoose55.default.Types.ObjectId.isValid(id2)))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0646\u0648\u0639 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "INVALID_HOME_CARE_CATEGORY_ID");
     if (new Set(categoryIds).size !== categoryIds.length)
       throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0643\u0631\u0627\u0631 \u0646\u0648\u0639 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u0641\u064A \u0627\u0644\u062A\u0631\u062A\u064A\u0628", 400, "DUPLICATE_HOME_CARE_CATEGORY_ID");
-    const ids = categoryIds.map((id2) => new import_mongoose53.default.Types.ObjectId(id2)), session = await home_care_category_model_default.db.startSession();
+    const ids = categoryIds.map((id2) => new import_mongoose55.default.Types.ObjectId(id2)), session = await home_care_category_model_default.db.startSession();
     let oldOrders = [];
     try {
       await session.withTransaction(async () => {
         oldOrders = await home_care_category_model_default.find({ _id: { $in: ids } }).select("_id display_order").session(session).lean().exec();
         if (oldOrders.length !== categoryIds.length)
           throw new DomainError("\u064A\u0648\u062C\u062F \u0646\u0648\u0639 \u0631\u0639\u0627\u064A\u0629 \u0645\u0646\u0632\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404, "HOME_CARE_CATEGORY_NOT_FOUND");
-        const result = await home_care_category_model_default.bulkWrite(categoryIds.map((id2, index) => ({ updateOne: { filter: { _id: new import_mongoose53.default.Types.ObjectId(id2) }, update: { $set: { display_order: (index + 1) * 10 } } } })), { ordered: true, session });
+        const result = await home_care_category_model_default.bulkWrite(categoryIds.map((id2, index) => ({ updateOne: { filter: { _id: new import_mongoose55.default.Types.ObjectId(id2) }, update: { $set: { display_order: (index + 1) * 10 } } } })), { ordered: true, session });
         if (result.matchedCount !== categoryIds.length)
           throw new DomainError("\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062A\u0631\u062A\u064A\u0628", 409, "HOME_CARE_CATEGORY_ORDER_CONFLICT");
       });
@@ -153250,7 +153455,7 @@ class HomeCareCategoryService {
 var home_care_category_service_default = new HomeCareCategoryService;
 
 // src/services/home-care-service.service.ts
-var import_mongoose54 = __toESM(require_mongoose2(), 1);
+var import_mongoose56 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 var MOBILE_HOME_CARE_SERVICES_CACHE_PREFIX = "cache:mobile:home-care:services:v1";
 var mobileHomeCareServicesCacheKey = (categoryId) => `${MOBILE_HOME_CARE_SERVICES_CACHE_PREFIX}:category=${categoryId ?? "all"}`;
@@ -153264,7 +153469,7 @@ class HomeCareServiceService {
     const limit = Math.min(100, Math.max(1, query.limit ?? 10));
     const filter = {};
     if (query.categoryId)
-      filter.category_id = new import_mongoose54.default.Types.ObjectId(query.categoryId);
+      filter.category_id = new import_mongoose56.default.Types.ObjectId(query.categoryId);
     if (query.status)
       filter.status = query.status;
     if (query.search?.trim()) {
@@ -153322,7 +153527,7 @@ class HomeCareServiceService {
     });
     await this.ensureCategoryCanContainService(input.categoryId, status2);
     const created = await home_care_service_model_default.create({
-      category_id: new import_mongoose54.default.Types.ObjectId(input.categoryId),
+      category_id: new import_mongoose56.default.Types.ObjectId(input.categoryId),
       name: normalizedName,
       short_description: input.shortDescription ?? null,
       description: input.description ?? null,
@@ -153353,7 +153558,7 @@ class HomeCareServiceService {
     await this.ensureCategoryCanContainService(categoryId, status2);
     const payload = {};
     if (input.categoryId !== undefined)
-      payload.category_id = new import_mongoose54.default.Types.ObjectId(input.categoryId);
+      payload.category_id = new import_mongoose56.default.Types.ObjectId(input.categoryId);
     if (input.name !== undefined)
       payload.name = normalizeHomeCareName(input.name).name;
     if (input.shortDescription !== undefined)
@@ -153382,11 +153587,11 @@ class HomeCareServiceService {
   async reorder(serviceIds, meta2) {
     if (!serviceIds.length || serviceIds.length > 500)
       throw new DomainError("\u0642\u0627\u0626\u0645\u0629 \u062E\u062F\u0645\u0627\u062A \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 400, "INVALID_HOME_CARE_SERVICE_ORDER");
-    if (serviceIds.some((id2) => !import_mongoose54.default.Types.ObjectId.isValid(id2)))
+    if (serviceIds.some((id2) => !import_mongoose56.default.Types.ObjectId.isValid(id2)))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "INVALID_HOME_CARE_SERVICE_ID");
     if (new Set(serviceIds).size !== serviceIds.length)
       throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0643\u0631\u0627\u0631 \u0627\u0644\u062E\u062F\u0645\u0629 \u0641\u064A \u0627\u0644\u062A\u0631\u062A\u064A\u0628", 400, "DUPLICATE_HOME_CARE_SERVICE_ID");
-    const ids = serviceIds.map((id2) => new import_mongoose54.default.Types.ObjectId(id2)), session = home_care_service_model_default.db.startSession ? await home_care_service_model_default.db.startSession() : null;
+    const ids = serviceIds.map((id2) => new import_mongoose56.default.Types.ObjectId(id2)), session = home_care_service_model_default.db.startSession ? await home_care_service_model_default.db.startSession() : null;
     let oldOrders = [];
     try {
       if (!session)
@@ -153395,7 +153600,7 @@ class HomeCareServiceService {
         oldOrders = await home_care_service_model_default.find({ _id: { $in: ids } }).select("_id display_order").session(session).lean().exec();
         if (oldOrders.length !== serviceIds.length)
           throw new DomainError("\u064A\u0648\u062C\u062F \u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404, "HOME_CARE_SERVICE_NOT_FOUND");
-        const result = await home_care_service_model_default.bulkWrite(serviceIds.map((id2, index) => ({ updateOne: { filter: { _id: new import_mongoose54.default.Types.ObjectId(id2) }, update: { $set: { display_order: (index + 1) * 10 } } } })), { ordered: true, session });
+        const result = await home_care_service_model_default.bulkWrite(serviceIds.map((id2, index) => ({ updateOne: { filter: { _id: new import_mongoose56.default.Types.ObjectId(id2) }, update: { $set: { display_order: (index + 1) * 10 } } } })), { ordered: true, session });
         if (result.matchedCount !== serviceIds.length)
           throw new DomainError("\u062A\u0639\u0630\u0631 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062A\u0631\u062A\u064A\u0628", 409, "HOME_CARE_SERVICE_ORDER_CONFLICT");
       });
@@ -153488,13 +153693,13 @@ var MobileHomeCareServiceListResponseSchema = successResponse(t.Array(MobileHome
 var MobileHomeCareServiceResponseSchema = successResponse(MobileHomeCareServiceSchema, "\u062A\u0645 \u062C\u0644\u0628 \u062E\u062F\u0645\u0629 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u0628\u0646\u062C\u0627\u062D");
 
 // src/controller/dash/admin/home-care-requests.controller.ts
-var import_mongoose64 = __toESM(require_mongoose2(), 1);
+var import_mongoose66 = __toESM(require_mongoose2(), 1);
 
 // src/services/home-care-request.service.ts
-var import_mongoose61 = __toESM(require_mongoose2(), 1);
+var import_mongoose63 = __toESM(require_mongoose2(), 1);
 
 // src/models/home-care-request.model.ts
-var import_mongoose55 = __toESM(require_mongoose2(), 1);
+var import_mongoose57 = __toESM(require_mongoose2(), 1);
 
 // src/interfaces/home-care-request.interface.ts
 var IHomeCareRequestStatusEnum = {
@@ -153520,12 +153725,12 @@ var IHomeCareRequestCancelledByTypeEnum = {
 };
 
 // src/models/home-care-request.model.ts
-var homeCareRequestSchema = new import_mongoose55.Schema({
+var homeCareRequestSchema = new import_mongoose57.Schema({
   request_number: { type: String, required: true, unique: true, trim: true },
-  patient_id: { type: import_mongoose55.Schema.Types.ObjectId, ref: "Patient", required: true },
-  child_id: { type: import_mongoose55.Schema.Types.ObjectId, ref: "PatientChild", default: null },
-  category_id: { type: import_mongoose55.Schema.Types.ObjectId, ref: "HomeCareCategory", required: true },
-  service_id: { type: import_mongoose55.Schema.Types.ObjectId, ref: "HomeCareService", required: true },
+  patient_id: { type: import_mongoose57.Schema.Types.ObjectId, ref: "Patient", required: true },
+  child_id: { type: import_mongoose57.Schema.Types.ObjectId, ref: "PatientChild", default: null },
+  category_id: { type: import_mongoose57.Schema.Types.ObjectId, ref: "HomeCareCategory", required: true },
+  service_id: { type: import_mongoose57.Schema.Types.ObjectId, ref: "HomeCareService", required: true },
   service_name: { type: String, required: true, trim: true, maxlength: 160 },
   service_price: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
   service_duration_min: { type: Number, min: 0, default: null },
@@ -153550,16 +153755,16 @@ var homeCareRequestSchema = new import_mongoose55.Schema({
   dispatch: {
     status: { type: String, enum: Object.values(IHomeCareDispatchStatusEnum), default: IHomeCareDispatchStatusEnum.OPEN },
     mode: { type: String, enum: Object.values(IHomeCareDispatchModeEnum), default: IHomeCareDispatchModeEnum.OPEN_POOL },
-    nurse_id: { type: import_mongoose55.Schema.Types.ObjectId, ref: "Nurse", default: null },
+    nurse_id: { type: import_mongoose57.Schema.Types.ObjectId, ref: "Nurse", default: null },
     assigned_at: { type: Date, default: null },
-    assigned_by_user_id: { type: import_mongoose55.Schema.Types.ObjectId, ref: "User", default: null },
+    assigned_by_user_id: { type: import_mongoose57.Schema.Types.ObjectId, ref: "User", default: null },
     version: { type: Number, min: 0, default: 0 },
     _id: false
   },
   internal_notes: { type: String, trim: true, maxlength: 3000, default: null },
   cancelled_at: { type: Date, default: null },
   cancelled_by: {
-    id: { type: import_mongoose55.Schema.Types.ObjectId, default: null },
+    id: { type: import_mongoose57.Schema.Types.ObjectId, default: null },
     type: {
       type: String,
       enum: Object.values(IHomeCareRequestCancelledByTypeEnum),
@@ -153576,20 +153781,20 @@ homeCareRequestSchema.index({ service_id: 1, createdAt: -1 });
 homeCareRequestSchema.index({ category_id: 1, createdAt: -1 });
 homeCareRequestSchema.index({ "dispatch.status": 1, status: 1, service_id: 1, requested_date: 1 });
 homeCareRequestSchema.index({ "dispatch.nurse_id": 1, status: 1, requested_date: -1 });
-var HomeCareRequest = import_mongoose55.models.HomeCareRequest || import_mongoose55.model("HomeCareRequest", homeCareRequestSchema);
+var HomeCareRequest = import_mongoose57.models.HomeCareRequest || import_mongoose57.model("HomeCareRequest", homeCareRequestSchema);
 var home_care_request_model_default = HomeCareRequest;
 
 // src/models/home-care-request-counter.model.ts
-var import_mongoose56 = __toESM(require_mongoose2(), 1);
-var homeCareRequestCounterSchema = new import_mongoose56.Schema({
+var import_mongoose58 = __toESM(require_mongoose2(), 1);
+var homeCareRequestCounterSchema = new import_mongoose58.Schema({
   _id: { type: String, required: true },
   sequence: { type: Number, required: true, default: 0, min: 0 }
 }, { versionKey: false, collection: "home_care_request_counters" });
-var HomeCareRequestCounter = import_mongoose56.models.HomeCareRequestCounter || import_mongoose56.model("HomeCareRequestCounter", homeCareRequestCounterSchema);
+var HomeCareRequestCounter = import_mongoose58.models.HomeCareRequestCounter || import_mongoose58.model("HomeCareRequestCounter", homeCareRequestCounterSchema);
 var home_care_request_counter_model_default = HomeCareRequestCounter;
 
 // src/services/patient-child.service.ts
-var import_mongoose57 = __toESM(require_mongoose2(), 1);
+var import_mongoose59 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 
 // src/services/date-of-birth.ts
@@ -153632,9 +153837,9 @@ function validateChildDateOfBirth(dateOfBirth) {
   }
 }
 function ownedChildFilter(patientId, childId) {
-  if (!import_mongoose57.default.Types.ObjectId.isValid(childId))
+  if (!import_mongoose59.default.Types.ObjectId.isValid(childId))
     return null;
-  return { _id: new import_mongoose57.default.Types.ObjectId(childId), patient_id: patientId };
+  return { _id: new import_mongoose59.default.Types.ObjectId(childId), patient_id: patientId };
 }
 function formatPatientChild(child) {
   return {
@@ -153725,22 +153930,22 @@ class PatientChildService {
   }
   async getOwnedHealthProfile(patientId, childId) {
     const child = await this.requireOwnedChild(patientId, childId);
-    const profile = await childHealthProfileService.getOrCreate(new import_mongoose57.default.Types.ObjectId(child._id.toString()));
+    const profile = await childHealthProfileService.getOrCreate(new import_mongoose59.default.Types.ObjectId(child._id.toString()));
     return { child, profile };
   }
   async updateOwnedHealthProfile(patientId, childId, input) {
     const child = await this.requireOwnedChild(patientId, childId);
-    const profile = await childHealthProfileService.update(new import_mongoose57.default.Types.ObjectId(child._id.toString()), input);
+    const profile = await childHealthProfileService.update(new import_mongoose59.default.Types.ObjectId(child._id.toString()), input);
     return { child, profile };
   }
 }
 var patient_child_service_default = new PatientChildService;
 
 // src/services/home-care-request-history.service.ts
-var import_mongoose59 = __toESM(require_mongoose2(), 1);
+var import_mongoose61 = __toESM(require_mongoose2(), 1);
 
 // src/models/home-care-request-history.model.ts
-var import_mongoose58 = __toESM(require_mongoose2(), 1);
+var import_mongoose60 = __toESM(require_mongoose2(), 1);
 
 // src/interfaces/home-care-request-history.interface.ts
 var HomeCareHistoryEventEnum = {
@@ -153763,26 +153968,26 @@ var HomeCareHistoryActorTypeEnum = {
 };
 
 // src/models/home-care-request-history.model.ts
-var historySchema = new import_mongoose58.Schema({
-  request_id: { type: import_mongoose58.Schema.Types.ObjectId, ref: "HomeCareRequest", required: true },
+var historySchema = new import_mongoose60.Schema({
+  request_id: { type: import_mongoose60.Schema.Types.ObjectId, ref: "HomeCareRequest", required: true },
   request_number: { type: String, required: true, trim: true },
   event_type: { type: String, enum: Object.values(HomeCareHistoryEventEnum), required: true },
   actor: {
     type: { type: String, enum: Object.values(HomeCareHistoryActorTypeEnum), required: true },
-    user_id: { type: import_mongoose58.Schema.Types.ObjectId, ref: "User", default: null },
-    nurse_id: { type: import_mongoose58.Schema.Types.ObjectId, ref: "Nurse", default: null },
+    user_id: { type: import_mongoose60.Schema.Types.ObjectId, ref: "User", default: null },
+    nurse_id: { type: import_mongoose60.Schema.Types.ObjectId, ref: "Nurse", default: null },
     _id: false
   },
   from_status: { type: String, default: null },
   to_status: { type: String, default: null },
-  from_nurse_id: { type: import_mongoose58.Schema.Types.ObjectId, ref: "Nurse", default: null },
-  to_nurse_id: { type: import_mongoose58.Schema.Types.ObjectId, ref: "Nurse", default: null },
+  from_nurse_id: { type: import_mongoose60.Schema.Types.ObjectId, ref: "Nurse", default: null },
+  to_nurse_id: { type: import_mongoose60.Schema.Types.ObjectId, ref: "Nurse", default: null },
   dispatch_mode: { type: String, default: null },
   reason: { type: String, trim: true, maxlength: 1000, default: null },
-  metadata: { type: import_mongoose58.Schema.Types.Mixed, default: null }
+  metadata: { type: import_mongoose60.Schema.Types.Mixed, default: null }
 }, { timestamps: { createdAt: true, updatedAt: false }, versionKey: false, collection: "home_care_request_history", bufferCommands: false });
 historySchema.index({ request_id: 1, createdAt: 1 });
-var HomeCareRequestHistory = import_mongoose58.models.HomeCareRequestHistory || import_mongoose58.model("HomeCareRequestHistory", historySchema);
+var HomeCareRequestHistory = import_mongoose60.models.HomeCareRequestHistory || import_mongoose60.model("HomeCareRequestHistory", historySchema);
 var home_care_request_history_model_default = HomeCareRequestHistory;
 
 // src/services/home-care-request-history.service.ts
@@ -153803,7 +154008,7 @@ class HomeCareRequestHistoryService {
     }
   }
   async list(requestId) {
-    if (!import_mongoose59.default.Types.ObjectId.isValid(requestId))
+    if (!import_mongoose61.default.Types.ObjectId.isValid(requestId))
       return [];
     return home_care_request_history_model_default.find({ request_id: requestId }).populate({ path: "actor.user_id", select: "full_name role" }).populate({ path: "actor.nurse_id", select: "full_name profile_photo" }).populate({ path: "from_nurse_id", select: "full_name profile_photo" }).populate({ path: "to_nurse_id", select: "full_name profile_photo" }).sort({ createdAt: 1, _id: 1 }).exec();
   }
@@ -153873,9 +154078,9 @@ function homeCareBaghdadDateRange(from, to) {
 }
 
 // src/services/home-care-transaction.service.ts
-var import_mongoose60 = __toESM(require_mongoose2(), 1);
+var import_mongoose62 = __toESM(require_mongoose2(), 1);
 async function runHomeCareTransaction(work) {
-  const session = await import_mongoose60.default.startSession();
+  const session = await import_mongoose62.default.startSession();
   try {
     let result;
     await session.withTransaction(async () => {
@@ -153937,7 +154142,7 @@ function withSafePopulation(query) {
 
 class HomeCareRequestService {
   async createForPatient(patientId, input, actor2) {
-    if (!import_mongoose61.default.Types.ObjectId.isValid(input.service_id)) {
+    if (!import_mongoose63.default.Types.ObjectId.isValid(input.service_id)) {
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     }
     const service = await home_care_service_service_default.getActiveById(input.service_id);
@@ -153945,14 +154150,14 @@ class HomeCareRequestService {
       throw new DomainError("\u0627\u0644\u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629 \u0623\u0648 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D\u0629", 404);
     let childId = null;
     if (input.child_id !== null && input.child_id !== undefined) {
-      if (!import_mongoose61.default.Types.ObjectId.isValid(input.child_id)) {
+      if (!import_mongoose63.default.Types.ObjectId.isValid(input.child_id)) {
         throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0641\u0644 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
       }
       const child = await patient_child_service_default.requireOwnedChild(patientId, input.child_id);
       if (child.status !== PatientChildStatusEnum.ACTIVE) {
         throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0637\u0644\u0628 \u0627\u0644\u062E\u062F\u0645\u0629 \u0644\u0637\u0641\u0644 \u063A\u064A\u0631 \u0641\u0639\u0627\u0644", 422);
       }
-      childId = new import_mongoose61.default.Types.ObjectId(child._id.toString());
+      childId = new import_mongoose63.default.Types.ObjectId(child._id.toString());
     }
     const now = new Date;
     const requestedDate = validateRequestedDate(input.requested_date, now);
@@ -153965,8 +154170,8 @@ class HomeCareRequestService {
     const basePayload = {
       patient_id: patientId,
       child_id: childId,
-      category_id: new import_mongoose61.default.Types.ObjectId(service.category_id.toString()),
-      service_id: new import_mongoose61.default.Types.ObjectId(service._id.toString()),
+      category_id: new import_mongoose63.default.Types.ObjectId(service.category_id.toString()),
+      service_id: new import_mongoose63.default.Types.ObjectId(service._id.toString()),
       service_name: service.name,
       service_price: service.price,
       service_duration_min: service.duration_min ?? null,
@@ -153998,10 +154203,10 @@ class HomeCareRequestService {
             request_number: await nextHomeCareRequestNumber(now, session)
           }], { session });
           await home_care_request_history_service_default.append({
-            request_id: new import_mongoose61.default.Types.ObjectId(String(created._id)),
+            request_id: new import_mongoose63.default.Types.ObjectId(String(created._id)),
             request_number: created.request_number,
             event_type: HomeCareHistoryEventEnum.REQUEST_CREATED,
-            actor: { type: HomeCareHistoryActorTypeEnum.PATIENT, user_id: new import_mongoose61.default.Types.ObjectId(actor2.user_id), nurse_id: null },
+            actor: { type: HomeCareHistoryActorTypeEnum.PATIENT, user_id: new import_mongoose63.default.Types.ObjectId(actor2.user_id), nurse_id: null },
             from_status: null,
             to_status: IHomeCareRequestStatusEnum.PENDING,
             from_nurse_id: null,
@@ -154036,7 +154241,7 @@ class HomeCareRequestService {
     return { data, count };
   }
   async getForPatient(patientId, requestId) {
-    if (!import_mongoose61.default.Types.ObjectId.isValid(requestId))
+    if (!import_mongoose63.default.Types.ObjectId.isValid(requestId))
       return null;
     return withSafePopulation(home_care_request_model_default.findOne({
       _id: requestId,
@@ -154054,7 +154259,7 @@ class HomeCareRequestService {
           status: IHomeCareRequestStatusEnum.CANCELLED,
           cancelled_at: new Date,
           cancelled_by: {
-            id: new import_mongoose61.default.Types.ObjectId(actor2.user_id),
+            id: new import_mongoose63.default.Types.ObjectId(actor2.user_id),
             type: IHomeCareRequestCancelledByTypeEnum.PATIENT
           },
           cancellation_reason: cancellationReason,
@@ -154082,9 +154287,9 @@ class HomeCareRequestService {
       [query.patient_id, "patient_id"]
     ]) {
       if (input) {
-        if (!import_mongoose61.default.Types.ObjectId.isValid(input))
+        if (!import_mongoose63.default.Types.ObjectId.isValid(input))
           throw new DomainError("\u0627\u0644\u0645\u0639\u0631\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
-        filter[field] = new import_mongoose61.default.Types.ObjectId(input);
+        filter[field] = new import_mongoose63.default.Types.ObjectId(input);
       }
     }
     if (query.dateFrom || query.dateTo) {
@@ -154105,7 +154310,7 @@ class HomeCareRequestService {
     return { data, count };
   }
   async getForDashboard(requestId) {
-    if (!import_mongoose61.default.Types.ObjectId.isValid(requestId))
+    if (!import_mongoose63.default.Types.ObjectId.isValid(requestId))
       return null;
     return withSafePopulation(home_care_request_model_default.findById(requestId)).exec();
   }
@@ -154148,7 +154353,7 @@ class HomeCareRequestService {
           status: IHomeCareRequestStatusEnum.CANCELLED,
           cancelled_at: new Date,
           cancelled_by: {
-            id: new import_mongoose61.default.Types.ObjectId(actor2.user_id),
+            id: new import_mongoose63.default.Types.ObjectId(actor2.user_id),
             type: IHomeCareRequestCancelledByTypeEnum.ADMIN
           },
           cancellation_reason: cancellationReason,
@@ -154214,12 +154419,12 @@ class HomeCareRequestService {
   }
   async appendMutationHistory(request, event_type, actor2, from_status, to_status, reason, session) {
     const nurseValue = request.dispatch?.nurse_id;
-    const nurseId = nurseValue ? new import_mongoose61.default.Types.ObjectId(String(nurseValue._id ?? nurseValue)) : null;
+    const nurseId = nurseValue ? new import_mongoose63.default.Types.ObjectId(String(nurseValue._id ?? nurseValue)) : null;
     await home_care_request_history_service_default.append({
-      request_id: new import_mongoose61.default.Types.ObjectId(String(request._id)),
+      request_id: new import_mongoose63.default.Types.ObjectId(String(request._id)),
       request_number: request.request_number,
       event_type,
-      actor: { type: actor2.user_type === "patient" ? HomeCareHistoryActorTypeEnum.PATIENT : HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose61.default.Types.ObjectId(actor2.user_id), nurse_id: null },
+      actor: { type: actor2.user_type === "patient" ? HomeCareHistoryActorTypeEnum.PATIENT : HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose63.default.Types.ObjectId(actor2.user_id), nurse_id: null },
       from_status,
       to_status,
       from_nurse_id: nurseId,
@@ -154233,25 +154438,25 @@ class HomeCareRequestService {
 var home_care_request_service_default = new HomeCareRequestService;
 
 // src/services/home-care-dispatch.service.ts
-var import_mongoose63 = __toESM(require_mongoose2(), 1);
+var import_mongoose65 = __toESM(require_mongoose2(), 1);
 
 // src/services/nurse.service.ts
-var import_mongoose62 = __toESM(require_mongoose2(), 1);
+var import_mongoose64 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 function ids(values) {
-  if (values.some((value) => !import_mongoose62.default.Types.ObjectId.isValid(value)))
+  if (values.some((value) => !import_mongoose64.default.Types.ObjectId.isValid(value)))
     throw new DomainError("\u0645\u0639\u0631\u0641 \u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
-  return [...new Set(values)].map((value) => new import_mongoose62.default.Types.ObjectId(value));
+  return [...new Set(values)].map((value) => new import_mongoose64.default.Types.ObjectId(value));
 }
 
 class NurseService {
   async getById(id2) {
-    if (!import_mongoose62.default.Types.ObjectId.isValid(id2))
+    if (!import_mongoose64.default.Types.ObjectId.isValid(id2))
       return null;
     return nurse_model_default.findById(id2).populate({ path: "qualified_service_ids", select: "name status category_id" }).exec();
   }
   async getByUserId(userId) {
-    if (!import_mongoose62.default.Types.ObjectId.isValid(userId))
+    if (!import_mongoose64.default.Types.ObjectId.isValid(userId))
       return null;
     return nurse_model_default.findOne({ user_id: userId }).populate({ path: "qualified_service_ids", select: "name status category_id" }).exec();
   }
@@ -154263,10 +154468,10 @@ class NurseService {
       throw new DomainError("\u062D\u0633\u0627\u0628 \u0627\u0644\u0645\u0645\u0631\u0636 \u063A\u064A\u0631 \u0641\u0639\u0627\u0644", 403);
     return nurse;
   }
-  async requireActiveQualified(nurseId, serviceId) {
-    if (!import_mongoose62.default.Types.ObjectId.isValid(nurseId))
+  async requireActiveQualified(nurseId, serviceId, session) {
+    if (!import_mongoose64.default.Types.ObjectId.isValid(nurseId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0645\u0631\u0636 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
-    const nurse = await nurse_model_default.findOne({ _id: nurseId, status: INurseStatusEnum.ACTIVE }).exec();
+    const nurse = await nurse_model_default.findOne({ _id: nurseId, status: INurseStatusEnum.ACTIVE }).session(session ?? null).exec();
     if (!nurse)
       throw new DomainError("\u0627\u0644\u0645\u0645\u0631\u0636 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F \u0623\u0648 \u063A\u064A\u0631 \u0641\u0639\u0627\u0644", 404);
     if (!nurse.qualified_service_ids.some((id2) => String(id2) === String(serviceId))) {
@@ -154294,7 +154499,7 @@ class NurseService {
   async create(input, actor2) {
     if (input.profile_photo)
       throw new DomainError("\u0623\u0646\u0634\u0626 \u0645\u0644\u0641 \u0627\u0644\u0645\u0645\u0631\u0636 \u062B\u0645 \u0627\u0631\u0641\u0639 \u0635\u0648\u0631\u062A\u0647 \u0644\u063A\u0631\u0636\u0647 \u0627\u0644\u0645\u062D\u062F\u062F", 422, "UPLOAD_TARGET_NOT_FOUND");
-    if (!import_mongoose62.default.Types.ObjectId.isValid(input.user_id))
+    if (!import_mongoose64.default.Types.ObjectId.isValid(input.user_id))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0633\u062A\u062E\u062F\u0645 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     const [user, duplicate] = await Promise.all([users_model_default.findById(input.user_id).exec(), nurse_model_default.findOne({ user_id: input.user_id }).exec()]);
     if (!user)
@@ -154307,7 +154512,7 @@ class NurseService {
     if (await home_care_service_model_default.countDocuments({ _id: { $in: serviceIds } }).exec() !== serviceIds.length) {
       throw new DomainError("\u0625\u062D\u062F\u0649 \u062E\u062F\u0645\u0627\u062A \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 422);
     }
-    const nurse = await nurse_model_default.create({ ...input, user_id: new import_mongoose62.default.Types.ObjectId(input.user_id), qualified_service_ids: serviceIds });
+    const nurse = await nurse_model_default.create({ ...input, user_id: new import_mongoose64.default.Types.ObjectId(input.user_id), qualified_service_ids: serviceIds });
     if (nurse.status !== INurseStatusEnum.ACTIVE)
       await session_service_default.revokeAll(String(nurse.user_id), { reasonCode: "NURSE_STATUS_DISABLED" });
     await this.audit("POST", IActivityLogActionEnum.CREATE, nurse, null, input, actor2);
@@ -154368,15 +154573,15 @@ function dateFilter(query) {
 class HomeCareDispatchService {
   async listAvailable(userId, query) {
     const nurse = await nurse_service_default.requireActiveByUserId(userId);
-    const qualified = nurse.qualified_service_ids.map((item) => new import_mongoose63.default.Types.ObjectId(String(item._id ?? item)));
-    if (query.service_id && !import_mongoose63.default.Types.ObjectId.isValid(query.service_id))
+    const qualified = nurse.qualified_service_ids.map((item) => new import_mongoose65.default.Types.ObjectId(String(item._id ?? item)));
+    if (query.service_id && !import_mongoose65.default.Types.ObjectId.isValid(query.service_id))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u062E\u062F\u0645\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     if (query.service_id && !qualified.some((id2) => String(id2) === query.service_id))
       throw new DomainError("\u0623\u0646\u062A \u063A\u064A\u0631 \u0645\u0624\u0647\u0644 \u0644\u062A\u0646\u0641\u064A\u0630 \u0647\u0630\u0647 \u0627\u0644\u062E\u062F\u0645\u0629", 422);
     const page = Math.max(1, query.page ?? 1), limit = Math.min(100, Math.max(1, query.limit ?? 10));
     const filter = {
       status: { $in: CLAIMABLE },
-      service_id: query.service_id ? new import_mongoose63.default.Types.ObjectId(query.service_id) : { $in: qualified },
+      service_id: query.service_id ? new import_mongoose65.default.Types.ObjectId(query.service_id) : { $in: qualified },
       ...openDispatchFilter()
     };
     const dates = dateFilter(query);
@@ -154404,13 +154609,13 @@ class HomeCareDispatchService {
     return { data, count };
   }
   async getMine(userId, requestId) {
-    if (!import_mongoose63.default.Types.ObjectId.isValid(requestId))
+    if (!import_mongoose65.default.Types.ObjectId.isValid(requestId))
       return null;
     const nurse = await nurse_service_default.requireActiveByUserId(userId);
     return populate(home_care_request_model_default.findOne({ _id: requestId, "dispatch.nurse_id": nurse._id })).exec();
   }
   async claim(userId, requestId, actor2) {
-    if (!import_mongoose63.default.Types.ObjectId.isValid(requestId))
+    if (!import_mongoose65.default.Types.ObjectId.isValid(requestId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     const nurse = await nurse_service_default.requireActiveByUserId(userId);
     const updated = await runHomeCareTransaction(async (session) => {
@@ -154422,7 +154627,7 @@ class HomeCareDispatchService {
       const result = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: { $in: CLAIMABLE }, ...openDispatchFilter() }, { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.mode": IHomeCareDispatchModeEnum.OPEN_POOL, "dispatch.nurse_id": nurse._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": null }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true, session }).exec();
       if (!result)
         throw new DomainError("\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628 \u0645\u0633\u0628\u0642\u0627\u064B", 409);
-      await home_care_request_history_service_default.append({ request_id: new import_mongoose63.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.CLAIMED_BY_NURSE, actor: { type: HomeCareHistoryActorTypeEnum.NURSE, user_id: new import_mongoose63.default.Types.ObjectId(actor2.user_id), nurse_id: new import_mongoose63.default.Types.ObjectId(String(nurse._id)) }, from_status: snapshot.status, to_status: result.status, from_nurse_id: null, to_nurse_id: new import_mongoose63.default.Types.ObjectId(String(nurse._id)), dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: null, metadata: null }, { session, critical: true });
+      await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.CLAIMED_BY_NURSE, actor: { type: HomeCareHistoryActorTypeEnum.NURSE, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: new import_mongoose65.default.Types.ObjectId(String(nurse._id)) }, from_status: snapshot.status, to_status: result.status, from_nurse_id: null, to_nurse_id: new import_mongoose65.default.Types.ObjectId(String(nurse._id)), dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: null, metadata: null }, { session, critical: true });
       return result;
     });
     try {
@@ -154431,77 +154636,119 @@ class HomeCareDispatchService {
     return await populate(home_care_request_model_default.findById(updated._id)).exec() ?? updated;
   }
   async transition(userId, requestId, expected, next, actor2) {
-    if (!import_mongoose63.default.Types.ObjectId.isValid(requestId))
+    if (!import_mongoose65.default.Types.ObjectId.isValid(requestId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
-    const nurse = await nurse_service_default.requireActiveByUserId(userId);
-    const updated = await home_care_request_model_default.findOneAndUpdate({ _id: requestId, "dispatch.nurse_id": nurse._id, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, status: expected }, { $set: { status: next, ...next === IHomeCareRequestStatusEnum.COMPLETED ? { "dispatch.status": IHomeCareDispatchStatusEnum.CLOSED } : {} }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }).exec();
-    if (!updated)
+    const allowed = {
+      [IHomeCareRequestStatusEnum.ASSIGNED]: IHomeCareRequestStatusEnum.ON_THE_WAY,
+      [IHomeCareRequestStatusEnum.ON_THE_WAY]: IHomeCareRequestStatusEnum.ARRIVED,
+      [IHomeCareRequestStatusEnum.ARRIVED]: IHomeCareRequestStatusEnum.IN_PROGRESS,
+      [IHomeCareRequestStatusEnum.IN_PROGRESS]: IHomeCareRequestStatusEnum.COMPLETED
+    };
+    if (allowed[expected] !== next)
       throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646\u0643 \u062A\u0646\u0641\u064A\u0630 \u0647\u0630\u0627 \u0627\u0644\u0625\u062C\u0631\u0627\u0621 \u0641\u064A \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0644\u0628 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
-    await this.record(updated, next === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED, actor2, expected, next, String(nurse._id), String(nurse._id), updated.dispatch.mode);
+    const nurse = await nurse_service_default.requireActiveByUserId(userId);
+    const updated = await runHomeCareTransaction(async (session) => {
+      const snapshot = await this.requestSnapshot(requestId, session);
+      const result = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: expected, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.nurse_id": nurse._id, "dispatch.version": snapshot.dispatch.version }, { $set: { status: next, ...next === IHomeCareRequestStatusEnum.COMPLETED ? { "dispatch.status": IHomeCareDispatchStatusEnum.CLOSED } : {} }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true, session }).exec();
+      if (!result)
+        throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646\u0643 \u062A\u0646\u0641\u064A\u0630 \u0647\u0630\u0627 \u0627\u0644\u0625\u062C\u0631\u0627\u0621 \u0641\u064A \u062D\u0627\u0644\u0629 \u0627\u0644\u0637\u0644\u0628 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
+      await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: next === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED, actor: { type: HomeCareHistoryActorTypeEnum.NURSE, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: new import_mongoose65.default.Types.ObjectId(String(nurse._id)) }, from_status: expected, to_status: next, from_nurse_id: new import_mongoose65.default.Types.ObjectId(String(nurse._id)), to_nurse_id: new import_mongoose65.default.Types.ObjectId(String(nurse._id)), dispatch_mode: result.dispatch.mode, reason: null, metadata: null }, { session, critical: true });
+      return result;
+    });
+    try {
+      await activity_log_service_default.logActivity({ user_id: actor2.user_id, user_name: `${actor2.user_type}_${actor2.user_id}`, user_type: actor2.user_type, method: "PATCH", endpoint: actor2.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: "home_care_requests", document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ["status", "dispatch"], request_body: { event: next === IHomeCareRequestStatusEnum.COMPLETED ? HomeCareHistoryEventEnum.COMPLETED : HomeCareHistoryEventEnum.STATUS_CHANGED }, source: IActivityLogSourceEnum.DASHBOARD });
+    } catch {}
     return await populate(home_care_request_model_default.findById(updated._id)).exec() ?? updated;
   }
   async assign(requestId, nurseId, actor2) {
-    const snapshot = await this.requestSnapshot(requestId);
-    const nurse = await nurse_service_default.requireActiveQualified(nurseId, snapshot.service_id);
-    const updated = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: { $in: CLAIMABLE }, ...openDispatchFilter() }, { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.mode": IHomeCareDispatchModeEnum.ADMIN_DIRECT, "dispatch.nurse_id": nurse._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": new import_mongoose63.default.Types.ObjectId(actor2.user_id) }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }).exec();
-    if (!updated)
-      throw new DomainError("\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628 \u0645\u0633\u0628\u0642\u0627\u064B", 409);
-    await this.record(updated, HomeCareHistoryEventEnum.ASSIGNED_BY_ADMIN, actor2, snapshot.status, updated.status, null, String(nurse._id), IHomeCareDispatchModeEnum.ADMIN_DIRECT);
+    if (!import_mongoose65.default.Types.ObjectId.isValid(requestId))
+      throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
+    const updated = await runHomeCareTransaction(async (session) => {
+      const snapshot = await home_care_request_model_default.findById(requestId).session(session).exec();
+      if (!snapshot)
+        throw new DomainError("\u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+      const nurse = await nurse_service_default.requireActiveQualified(nurseId, snapshot.service_id, session);
+      const result = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: { $in: CLAIMABLE }, "dispatch.status": IHomeCareDispatchStatusEnum.OPEN, "dispatch.nurse_id": null, "dispatch.version": snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.mode": IHomeCareDispatchModeEnum.ADMIN_DIRECT, "dispatch.nurse_id": nurse._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": new import_mongoose65.default.Types.ObjectId(actor2.user_id) }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true, session }).exec();
+      if (!result)
+        throw new DomainError("\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0647\u0630\u0627 \u0627\u0644\u0637\u0644\u0628 \u0645\u0633\u0628\u0642\u0627\u064B", 409);
+      await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.ASSIGNED_BY_ADMIN, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: null, to_nurse_id: new import_mongoose65.default.Types.ObjectId(String(nurse._id)), dispatch_mode: IHomeCareDispatchModeEnum.ADMIN_DIRECT, reason: null, metadata: null }, { session, critical: true });
+      return result;
+    });
+    try {
+      await activity_log_service_default.logActivity({ user_id: actor2.user_id, user_name: `${actor2.user_type}_${actor2.user_id}`, user_type: actor2.user_type, method: "PATCH", endpoint: actor2.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: "home_care_requests", document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ["status", "dispatch"], request_body: { event: HomeCareHistoryEventEnum.ASSIGNED_BY_ADMIN }, source: IActivityLogSourceEnum.DASHBOARD });
+    } catch {}
     return await populate(home_care_request_model_default.findById(updated._id)).exec() ?? updated;
   }
   async reassign(requestId, nurseId, reason, actor2) {
-    const snapshot = await this.requestSnapshot(requestId);
-    if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status) || !snapshot.dispatch?.nurse_id)
-      throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0639\u0627\u062F\u0629 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u062D\u0627\u0644\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
     const normalized = normalizeOptionalRequestText(reason, 1000, "\u0633\u0628\u0628 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0639\u064A\u064A\u0646 \u0637\u0648\u064A\u0644 \u062C\u062F\u0627\u064B");
-    if (snapshot.status !== IHomeCareRequestStatusEnum.ASSIGNED && !normalized)
-      throw new DomainError("\u0633\u0628\u0628 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0639\u064A\u064A\u0646 \u0645\u0637\u0644\u0648\u0628", 400);
-    if (String(snapshot.dispatch.nurse_id) === nurseId)
-      throw new DomainError("\u0627\u0644\u0645\u0645\u0631\u0636 \u0627\u0644\u062C\u062F\u064A\u062F \u0647\u0648 \u0627\u0644\u0645\u0645\u0631\u0636 \u0627\u0644\u062D\u0627\u0644\u064A", 409);
-    const nurse = await nurse_service_default.requireActiveQualified(nurseId, snapshot.service_id);
-    const updated = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.nurse_id": snapshot.dispatch.nurse_id }, { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, "dispatch.mode": IHomeCareDispatchModeEnum.ADMIN_REASSIGN, "dispatch.nurse_id": nurse._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": new import_mongoose63.default.Types.ObjectId(actor2.user_id) }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }).exec();
-    if (!updated)
-      throw new DomainError("\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0622\u062E\u0631\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B", 409);
-    await this.record(updated, HomeCareHistoryEventEnum.REASSIGNED_BY_ADMIN, actor2, snapshot.status, updated.status, String(snapshot.dispatch.nurse_id), String(nurse._id), IHomeCareDispatchModeEnum.ADMIN_REASSIGN, normalized);
+    const updated = await runHomeCareTransaction(async (session) => {
+      const snapshot = await this.requestSnapshot(requestId, session);
+      if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status) || !snapshot.dispatch?.nurse_id)
+        throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0639\u0627\u062F\u0629 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u062D\u0627\u0644\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
+      if (snapshot.status !== IHomeCareRequestStatusEnum.ASSIGNED && !normalized)
+        throw new DomainError("\u0633\u0628\u0628 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u062A\u0639\u064A\u064A\u0646 \u0645\u0637\u0644\u0648\u0628", 400);
+      if (String(snapshot.dispatch.nurse_id) === nurseId)
+        throw new DomainError("\u0627\u0644\u0645\u0645\u0631\u0636 \u0627\u0644\u062C\u062F\u064A\u062F \u0647\u0648 \u0627\u0644\u0645\u0645\u0631\u0636 \u0627\u0644\u062D\u0627\u0644\u064A", 409);
+      const nurse = await nurse_service_default.requireActiveQualified(nurseId, snapshot.service_id, session);
+      const result = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.nurse_id": snapshot.dispatch.nurse_id, "dispatch.version": snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.ASSIGNED, "dispatch.mode": IHomeCareDispatchModeEnum.ADMIN_REASSIGN, "dispatch.nurse_id": nurse._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": new import_mongoose65.default.Types.ObjectId(actor2.user_id) }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true, session }).exec();
+      if (!result)
+        throw new DomainError("\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0622\u062E\u0631\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B", 409);
+      await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.REASSIGNED_BY_ADMIN, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: snapshot.dispatch.nurse_id, to_nurse_id: nurse._id, dispatch_mode: IHomeCareDispatchModeEnum.ADMIN_REASSIGN, reason: normalized, metadata: null }, { session, critical: true });
+      return result;
+    });
+    try {
+      await activity_log_service_default.logActivity({ user_id: actor2.user_id, user_name: `${actor2.user_type}_${actor2.user_id}`, user_type: actor2.user_type, method: "PATCH", endpoint: actor2.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: "home_care_requests", document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ["status", "dispatch"], request_body: { event: HomeCareHistoryEventEnum.REASSIGNED_BY_ADMIN, reason: normalized }, source: IActivityLogSourceEnum.DASHBOARD });
+    } catch {}
     return await populate(home_care_request_model_default.findById(updated._id)).exec() ?? updated;
   }
   async unassign(requestId, reason, actor2) {
-    const snapshot = await this.requestSnapshot(requestId);
     const normalized = normalizeOptionalRequestText(reason, 1000, "\u0633\u0628\u0628 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u0639\u064A\u064A\u0646 \u0637\u0648\u064A\u0644 \u062C\u062F\u0627\u064B");
     if (!normalized)
       throw new DomainError("\u0633\u0628\u0628 \u0625\u0644\u063A\u0627\u0621 \u0627\u0644\u062A\u0639\u064A\u064A\u0646 \u0645\u0637\u0644\u0648\u0628", 400);
-    if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status) || !snapshot.dispatch?.nurse_id)
-      throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0644\u063A\u0627\u0621 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u062D\u0627\u0644\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
-    const oldNurse = String(snapshot.dispatch.nurse_id);
-    const updated = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.nurse_id": snapshot.dispatch.nurse_id }, { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, "dispatch.status": IHomeCareDispatchStatusEnum.OPEN, "dispatch.mode": IHomeCareDispatchModeEnum.OPEN_POOL, "dispatch.nurse_id": null, "dispatch.assigned_at": null, "dispatch.assigned_by_user_id": null }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }).exec();
-    if (!updated)
-      throw new DomainError("\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0622\u062E\u0631\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B", 409);
-    await this.record(updated, HomeCareHistoryEventEnum.UNASSIGNED_BY_ADMIN, actor2, snapshot.status, updated.status, oldNurse, null, IHomeCareDispatchModeEnum.OPEN_POOL, normalized);
+    const updated = await runHomeCareTransaction(async (session) => {
+      const snapshot = await this.requestSnapshot(requestId, session);
+      if (!ACTIVE_ASSIGNMENTS.includes(snapshot.status) || !snapshot.dispatch?.nurse_id)
+        throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0644\u063A\u0627\u0621 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u062D\u0627\u0644\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
+      const result = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, "dispatch.status": IHomeCareDispatchStatusEnum.CLAIMED, "dispatch.nurse_id": snapshot.dispatch.nurse_id, "dispatch.version": snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, "dispatch.status": IHomeCareDispatchStatusEnum.OPEN, "dispatch.mode": IHomeCareDispatchModeEnum.OPEN_POOL, "dispatch.nurse_id": null, "dispatch.assigned_at": null, "dispatch.assigned_by_user_id": null }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true, session }).exec();
+      if (!result)
+        throw new DomainError("\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0622\u062E\u0631\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B", 409);
+      await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.UNASSIGNED_BY_ADMIN, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: snapshot.dispatch.nurse_id, to_nurse_id: null, dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: normalized, metadata: null }, { session, critical: true });
+      return result;
+    });
+    try {
+      await activity_log_service_default.logActivity({ user_id: actor2.user_id, user_name: `${actor2.user_type}_${actor2.user_id}`, user_type: actor2.user_type, method: "PATCH", endpoint: actor2.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: "home_care_requests", document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ["status", "dispatch"], request_body: { event: HomeCareHistoryEventEnum.UNASSIGNED_BY_ADMIN, reason: normalized }, source: IActivityLogSourceEnum.DASHBOARD });
+    } catch {}
     return await populate(home_care_request_model_default.findById(updated._id)).exec() ?? updated;
   }
   async reopen(requestId, reason, actor2) {
-    const snapshot = await this.requestSnapshot(requestId);
     const normalized = normalizeOptionalRequestText(reason, 1000, "\u0633\u0628\u0628 \u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0641\u062A\u062D \u0637\u0648\u064A\u0644 \u062C\u062F\u0627\u064B");
     if (!normalized)
       throw new DomainError("\u0633\u0628\u0628 \u0625\u0639\u0627\u062F\u0629 \u0641\u062A\u062D \u0627\u0644\u0637\u0644\u0628 \u0645\u0637\u0644\u0648\u0628", 400);
-    if (![IHomeCareRequestStatusEnum.CANCELLED, IHomeCareRequestStatusEnum.REJECTED].includes(snapshot.status))
-      throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0639\u0627\u062F\u0629 \u0641\u062A\u062D \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u062D\u0627\u0644\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
-    const updated = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status }, { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, "dispatch.status": IHomeCareDispatchStatusEnum.OPEN, "dispatch.mode": IHomeCareDispatchModeEnum.OPEN_POOL, "dispatch.nurse_id": null, "dispatch.assigned_at": null, "dispatch.assigned_by_user_id": null, cancelled_at: null, cancelled_by: null, cancellation_reason: null }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }).exec();
-    if (!updated)
-      throw new DomainError("\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0622\u062E\u0631\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B", 409);
-    await this.record(updated, HomeCareHistoryEventEnum.REQUEST_REOPENED, actor2, snapshot.status, updated.status, snapshot.dispatch?.nurse_id ? String(snapshot.dispatch.nurse_id) : null, null, IHomeCareDispatchModeEnum.OPEN_POOL, normalized);
+    const updated = await runHomeCareTransaction(async (session) => {
+      const snapshot = await this.requestSnapshot(requestId, session);
+      if (![IHomeCareRequestStatusEnum.CANCELLED, IHomeCareRequestStatusEnum.REJECTED].includes(snapshot.status))
+        throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u0625\u0639\u0627\u062F\u0629 \u0641\u062A\u062D \u0627\u0644\u0637\u0644\u0628 \u0641\u064A \u062D\u0627\u0644\u062A\u0647 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409);
+      const result = await home_care_request_model_default.findOneAndUpdate({ _id: snapshot._id, status: snapshot.status, "dispatch.version": snapshot.dispatch.version }, { $set: { status: IHomeCareRequestStatusEnum.CONFIRMED, "dispatch.status": IHomeCareDispatchStatusEnum.OPEN, "dispatch.mode": IHomeCareDispatchModeEnum.OPEN_POOL, "dispatch.nurse_id": null, "dispatch.assigned_at": null, "dispatch.assigned_by_user_id": null, cancelled_at: null, cancelled_by: null, cancellation_reason: null }, $inc: { "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true, session }).exec();
+      if (!result)
+        throw new DomainError("\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0637\u0644\u0628 \u0628\u0648\u0627\u0633\u0637\u0629 \u0645\u0633\u062A\u062E\u062F\u0645 \u0622\u062E\u0631\u060C \u064A\u0631\u062C\u0649 \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629 \u0645\u062C\u062F\u062F\u0627\u064B", 409);
+      await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(result._id)), request_number: result.request_number, event_type: HomeCareHistoryEventEnum.REQUEST_REOPENED, actor: { type: HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: null }, from_status: snapshot.status, to_status: result.status, from_nurse_id: snapshot.dispatch?.nurse_id ?? null, to_nurse_id: null, dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: normalized, metadata: null }, { session, critical: true });
+      return result;
+    });
+    try {
+      await activity_log_service_default.logActivity({ user_id: actor2.user_id, user_name: `${actor2.user_type}_${actor2.user_id}`, user_type: actor2.user_type, method: "PATCH", endpoint: actor2.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: "home_care_requests", document_id: String(updated._id), new_data: updated.toObject?.() ?? updated, changed_fields: ["status", "dispatch"], request_body: { event: HomeCareHistoryEventEnum.REQUEST_REOPENED, reason: normalized }, source: IActivityLogSourceEnum.DASHBOARD });
+    } catch {}
     return await populate(home_care_request_model_default.findById(updated._id)).exec() ?? updated;
   }
-  async requestSnapshot(requestId) {
-    if (!import_mongoose63.default.Types.ObjectId.isValid(requestId))
+  async requestSnapshot(requestId, session) {
+    if (!import_mongoose65.default.Types.ObjectId.isValid(requestId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
-    const request = await home_care_request_model_default.findById(requestId).exec();
+    const request = await home_care_request_model_default.findById(requestId).session(session ?? null).exec();
     if (!request)
       throw new DomainError("\u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
     return request;
   }
   async record(request, event, actor2, fromStatus, toStatus, fromNurse, toNurse, mode, reason = null) {
-    await home_care_request_history_service_default.append({ request_id: new import_mongoose63.default.Types.ObjectId(String(request._id)), request_number: request.request_number, event_type: event, actor: { type: actor2.user_type === "nurse" ? HomeCareHistoryActorTypeEnum.NURSE : HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose63.default.Types.ObjectId(actor2.user_id), nurse_id: actor2.nurse_id ? new import_mongoose63.default.Types.ObjectId(actor2.nurse_id) : null }, from_status: fromStatus, to_status: toStatus, from_nurse_id: fromNurse ? new import_mongoose63.default.Types.ObjectId(fromNurse) : null, to_nurse_id: toNurse ? new import_mongoose63.default.Types.ObjectId(toNurse) : null, dispatch_mode: mode, reason, metadata: null });
+    await home_care_request_history_service_default.append({ request_id: new import_mongoose65.default.Types.ObjectId(String(request._id)), request_number: request.request_number, event_type: event, actor: { type: actor2.user_type === "nurse" ? HomeCareHistoryActorTypeEnum.NURSE : HomeCareHistoryActorTypeEnum.ADMIN, user_id: new import_mongoose65.default.Types.ObjectId(actor2.user_id), nurse_id: actor2.nurse_id ? new import_mongoose65.default.Types.ObjectId(actor2.nurse_id) : null }, from_status: fromStatus, to_status: toStatus, from_nurse_id: fromNurse ? new import_mongoose65.default.Types.ObjectId(fromNurse) : null, to_nurse_id: toNurse ? new import_mongoose65.default.Types.ObjectId(toNurse) : null, dispatch_mode: mode, reason, metadata: null });
     try {
       await activity_log_service_default.logActivity({ user_id: actor2.user_id, user_name: `${actor2.user_type}_${actor2.user_id}`, user_type: actor2.user_type, method: "PATCH", endpoint: actor2.endpoint, action: IActivityLogActionEnum.UPDATE, collection_name: "home_care_requests", document_id: String(request._id), new_data: request.toObject?.() ?? request, changed_fields: ["status", "dispatch"], request_body: { event, reason }, source: IActivityLogSourceEnum.DASHBOARD });
     } catch {}
@@ -154849,7 +155096,7 @@ var homeCareRequestsAdminController = new Elysia({
   }
 }).get("/:id", async ({ params, phrase, set }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
-  if (!import_mongoose64.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose66.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
@@ -154874,7 +155121,7 @@ var homeCareRequestsAdminController = new Elysia({
   }
 }).get("/:id/history", async ({ params, phrase, set }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
-  if (!import_mongoose64.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose66.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
@@ -154883,15 +155130,15 @@ var homeCareRequestsAdminController = new Elysia({
     throw new DomainError("\u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
   const history = await home_care_request_history_service_default.list(params.id);
   return { error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0633\u062C\u0644 \u0627\u0644\u0637\u0644\u0628 \u0628\u0646\u062C\u0627\u062D", data: history.map(formatHistory) };
-}, { params: t.Object({ id: t.String() }), response: { 200: HomeCareHistoryListResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } }).patch("/:id/assign", async ({ params, body, phrase }) => {
+}, { params: t.Object({ id: t.String() }), response: { 200: HomeCareHistoryListResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } }).patch("/:id/assign", async ({ params, body, phrase }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
   const request = await home_care_dispatch_service_default.assign(params.id, body.nurse_id, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/assign`));
   return { error: false, message: "\u062A\u0645 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0645\u0645\u0631\u0636 \u0628\u0646\u062C\u0627\u062D", data: formatHomeCareRequestForDashboard(request) };
-}, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String() }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } }).patch("/:id/reassign", async ({ params, body, phrase }) => {
+}, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String() }, { additionalProperties: false, examples: [{ nurse_id: "507f1f77bcf86cd799439012" }] }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } }).patch("/:id/reassign", async ({ params, body, phrase }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
   const request = await home_care_dispatch_service_default.reassign(params.id, body.nurse_id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/reassign`));
   return { error: false, message: "\u062A\u0645 \u0625\u0639\u0627\u062F\u0629 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0645\u0645\u0631\u0636 \u0628\u0646\u062C\u0627\u062D", data: formatHomeCareRequestForDashboard(request) };
-}, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String(), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } }).patch("/:id/unassign", async ({ params, body, phrase }) => {
+}, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String(), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false, examples: [{ nurse_id: "507f1f77bcf86cd799439013", reason: "\u062A\u0628\u062F\u064A\u0644 \u062A\u0634\u063A\u064A\u0644\u064A \u0644\u0644\u0645\u0645\u0631\u0636" }] }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } }).patch("/:id/unassign", async ({ params, body, phrase }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
   const request = await home_care_dispatch_service_default.unassign(params.id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/unassign`));
   return { error: false, message: "\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u062A\u0639\u064A\u064A\u0646 \u0627\u0644\u0645\u0645\u0631\u0636 \u0628\u0646\u062C\u0627\u062D", data: formatHomeCareRequestForDashboard(request) };
@@ -154905,7 +155152,7 @@ var homeCareRequestsAdminController = new Elysia({
   return { error: false, message: "\u062A\u0645 \u0631\u0641\u0636 \u0637\u0644\u0628 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629", data: formatHomeCareRequestForDashboard(request) };
 }, { params: t.Object({ id: t.String() }), body: t.Object({ reason: t.String({ minLength: 1, maxLength: 1000 }) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } }).patch("/:id/status", async ({ params, body, phrase, set }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
-  if (!import_mongoose64.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose66.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
@@ -154917,7 +155164,7 @@ var homeCareRequestsAdminController = new Elysia({
   };
 }, {
   params: t.Object({ id: t.String() }),
-  body: t.Object({ status: t.Enum(IHomeCareRequestStatusEnum) }, { additionalProperties: false }),
+  body: t.Object({ status: t.Literal(IHomeCareRequestStatusEnum.CONFIRMED) }, { additionalProperties: false }),
   response: {
     200: DashboardHomeCareRequestResponseSchema,
     400: BadRequestResponseSchema,
@@ -154929,7 +155176,7 @@ var homeCareRequestsAdminController = new Elysia({
   }
 }).patch("/:id/cancel", async ({ params, body, phrase, set }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
-  if (!import_mongoose64.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose66.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
@@ -154943,7 +155190,7 @@ var homeCareRequestsAdminController = new Elysia({
   params: t.Object({ id: t.String() }),
   body: t.Object({
     reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 })))
-  }, { additionalProperties: false }),
+  }, { additionalProperties: false, examples: [{ reason: "\u0625\u0644\u063A\u0627\u0621 \u0637\u0627\u0631\u0626 \u0623\u062B\u0646\u0627\u0621 \u062A\u0646\u0641\u064A\u0630 \u0627\u0644\u062E\u062F\u0645\u0629" }] }),
   response: {
     200: DashboardHomeCareRequestResponseSchema,
     400: BadRequestResponseSchema,
@@ -154955,7 +155202,7 @@ var homeCareRequestsAdminController = new Elysia({
   }
 }).patch("/:id/internal-note", async ({ params, body, phrase, set }) => {
   await requireOperationalAccess(phrase._id, phrase.role);
-  if (!import_mongoose64.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose66.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
@@ -154982,7 +155229,7 @@ var homeCareRequestsAdminController = new Elysia({
 
 // src/controller/dash/admin/home-care.controller.ts
 init_domain_error();
-var ObjectId11 = import_mongoose65.default.Types.ObjectId;
+var ObjectId11 = import_mongoose67.default.Types.ObjectId;
 var optionalCategoryFields = {
   description: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
   icon: t.Optional(t.Nullable(t.String())),
@@ -155435,16 +155682,16 @@ var nursesAdminController = new Elysia({ prefix: "/nurses", detail: { tags: [SWA
 }, { params: t.Object({ id: t.String() }), body: t.Object({ status: t.Enum(INurseStatusEnum) }), response: { 200: NurseResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } });
 
 // src/services/pharmacy.service.ts
-var import_mongoose66 = __toESM(require_mongoose2(), 1);
+var import_mongoose68 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 class PharmacyService {
   async getById(id2) {
-    if (!import_mongoose66.default.Types.ObjectId.isValid(id2))
+    if (!import_mongoose68.default.Types.ObjectId.isValid(id2))
       return null;
     return pharmacy_model_default.findById(id2).exec();
   }
   async getByUserId(id2) {
-    if (!import_mongoose66.default.Types.ObjectId.isValid(id2))
+    if (!import_mongoose68.default.Types.ObjectId.isValid(id2))
       return null;
     return pharmacy_model_default.findOne({ user_id: id2 }).exec();
   }
@@ -155648,28 +155895,28 @@ var pharmaciesAdminController = new Elysia({ prefix: "/pharmacies", detail: { ta
 }, { body: t.Object({ status: t.Enum(IPharmacyStatusEnum) }), response: { 200: PharmacyResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses } });
 
 // src/services/pharmacy-treatment-request.service.ts
-var import_mongoose70 = __toESM(require_mongoose2(), 1);
+var import_mongoose72 = __toESM(require_mongoose2(), 1);
 
 // src/models/pharmacy-treatment-request-counter.model.ts
-var import_mongoose67 = __toESM(require_mongoose2(), 1);
-var schema10 = new import_mongoose67.Schema({ _id: { type: String }, sequence: { type: Number, default: 0 } }, { versionKey: false });
-var pharmacy_treatment_request_counter_model_default = import_mongoose67.models.PharmacyTreatmentRequestCounter || import_mongoose67.model("PharmacyTreatmentRequestCounter", schema10);
+var import_mongoose69 = __toESM(require_mongoose2(), 1);
+var schema12 = new import_mongoose69.Schema({ _id: { type: String }, sequence: { type: Number, default: 0 } }, { versionKey: false });
+var pharmacy_treatment_request_counter_model_default = import_mongoose69.models.PharmacyTreatmentRequestCounter || import_mongoose69.model("PharmacyTreatmentRequestCounter", schema12);
 
 // src/models/pharmacy-treatment-request-history.model.ts
-var import_mongoose68 = __toESM(require_mongoose2(), 1);
-var schema11 = new import_mongoose68.Schema({ request_id: { type: import_mongoose68.Schema.Types.ObjectId, ref: "PharmacyTreatmentRequest", required: true }, request_number: { type: String, required: true }, event_type: { type: String, required: true }, actor: { type: { type: String, required: true }, user_id: { type: import_mongoose68.Schema.Types.ObjectId, ref: "User", default: null }, pharmacy_id: { type: import_mongoose68.Schema.Types.ObjectId, ref: "Pharmacy", default: null }, _id: false }, from_status: { type: String, default: null }, to_status: { type: String, default: null }, from_pharmacy_id: { type: import_mongoose68.Schema.Types.ObjectId, ref: "Pharmacy", default: null }, to_pharmacy_id: { type: import_mongoose68.Schema.Types.ObjectId, ref: "Pharmacy", default: null }, quotation_version: { type: Number, default: null }, total_price: { type: Number, default: null }, reason: { type: String, maxlength: 1000, default: null }, metadata: { type: import_mongoose68.Schema.Types.Mixed, default: null } }, { timestamps: { createdAt: true, updatedAt: false }, versionKey: false, collection: "pharmacy_treatment_request_history", bufferCommands: false });
-schema11.index({ request_id: 1, createdAt: 1 });
-var pharmacy_treatment_request_history_model_default = import_mongoose68.models.PharmacyTreatmentRequestHistory || import_mongoose68.model("PharmacyTreatmentRequestHistory", schema11);
+var import_mongoose70 = __toESM(require_mongoose2(), 1);
+var schema13 = new import_mongoose70.Schema({ request_id: { type: import_mongoose70.Schema.Types.ObjectId, ref: "PharmacyTreatmentRequest", required: true }, request_number: { type: String, required: true }, event_type: { type: String, required: true }, actor: { type: { type: String, required: true }, user_id: { type: import_mongoose70.Schema.Types.ObjectId, ref: "User", default: null }, pharmacy_id: { type: import_mongoose70.Schema.Types.ObjectId, ref: "Pharmacy", default: null }, _id: false }, from_status: { type: String, default: null }, to_status: { type: String, default: null }, from_pharmacy_id: { type: import_mongoose70.Schema.Types.ObjectId, ref: "Pharmacy", default: null }, to_pharmacy_id: { type: import_mongoose70.Schema.Types.ObjectId, ref: "Pharmacy", default: null }, quotation_version: { type: Number, default: null }, total_price: { type: Number, default: null }, reason: { type: String, maxlength: 1000, default: null }, metadata: { type: import_mongoose70.Schema.Types.Mixed, default: null } }, { timestamps: { createdAt: true, updatedAt: false }, versionKey: false, collection: "pharmacy_treatment_request_history", bufferCommands: false });
+schema13.index({ request_id: 1, createdAt: 1 });
+var pharmacy_treatment_request_history_model_default = import_mongoose70.models.PharmacyTreatmentRequestHistory || import_mongoose70.model("PharmacyTreatmentRequestHistory", schema13);
 
 // src/services/pharmacy-treatment-request.service.ts
 init_domain_error();
 
 // src/services/pharmacy-transaction.service.ts
-var import_mongoose69 = __toESM(require_mongoose2(), 1);
+var import_mongoose71 = __toESM(require_mongoose2(), 1);
 
 class MongoosePharmacyTransactionRunner {
   async run(work) {
-    const session = await import_mongoose69.default.startSession();
+    const session = await import_mongoose71.default.startSession();
     let result;
     try {
       await session.withTransaction(async () => {
@@ -155689,7 +155936,7 @@ function supportsPharmacyTransactions(hello) {
   return typeof hello.setName === "string" && hello.setName.length > 0 || hello.msg === "isdbgrid";
 }
 async function assertPharmacyTransactionSupport() {
-  const database = import_mongoose69.default.connection.db;
+  const database = import_mongoose71.default.connection.db;
   if (!database)
     throw new Error("MongoDB must be connected before checking Pharmacy transaction support");
   const hello = await database.admin().command({ hello: 1 });
@@ -155761,9 +156008,9 @@ function assertPharmacyTransition(operation2, actor2, from) {
 var populated = (q2) => q2.populate({ path: "patient_id", select: "full_name phone profile_photo" }).populate({ path: "child_id", select: "full_name date_of_birth status" }).populate({ path: "dispatch.pharmacy_id", select: "name display_name logo phone license_verified status" });
 var openFilter = () => ({ $and: [{ $or: [{ "dispatch.status": PharmacyDispatchStatusEnum.OPEN }, { "dispatch.status": { $exists: false } }] }, { $or: [{ "dispatch.pharmacy_id": null }, { "dispatch.pharmacy_id": { $exists: false } }] }] });
 var oid4 = (value) => {
-  if (!import_mongoose70.default.Types.ObjectId.isValid(value))
+  if (!import_mongoose72.default.Types.ObjectId.isValid(value))
     throw new DomainError("\u0627\u0644\u0645\u0639\u0631\u0641 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "INVALID_IDENTIFIER");
-  return new import_mongoose70.default.Types.ObjectId(value);
+  return new import_mongoose72.default.Types.ObjectId(value);
 };
 var clean3 = (value, max) => {
   if (value === null || value === undefined)
@@ -155827,7 +156074,7 @@ class PharmacyTreatmentRequestService {
       const owned = await patient_child_service_default.requireOwnedChild(patientId, input.child_id);
       if (owned.status !== PatientChildStatusEnum.ACTIVE)
         throw new DomainError("\u0627\u0644\u0637\u0641\u0644 \u063A\u064A\u0631 \u0641\u0639\u0627\u0644", 422, "CHILD_NOT_ACTIVE");
-      child = new import_mongoose70.default.Types.ObjectId(String(owned._id));
+      child = new import_mongoose72.default.Types.ObjectId(String(owned._id));
     }
     const address2 = input.delivery_address;
     if (!address2 || String(address2.address_text).trim().length < 5 || address2.lat < -90 || address2.lat > 90 || address2.lng < -180 || address2.lng > 180)
@@ -155856,7 +156103,7 @@ class PharmacyTreatmentRequestService {
     return this.list({ patient_id: patientId }, q2);
   }
   async getPatient(patientId, id3) {
-    if (!import_mongoose70.default.Types.ObjectId.isValid(id3))
+    if (!import_mongoose72.default.Types.ObjectId.isValid(id3))
       return null;
     return populated(pharmacy_treatment_request_model_default.findOne({ _id: id3, patient_id: patientId })).exec();
   }
@@ -155870,7 +156117,7 @@ class PharmacyTreatmentRequestService {
   }
   async getPharmacy(userId, id3) {
     const pharmacy2 = await pharmacy_service_default.requireOperational(userId);
-    if (!import_mongoose70.default.Types.ObjectId.isValid(id3))
+    if (!import_mongoose72.default.Types.ObjectId.isValid(id3))
       return null;
     return populated(pharmacy_treatment_request_model_default.findOne({ _id: id3, "dispatch.pharmacy_id": pharmacy2._id })).exec();
   }
@@ -155960,7 +156207,7 @@ class PharmacyTreatmentRequestService {
       if (!current)
         throw new DomainError("\u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404, "PHARMACY_REQUEST_NOT_FOUND");
       assertPharmacyTransition(PharmacyWorkflowOperationEnum.PATIENT_CANCEL, "PATIENT", current.status);
-      const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, patient_id: patientId, status: current.status, workflowVersion: current.workflowVersion }, { $set: { status: PharmacyRequestStatusEnum.CANCELLED, "dispatch.status": PharmacyDispatchStatusEnum.CLOSED, cancelled_at: new Date, cancelled_by_user_id: new import_mongoose70.default.Types.ObjectId(actor2.user_id), cancellation_actor_type: "PATIENT", cancellation_reason: clean3(reason, 1000) }, $inc: { workflowVersion: 1, "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }), session).exec();
+      const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, patient_id: patientId, status: current.status, workflowVersion: current.workflowVersion }, { $set: { status: PharmacyRequestStatusEnum.CANCELLED, "dispatch.status": PharmacyDispatchStatusEnum.CLOSED, cancelled_at: new Date, cancelled_by_user_id: new import_mongoose72.default.Types.ObjectId(actor2.user_id), cancellation_actor_type: "PATIENT", cancellation_reason: clean3(reason, 1000) }, $inc: { workflowVersion: 1, "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }), session).exec();
       if (!updated)
         throw stale();
       await this.appendHistory(updated, PharmacyHistoryEventEnum.CANCELLED, actor2, current.status, PharmacyRequestStatusEnum.CANCELLED, current.dispatch.pharmacy_id, current.dispatch.pharmacy_id, reason, { quotation: this.quoteSnapshot(current.quotation) }, session);
@@ -155979,7 +156226,7 @@ class PharmacyTreatmentRequestService {
       const excluded = current.excluded_pharmacy_ids.some((value) => String(value) === pharmacyId);
       if (excluded && (!overrideExclusion || !clean3(reason, 1000)))
         throw new DomainError("\u062A\u062C\u0627\u0648\u0632 \u0627\u0633\u062A\u0628\u0639\u0627\u062F \u0627\u0644\u0635\u064A\u062F\u0644\u064A\u0629 \u064A\u062A\u0637\u0644\u0628 \u0645\u0648\u0627\u0641\u0642\u0629 \u0635\u0631\u064A\u062D\u0629 \u0648\u0633\u0628\u0628\u0627\u064B", 400, "PHARMACY_EXCLUDED");
-      const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, status: PharmacyRequestStatusEnum.OPEN, workflowVersion: current.workflowVersion, ...openFilter() }, { $set: { status: PharmacyRequestStatusEnum.UNDER_REVIEW, "dispatch.status": PharmacyDispatchStatusEnum.CLAIMED, "dispatch.mode": PharmacyDispatchModeEnum.ADMIN_DIRECT, "dispatch.pharmacy_id": pharmacy2._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": new import_mongoose70.default.Types.ObjectId(actor2.user_id) }, $inc: { workflowVersion: 1, "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }), session).exec();
+      const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, status: PharmacyRequestStatusEnum.OPEN, workflowVersion: current.workflowVersion, ...openFilter() }, { $set: { status: PharmacyRequestStatusEnum.UNDER_REVIEW, "dispatch.status": PharmacyDispatchStatusEnum.CLAIMED, "dispatch.mode": PharmacyDispatchModeEnum.ADMIN_DIRECT, "dispatch.pharmacy_id": pharmacy2._id, "dispatch.assigned_at": new Date, "dispatch.assigned_by_user_id": new import_mongoose72.default.Types.ObjectId(actor2.user_id) }, $inc: { workflowVersion: 1, "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }), session).exec();
       if (!updated)
         throw new DomainError("\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0627\u0644\u0637\u0644\u0628 \u0645\u0633\u0628\u0642\u0627\u064B", 409, "REQUEST_ALREADY_CLAIMED");
       await this.appendHistory(updated, PharmacyHistoryEventEnum.ASSIGNED, actor2, PharmacyRequestStatusEnum.OPEN, PharmacyRequestStatusEnum.UNDER_REVIEW, null, pharmacy2._id, reason, excluded ? { exclusion_override: true } : null, session);
@@ -155999,7 +156246,7 @@ class PharmacyTreatmentRequestService {
         throw new DomainError("\u0627\u0644\u0633\u0628\u0628 \u0645\u0637\u0644\u0648\u0628", 400, "REASON_REQUIRED");
       if (pharmacy2 && String(pharmacy2._id) === String(current.dispatch.pharmacy_id))
         throw new DomainError("\u0627\u0644\u0635\u064A\u062F\u0644\u064A\u0629 \u0647\u064A \u0627\u0644\u0635\u064A\u062F\u0644\u064A\u0629 \u0627\u0644\u062D\u0627\u0644\u064A\u0629", 409, "INVALID_STATE_TRANSITION");
-      const set = { quotation: null, status: kind === "reassign" ? PharmacyRequestStatusEnum.UNDER_REVIEW : PharmacyRequestStatusEnum.OPEN, "dispatch.status": kind === "reassign" ? PharmacyDispatchStatusEnum.CLAIMED : PharmacyDispatchStatusEnum.OPEN, "dispatch.mode": kind === "reassign" ? PharmacyDispatchModeEnum.ADMIN_REASSIGN : PharmacyDispatchModeEnum.OPEN_POOL, "dispatch.pharmacy_id": pharmacy2?._id ?? null, "dispatch.assigned_at": pharmacy2 ? new Date : null, "dispatch.assigned_by_user_id": pharmacy2 ? new import_mongoose70.default.Types.ObjectId(actor2.user_id) : null };
+      const set = { quotation: null, status: kind === "reassign" ? PharmacyRequestStatusEnum.UNDER_REVIEW : PharmacyRequestStatusEnum.OPEN, "dispatch.status": kind === "reassign" ? PharmacyDispatchStatusEnum.CLAIMED : PharmacyDispatchStatusEnum.OPEN, "dispatch.mode": kind === "reassign" ? PharmacyDispatchModeEnum.ADMIN_REASSIGN : PharmacyDispatchModeEnum.OPEN_POOL, "dispatch.pharmacy_id": pharmacy2?._id ?? null, "dispatch.assigned_at": pharmacy2 ? new Date : null, "dispatch.assigned_by_user_id": pharmacy2 ? new import_mongoose72.default.Types.ObjectId(actor2.user_id) : null };
       const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, status: current.status, workflowVersion: current.workflowVersion, "dispatch.pharmacy_id": current.dispatch.pharmacy_id, "dispatch.version": current.dispatch.version }, { $set: set, $inc: { workflowVersion: 1, "dispatch.version": 1 }, $addToSet: { excluded_pharmacy_ids: current.dispatch.pharmacy_id } }, { returnDocument: "after", runValidators: true }), session).exec();
       if (!updated)
         throw stale();
@@ -156017,7 +156264,7 @@ class PharmacyTreatmentRequestService {
       assertPharmacyTransition(PharmacyWorkflowOperationEnum.ADMIN_CANCEL, "ADMIN", current.status);
       if (current.dispatch.pharmacy_id && !clean3(reason, 1000))
         throw new DomainError("\u0633\u0628\u0628 \u0627\u0644\u0625\u0644\u063A\u0627\u0621 \u0645\u0637\u0644\u0648\u0628", 400, "REASON_REQUIRED");
-      const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, status: current.status, workflowVersion: current.workflowVersion }, { $set: { status: PharmacyRequestStatusEnum.CANCELLED, "dispatch.status": PharmacyDispatchStatusEnum.CLOSED, cancelled_at: new Date, cancelled_by_user_id: new import_mongoose70.default.Types.ObjectId(actor2.user_id), cancellation_actor_type: "ADMIN", cancellation_reason: clean3(reason, 1000) }, $inc: { workflowVersion: 1, "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }), session).exec();
+      const updated = await inSession3(pharmacy_treatment_request_model_default.findOneAndUpdate({ _id: current._id, status: current.status, workflowVersion: current.workflowVersion }, { $set: { status: PharmacyRequestStatusEnum.CANCELLED, "dispatch.status": PharmacyDispatchStatusEnum.CLOSED, cancelled_at: new Date, cancelled_by_user_id: new import_mongoose72.default.Types.ObjectId(actor2.user_id), cancellation_actor_type: "ADMIN", cancellation_reason: clean3(reason, 1000) }, $inc: { workflowVersion: 1, "dispatch.version": 1 } }, { returnDocument: "after", runValidators: true }), session).exec();
       if (!updated)
         throw stale();
       await this.appendHistory(updated, PharmacyHistoryEventEnum.CANCELLED, actor2, current.status, PharmacyRequestStatusEnum.CANCELLED, current.dispatch.pharmacy_id, current.dispatch.pharmacy_id, reason, { quotation: this.quoteSnapshot(current.quotation) }, session);
@@ -156044,7 +156291,7 @@ class PharmacyTreatmentRequestService {
     return result;
   }
   async history(id3, q2 = {}) {
-    if (!import_mongoose70.default.Types.ObjectId.isValid(id3))
+    if (!import_mongoose72.default.Types.ObjectId.isValid(id3))
       return { data: [], count: 0, page: 1, limit: 20 };
     const page2 = Math.max(1, Number(q2.page) || 1), limit = Math.min(100, Math.max(1, Number(q2.limit) || 20));
     const filter = { request_id: id3 };
@@ -156073,7 +156320,7 @@ class PharmacyTreatmentRequestService {
     return this.list(filter, q2);
   }
   async adminGet(id3) {
-    if (!import_mongoose70.default.Types.ObjectId.isValid(id3))
+    if (!import_mongoose72.default.Types.ObjectId.isValid(id3))
       return null;
     return populated(pharmacy_treatment_request_model_default.findById(id3)).exec();
   }
@@ -156114,7 +156361,7 @@ class PharmacyTreatmentRequestService {
     return operation2;
   }
   async appendHistory(request, event_type, actor2, from_status, to_status, from_pharmacy = null, to_pharmacy = null, reason = null, metadata = null, session = null) {
-    const entry = { request_id: request._id, request_number: request.request_number, event_type, actor: { type: actor2.type, user_id: actor2.user_id ? new import_mongoose70.default.Types.ObjectId(actor2.user_id) : null, pharmacy_id: actor2.pharmacy_id ? new import_mongoose70.default.Types.ObjectId(actor2.pharmacy_id) : null }, from_status, to_status, from_pharmacy_id: from_pharmacy, to_pharmacy_id: to_pharmacy, quotation_version: request.quotation?.version ?? metadata?.quotation?.version ?? null, total_price: request.quotation?.total_price ?? metadata?.quotation?.total_price ?? null, reason: clean3(reason, 1000), metadata };
+    const entry = { request_id: request._id, request_number: request.request_number, event_type, actor: { type: actor2.type, user_id: actor2.user_id ? new import_mongoose72.default.Types.ObjectId(actor2.user_id) : null, pharmacy_id: actor2.pharmacy_id ? new import_mongoose72.default.Types.ObjectId(actor2.pharmacy_id) : null }, from_status, to_status, from_pharmacy_id: from_pharmacy, to_pharmacy_id: to_pharmacy, quotation_version: request.quotation?.version ?? metadata?.quotation?.version ?? null, total_price: request.quotation?.total_price ?? metadata?.quotation?.total_price ?? null, reason: clean3(reason, 1000), metadata };
     await this.historyWriter.create([entry], session ? { session } : {});
   }
   async audit(request, actor2, method, body) {
@@ -156189,22 +156436,22 @@ var pharmacyRequestsAdminController = new Elysia({ prefix: "/pharmacy-requests",
 }, { query: t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()) }), response: { 200: PharmacyHistoryListResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } });
 
 // src/controller/dash/admin/auth-security.controller.ts
-var import_mongoose73 = __toESM(require_mongoose2(), 1);
+var import_mongoose75 = __toESM(require_mongoose2(), 1);
 
 // src/services/patient-auth.service.ts
-var import_mongoose72 = __toESM(require_mongoose2(), 1);
+var import_mongoose74 = __toESM(require_mongoose2(), 1);
 import crypto5 from "crypto";
 
 // src/models/auth-flow.model.ts
-var import_mongoose71 = __toESM(require_mongoose2(), 1);
-var schema12 = new import_mongoose71.Schema({
+var import_mongoose73 = __toESM(require_mongoose2(), 1);
+var schema14 = new import_mongoose73.Schema({
   flow_id: { type: String, required: true, unique: true },
   phone: { type: String, required: true, index: true },
   purpose: { type: String, enum: Object.values(AuthFlowPurposeEnum), default: AuthFlowPurposeEnum.REGISTRATION, required: true },
   is_current: { type: Boolean, default: false },
   step: { type: String, enum: Object.values(AuthFlowStepEnum), required: true },
-  user_id: { type: import_mongoose71.Schema.Types.ObjectId, ref: "User", default: null },
-  patient_id: { type: import_mongoose71.Schema.Types.ObjectId, ref: "Patient", default: null },
+  user_id: { type: import_mongoose73.Schema.Types.ObjectId, ref: "User", default: null },
+  patient_id: { type: import_mongoose73.Schema.Types.ObjectId, ref: "Patient", default: null },
   otp_hash: { type: String, select: false, default: null },
   support_otp_hash: { type: String, select: false, default: null },
   otp_expires_at: { type: Date, default: null },
@@ -156219,11 +156466,11 @@ var schema12 = new import_mongoose71.Schema({
   expires_at: { type: Date, required: true },
   ip_address: { type: String, default: "" }
 }, { timestamps: true, versionKey: false });
-schema12.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
-schema12.index({ phone: 1, createdAt: -1 });
-schema12.index({ phone: 1, purpose: 1, expires_at: 1 });
-schema12.index({ phone: 1, purpose: 1, is_current: 1 }, { unique: true, partialFilterExpression: { purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true } });
-var auth_flow_model_default = import_mongoose71.models.AuthFlow || import_mongoose71.model("AuthFlow", schema12);
+schema14.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
+schema14.index({ phone: 1, createdAt: -1 });
+schema14.index({ phone: 1, purpose: 1, expires_at: 1 });
+schema14.index({ phone: 1, purpose: 1, is_current: 1 }, { unique: true, partialFilterExpression: { purpose: AuthFlowPurposeEnum.PIN_RECOVERY, is_current: true } });
+var auth_flow_model_default = import_mongoose73.models.AuthFlow || import_mongoose73.model("AuthFlow", schema14);
 
 // src/services/otp-delivery.service.ts
 class OtpDeliveryService {
@@ -156326,7 +156573,7 @@ class PatientAuthService {
           ip_address: context.ip ?? ""
         });
       } catch (error) {
-        if (!(error instanceof import_mongoose72.default.mongo.MongoServerError) || error.code !== 11000)
+        if (!(error instanceof import_mongoose74.default.mongo.MongoServerError) || error.code !== 11000)
           throw error;
       }
     }
@@ -156620,7 +156867,7 @@ class PatientAuthService {
     return { supportOtp, expiresAt: flow.support_otp_expires_at };
   }
   async adminResetPin(patientId, reason, actorUserId, ip2) {
-    if (!import_mongoose72.default.Types.ObjectId.isValid(patientId))
+    if (!import_mongoose74.default.Types.ObjectId.isValid(patientId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0631\u064A\u0636 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     const patient2 = await patients_model_default.findById(patientId).exec();
     if (!patient2)
@@ -156637,7 +156884,7 @@ class PatientAuthService {
     return { temporaryPin, mustChangePin: true };
   }
   async revokePatientSessions(patientId, actorUserId, reason, ip2) {
-    if (!import_mongoose72.default.Types.ObjectId.isValid(patientId))
+    if (!import_mongoose74.default.Types.ObjectId.isValid(patientId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0631\u064A\u0636 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     const patient2 = await patients_model_default.findById(patientId).exec();
     if (!patient2)
@@ -156649,7 +156896,7 @@ class PatientAuthService {
     return { revokedSessionsCount: revoked };
   }
   async securityDetails(patientId) {
-    if (!import_mongoose72.default.Types.ObjectId.isValid(patientId))
+    if (!import_mongoose74.default.Types.ObjectId.isValid(patientId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0631\u064A\u0636 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
     const patient2 = await patients_model_default.findById(patientId).lean().exec();
     if (!patient2)
@@ -156704,10 +156951,10 @@ var authSecurityController = new Elysia({ prefix: "/auth-security", detail: { ta
       match.type = query.type;
     if (query.success !== undefined)
       match.success = query.success;
-    if (query.userId && import_mongoose73.default.Types.ObjectId.isValid(query.userId))
-      match.user_id = new import_mongoose73.default.Types.ObjectId(query.userId);
-    if (query.patientId && import_mongoose73.default.Types.ObjectId.isValid(query.patientId))
-      match.patient_id = new import_mongoose73.default.Types.ObjectId(query.patientId);
+    if (query.userId && import_mongoose75.default.Types.ObjectId.isValid(query.userId))
+      match.user_id = new import_mongoose75.default.Types.ObjectId(query.userId);
+    if (query.patientId && import_mongoose75.default.Types.ObjectId.isValid(query.patientId))
+      match.patient_id = new import_mongoose75.default.Types.ObjectId(query.patientId);
     if (query.dateFrom || query.dateTo) {
       const range = {};
       if (query.dateFrom)
@@ -156737,9 +156984,9 @@ var authSecurityController = new Elysia({ prefix: "/auth-security", detail: { ta
 }, { params: t.Object({ flowId: t.String() }), response: { 200: GenericDataResponseSchema, 403: ForbiddenResponseSchema, ...ProtectedApiErrorResponses } }).get("/patients/:patientId/timeline", async ({ params, phrase, set }) => {
   try {
     await requireAdminPermission(phrase.role, phrase._id, IAdminPermissionEnum.VIEW_AUTH_AUDIT);
-    if (!import_mongoose73.default.Types.ObjectId.isValid(params.patientId))
+    if (!import_mongoose75.default.Types.ObjectId.isValid(params.patientId))
       throw new DomainError("\u0645\u0639\u0631\u0641 \u0627\u0644\u0645\u0631\u064A\u0636 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400);
-    return { error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u062A\u0633\u0644\u0633\u0644 \u0627\u0644\u0632\u0645\u0646\u064A \u0644\u0644\u0645\u0631\u064A\u0636 \u0628\u0646\u062C\u0627\u062D", data: await auth_event_service_default.patientTimeline(new import_mongoose73.default.Types.ObjectId(params.patientId)) };
+    return { error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u062A\u0633\u0644\u0633\u0644 \u0627\u0644\u0632\u0645\u0646\u064A \u0644\u0644\u0645\u0631\u064A\u0636 \u0628\u0646\u062C\u0627\u062D", data: await auth_event_service_default.patientTimeline(new import_mongoose75.default.Types.ObjectId(params.patientId)) };
   } catch (error) {
     return handle(error, set);
   }
@@ -156798,8 +157045,8 @@ var authSecurityController = new Elysia({ prefix: "/auth-security", detail: { ta
 var adminController = new Elysia({ prefix: "/admin" }).use(RoleGuardPlugin([IUserRoleEnum.ADMIN])).use(clinicsController).use(activityLogController).use(aboutUsController).use(adsController).use(specialtiesController).use(chronicConditionsController).use(doctorsController).use(patientsController).use(appointmentsController).use(notificationsController).use(suggestionsController).use(nursesAdminController).use(pharmaciesAdminController).use(pharmacyRequestsAdminController).use(homeCareAdminController).use(authSecurityController);
 
 // src/controller/dash/doctor/activity-log.controller.ts
-var import_mongoose74 = __toESM(require_mongoose2(), 1);
-var ObjectId12 = import_mongoose74.default.Types.ObjectId;
+var import_mongoose76 = __toESM(require_mongoose2(), 1);
+var ObjectId12 = import_mongoose76.default.Types.ObjectId;
 var doctorActivityLogController = new Elysia({
   prefix: "/activity-logs",
   detail: { tags: [SWAGGER_TAGS.DOCTOR.ACTIVITY_LOGS] }
@@ -156877,10 +157124,10 @@ var doctorActivityLogController = new Elysia({
 });
 
 // src/controller/dash/doctor/secretary.controller.ts
-var import_mongoose76 = __toESM(require_mongoose2(), 1);
+var import_mongoose78 = __toESM(require_mongoose2(), 1);
 
 // src/models/secretary.model.ts
-var import_mongoose75 = __toESM(require_mongoose2(), 1);
+var import_mongoose77 = __toESM(require_mongoose2(), 1);
 
 // src/interfaces/secretary.interface.ts
 var ISecretaryPermissionEnum = {
@@ -156909,9 +157156,9 @@ var ISecretaryDefaultPermissions = [
 ];
 
 // src/models/secretary.model.ts
-var secretarySchema = new import_mongoose75.Schema({
+var secretarySchema = new import_mongoose77.Schema({
   user_id: {
-    type: import_mongoose75.Schema.Types.ObjectId,
+    type: import_mongoose77.Schema.Types.ObjectId,
     ref: "User",
     required: true
   },
@@ -156922,12 +157169,12 @@ var secretarySchema = new import_mongoose75.Schema({
     maxlength: 120
   },
   clinic_id: {
-    type: import_mongoose75.Schema.Types.ObjectId,
+    type: import_mongoose77.Schema.Types.ObjectId,
     ref: "Clinic"
   },
   doctor_ids: [
     {
-      type: import_mongoose75.Schema.Types.ObjectId,
+      type: import_mongoose77.Schema.Types.ObjectId,
       ref: "Doctor"
     }
   ],
@@ -156942,7 +157189,7 @@ var secretarySchema = new import_mongoose75.Schema({
     default: ISecretaryStatusEnum.ACTIVE
   },
   created_by: {
-    type: import_mongoose75.Schema.Types.ObjectId,
+    type: import_mongoose77.Schema.Types.ObjectId,
     ref: "User",
     default: null
   },
@@ -156959,7 +157206,7 @@ var secretarySchema = new import_mongoose75.Schema({
 secretarySchema.index({ status: 1 });
 secretarySchema.index({ clinic_id: 1 });
 secretarySchema.index({ doctor_ids: 1 });
-var Secretary = import_mongoose75.models.Secretary || import_mongoose75.model("Secretary", secretarySchema);
+var Secretary = import_mongoose77.models.Secretary || import_mongoose77.model("Secretary", secretarySchema);
 var secretary_model_default = Secretary;
 
 // src/services/secretary.service.ts
@@ -157089,7 +157336,7 @@ class SecretaryService {
 var secretary_service_default = new SecretaryService;
 
 // src/controller/dash/doctor/secretary.controller.ts
-var ObjectId13 = import_mongoose76.default.Types.ObjectId;
+var ObjectId13 = import_mongoose78.default.Types.ObjectId;
 var secretaryBodySchema = t.Object({
   user_id: t.String({ minLength: 1 }),
   full_name: t.String({ minLength: 1, maxLength: 120 }),
@@ -157422,8 +157669,8 @@ async function operation2(id3, phrase, action) {
 }
 
 // src/controller/dash/doctor/suggestions.controller.ts
-var import_mongoose77 = __toESM(require_mongoose2(), 1);
-var ObjectId14 = import_mongoose77.default.Types.ObjectId;
+var import_mongoose79 = __toESM(require_mongoose2(), 1);
+var ObjectId14 = import_mongoose79.default.Types.ObjectId;
 var createSuggestionBodySchema = t.Object({
   suggestion: t.String({ minLength: 1, maxLength: 2000 })
 });
@@ -157570,7 +157817,7 @@ var nurseHomeCareController = new Elysia({ prefix: "/home-care", detail: { tags:
   const nurse = await nurse_service_default.requireActiveByUserId(phrase._id);
   const request = await home_care_dispatch_service_default.claim(phrase._id, params.id, actor4(phrase._id, String(nurse._id), `/dash/nurse/home-care/${params.id}/claim`));
   return { error: false, message: "\u062A\u0645 \u0627\u0633\u062A\u0644\u0627\u0645 \u0637\u0644\u0628 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u0628\u0646\u062C\u0627\u062D", data: formatHomeCareRequestForNurse(request) };
-}, { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/on-the-way", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, "on-the-way"), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/arrived", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ON_THE_WAY, IHomeCareRequestStatusEnum.ARRIVED, "arrived"), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/start", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ARRIVED, IHomeCareRequestStatusEnum.IN_PROGRESS, "start"), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/complete", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.IN_PROGRESS, IHomeCareRequestStatusEnum.COMPLETED, "complete"), { params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } });
+}, { detail: { summary: "Claim an OPEN qualified request", description: "Claims a PENDING or CONFIRMED OPEN_POOL request and changes it to ASSIGNED. Concurrent claims return 409." }, params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/on-the-way", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, "on-the-way"), { detail: { summary: "ASSIGNED to ON_THE_WAY", description: "Only the current assigned Nurse may perform this step; replay or skipped transitions return 409." }, params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/arrived", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ON_THE_WAY, IHomeCareRequestStatusEnum.ARRIVED, "arrived"), { detail: { summary: "ON_THE_WAY to ARRIVED" }, params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/start", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.ARRIVED, IHomeCareRequestStatusEnum.IN_PROGRESS, "start"), { detail: { summary: "ARRIVED to IN_PROGRESS" }, params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } }).patch("/:id/complete", ({ params, phrase }) => transition(params.id, phrase, IHomeCareRequestStatusEnum.IN_PROGRESS, IHomeCareRequestStatusEnum.COMPLETED, "complete"), { detail: { summary: "IN_PROGRESS to COMPLETED", description: "Only the current assigned Nurse may complete; completion closes dispatch and is terminal." }, params: t.Object({ id: t.String() }), response: { 200: NurseHomeCareRequestResponseSchema, ...errors3 } });
 async function transition(id3, phrase, expected, next, action) {
   requireRole(phrase.role);
   const nurse = await nurse_service_default.requireActiveByUserId(phrase._id);
@@ -157665,8 +157912,8 @@ var mobileAboutUsController = new Elysia({
 }, { response: { 200: GenericDataResponseSchema, 404: NotFoundResponseSchema, ...PublicApiErrorResponses } });
 
 // src/controller/mobile/ads.controller.ts
-var import_mongoose78 = __toESM(require_mongoose2(), 1);
-var ObjectId15 = import_mongoose78.default.Types.ObjectId;
+var import_mongoose80 = __toESM(require_mongoose2(), 1);
+var ObjectId15 = import_mongoose80.default.Types.ObjectId;
 function mobileAd(ad2) {
   return { _id: String(ad2._id), title: ad2.title ?? null, description: ad2.description ?? null, image: ad2.image, start_date: ad2.start_date ?? null, end_date: ad2.end_date ?? null };
 }
@@ -157870,10 +158117,10 @@ var mobileChronicConditionsController = new Elysia({
 });
 
 // src/controller/mobile/doctors.controller.ts
-var import_mongoose80 = __toESM(require_mongoose2(), 1);
+var import_mongoose82 = __toESM(require_mongoose2(), 1);
 
 // src/services/available-doctors.service.ts
-var import_mongoose79 = __toESM(require_mongoose2(), 1);
+var import_mongoose81 = __toESM(require_mongoose2(), 1);
 var AVAILABLE_DOCTORS_CACHE_TTL_SECONDS = 30;
 function availableDoctorsCacheKey(input) {
   return `cache:mobile:doctors:available:v1:date=${input.date}:page=${input.page}:limit=${input.limit}:specialty=${input.specialty_id ?? "all"}:clinic=${input.clinic_id ?? "all"}:gender=${input.gender ?? "all"}:featured=${input.is_featured ? "true" : "all"}`;
@@ -157887,9 +158134,9 @@ class AvailableDoctorsService {
       accepting_new_patients: true
     };
     if (filters.specialty_id)
-      doctorMatch.specialty_ids = new import_mongoose79.default.Types.ObjectId(filters.specialty_id);
+      doctorMatch.specialty_ids = new import_mongoose81.default.Types.ObjectId(filters.specialty_id);
     if (filters.clinic_id)
-      doctorMatch.clinic_ids = new import_mongoose79.default.Types.ObjectId(filters.clinic_id);
+      doctorMatch.clinic_ids = new import_mongoose81.default.Types.ObjectId(filters.clinic_id);
     if (filters.gender)
       doctorMatch.gender = filters.gender;
     if (filters.is_featured)
@@ -157916,7 +158163,7 @@ class AvailableDoctorsService {
         clinicIds.add(String(clinicId));
     for (const row of weekly)
       clinicIds.add(String(row.clinic_id));
-    const clinics = await clinics_model_default.find({ _id: { $in: [...clinicIds].map((id3) => new import_mongoose79.default.Types.ObjectId(id3)) }, status: IClinicStatusEnum.ACTIVE }).select("_id").lean().exec();
+    const clinics = await clinics_model_default.find({ _id: { $in: [...clinicIds].map((id3) => new import_mongoose81.default.Types.ObjectId(id3)) }, status: IClinicStatusEnum.ACTIVE }).select("_id").lean().exec();
     const activeClinicIds = new Set(clinics.map((clinic) => String(clinic._id)));
     const bookedByDoctor = new Map(dailyCounts.map((row) => [String(row._id), Number(row.count)]));
     const blockersByDoctor = new Map;
@@ -157999,7 +158246,7 @@ var available_doctors_service_default = new AvailableDoctorsService;
 
 // src/controller/mobile/doctors.controller.ts
 init_domain_error();
-var ObjectId16 = import_mongoose80.default.Types.ObjectId;
+var ObjectId16 = import_mongoose82.default.Types.ObjectId;
 var availableDoctorsResponseSchema = t.Object({
   error: t.Literal(false),
   message: t.String(),
@@ -158186,14 +158433,14 @@ var mobileDoctorsController = new Elysia({
     name: clinic.name,
     address: clinic.address,
     icon: clinic.icon ?? null,
-    map_location: clinic.map_location ?? { lat: null, lng: null }
+    map_location: { lat: clinic.map_location?.lat ?? null, lng: clinic.map_location?.lng ?? null }
   }]));
   return {
     error: false,
     message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u0637\u0628\u064A\u0628 \u0628\u0646\u062C\u0627\u062D",
     data: {
       ...formatDoctorForMobile(doctor, specialties2, true),
-      clinics: (doctor.clinic_ids ?? []).map((id3) => clinicsById.get(String(id3))).filter(Boolean)
+      clinics: (doctor.clinic_ids ?? []).map((id3) => clinicsById.get(String(id3))).filter((clinic) => clinic !== undefined)
     }
   };
 }, {
@@ -158202,8 +158449,8 @@ var mobileDoctorsController = new Elysia({
 });
 
 // src/controller/mobile/specialties.controller.ts
-var import_mongoose81 = __toESM(require_mongoose2(), 1);
-var ObjectId17 = import_mongoose81.default.Types.ObjectId;
+var import_mongoose83 = __toESM(require_mongoose2(), 1);
+var ObjectId17 = import_mongoose83.default.Types.ObjectId;
 function formatSpecialtyForMobile(specialty) {
   return {
     _id: String(specialty._id),
@@ -158286,9 +158533,9 @@ var mobileSpecialtiesController = new Elysia({
 });
 
 // src/controller/mobile/profile.controller.ts
-var import_mongoose82 = __toESM(require_mongoose2(), 1);
+var import_mongoose84 = __toESM(require_mongoose2(), 1);
 init_domain_error();
-var ObjectId18 = import_mongoose82.default.Types.ObjectId;
+var ObjectId18 = import_mongoose84.default.Types.ObjectId;
 var completeProfileBodySchema = t.Object({
   full_name: t.Optional(t.String({ minLength: 2, maxLength: 120 })),
   email: t.Optional(t.Nullable(t.String())),
@@ -158427,8 +158674,8 @@ var mobileProfileController = new Elysia({
 });
 
 // src/controller/mobile/suggestions.controller.ts
-var import_mongoose83 = __toESM(require_mongoose2(), 1);
-var ObjectId19 = import_mongoose83.default.Types.ObjectId;
+var import_mongoose85 = __toESM(require_mongoose2(), 1);
+var ObjectId19 = import_mongoose85.default.Types.ObjectId;
 var createSuggestionBodySchema2 = t.Object({
   suggestion: t.String({ minLength: 1, maxLength: 2000 })
 });
@@ -158486,18 +158733,18 @@ var mobileSuggestionsController = new Elysia({
 });
 
 // src/controller/mobile/doctor-favorites.controller.ts
-var import_mongoose85 = __toESM(require_mongoose2(), 1);
+var import_mongoose87 = __toESM(require_mongoose2(), 1);
 
 // src/models/doctors_favorite.model.ts
-var import_mongoose84 = __toESM(require_mongoose2(), 1);
-var doctorFavoriteSchema = new import_mongoose84.Schema({
+var import_mongoose86 = __toESM(require_mongoose2(), 1);
+var doctorFavoriteSchema = new import_mongoose86.Schema({
   patient_id: {
-    type: import_mongoose84.Schema.Types.ObjectId,
+    type: import_mongoose86.Schema.Types.ObjectId,
     ref: "Patient",
     required: true
   },
   doctor_id: {
-    type: import_mongoose84.Schema.Types.ObjectId,
+    type: import_mongoose86.Schema.Types.ObjectId,
     ref: "Doctor",
     required: true
   }
@@ -158507,7 +158754,7 @@ var doctorFavoriteSchema = new import_mongoose84.Schema({
 doctorFavoriteSchema.index({ patient_id: 1, doctor_id: 1 }, { unique: true });
 doctorFavoriteSchema.index({ patient_id: 1, createdAt: -1 });
 doctorFavoriteSchema.index({ doctor_id: 1 });
-var DoctorFavorite = import_mongoose84.models.DoctorFavorite || import_mongoose84.model("DoctorFavorite", doctorFavoriteSchema);
+var DoctorFavorite = import_mongoose86.models.DoctorFavorite || import_mongoose86.model("DoctorFavorite", doctorFavoriteSchema);
 var doctors_favorite_model_default = DoctorFavorite;
 
 // src/services/doctor-favorite.service.ts
@@ -158597,7 +158844,7 @@ class DoctorFavoriteService {
 var doctor_favorite_service_default = new DoctorFavoriteService;
 
 // src/controller/mobile/doctor-favorites.controller.ts
-var ObjectId20 = import_mongoose85.default.Types.ObjectId;
+var ObjectId20 = import_mongoose87.default.Types.ObjectId;
 var createFavoriteBodySchema = t.Object({
   doctor_id: t.String()
 });
@@ -158757,8 +159004,8 @@ var mobileDoctorFavoritesController = new Elysia({
 });
 
 // src/controller/mobile/home-care.controller.ts
-var import_mongoose86 = __toESM(require_mongoose2(), 1);
-var ObjectId21 = import_mongoose86.default.Types.ObjectId;
+var import_mongoose88 = __toESM(require_mongoose2(), 1);
+var ObjectId21 = import_mongoose88.default.Types.ObjectId;
 function formatHomeCareCategory(category) {
   return {
     _id: String(category._id),
@@ -158885,7 +159132,7 @@ var mobileHomeCareController = new Elysia({
 });
 
 // src/controller/mobile/profile-health.controller.ts
-var import_mongoose87 = __toESM(require_mongoose2(), 1);
+var import_mongoose89 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 
 // src/schemas/patient-health-response.schema.ts
@@ -159005,7 +159252,7 @@ var mobileProfileHealthController = new Elysia({
     set.status = 404;
     return { error: true, message: "\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" };
   }
-  const profile = await patientHealthProfileService.getOrCreate(new import_mongoose87.default.Types.ObjectId(patient2._id.toString()));
+  const profile = await patientHealthProfileService.getOrCreate(new import_mongoose89.default.Types.ObjectId(patient2._id.toString()));
   return {
     error: false,
     message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0635\u062D\u064A \u0628\u0646\u062C\u0627\u062D",
@@ -159021,7 +159268,7 @@ var mobileProfileHealthController = new Elysia({
 }).patch("/", async ({ body, phrase, set }) => {
   try {
     const patient2 = await authenticatedPatient(phrase);
-    const profile = await patientHealthProfileService.update(new import_mongoose87.default.Types.ObjectId(patient2._id.toString()), body);
+    const profile = await patientHealthProfileService.update(new import_mongoose89.default.Types.ObjectId(patient2._id.toString()), body);
     return {
       error: false,
       message: "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0635\u062D\u064A \u0628\u0646\u062C\u0627\u062D",
@@ -159050,7 +159297,7 @@ var mobileProfileHealthController = new Elysia({
 });
 
 // src/controller/mobile/children.controller.ts
-var import_mongoose88 = __toESM(require_mongoose2(), 1);
+var import_mongoose90 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 var childCreateBodySchema = t.Object({
   full_name: t.String({ minLength: 1, maxLength: 120 }),
@@ -159068,7 +159315,7 @@ async function requirePatient(phrase) {
   const patient2 = await patient_service_default.getByUserId(phrase._id);
   if (!patient2)
     throw new DomainError("\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
-  return new import_mongoose88.default.Types.ObjectId(patient2._id.toString());
+  return new import_mongoose90.default.Types.ObjectId(patient2._id.toString());
 }
 function handleDomainError(error, set) {
   if (!(error instanceof DomainError))
@@ -159295,7 +159542,7 @@ var mobileAppointmentsController = new Elysia({ prefix: "/appointments", detail:
 }, { body: destinationSchema3, response: { 200: AppointmentResponseSchema, ...errors5 } });
 
 // src/controller/mobile/home-care-requests.controller.ts
-var import_mongoose89 = __toESM(require_mongoose2(), 1);
+var import_mongoose91 = __toESM(require_mongoose2(), 1);
 init_domain_error();
 var requestBodySchema = t.Object({
   service_id: t.String(),
@@ -159308,7 +159555,10 @@ var requestBodySchema = t.Object({
     lng: t.Number({ minimum: -180, maximum: 180 })
   }, { additionalProperties: false }),
   notes: t.Optional(t.Nullable(t.String({ maxLength: 2000 })))
-}, { additionalProperties: false });
+}, {
+  additionalProperties: false,
+  examples: [{ service_id: "507f1f77bcf86cd799439011", child_id: null, requested_date: "2099-01-02", preferred_time: "10:30", address: { address_text: "\u0628\u063A\u062F\u0627\u062F - \u0627\u0644\u0645\u0646\u0635\u0648\u0631", lat: 33.3128, lng: 44.3615 }, notes: "\u064A\u0631\u062C\u0649 \u0627\u0644\u0627\u062A\u0635\u0627\u0644 \u0642\u0628\u0644 \u0627\u0644\u0648\u0635\u0648\u0644" }]
+});
 var cancellationBodySchema = t.Object({
   reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 })))
 }, { additionalProperties: false });
@@ -159351,7 +159601,7 @@ var mobileHomeCareRequestsController = new Elysia({
   }
 }).post("/", async ({ body, phrase, set }) => {
   const patient2 = await requirePatient2(phrase);
-  const request = await home_care_request_service_default.createForPatient(new import_mongoose89.default.Types.ObjectId(patient2._id.toString()), {
+  const request = await home_care_request_service_default.createForPatient(new import_mongoose91.default.Types.ObjectId(patient2._id.toString()), {
     service_id: body.service_id,
     child_id: body.child_id,
     requested_date: body.requested_date,
@@ -159384,7 +159634,7 @@ var mobileHomeCareRequestsController = new Elysia({
   const patient2 = await requirePatient2(phrase);
   const page3 = Math.max(1, Number(query.page) || 1);
   const limit = Math.min(100, Math.max(1, Number(query.limit) || 10));
-  const { data, count } = await home_care_request_service_default.listForPatient(new import_mongoose89.default.Types.ObjectId(patient2._id.toString()), { page: page3, limit, status: query.status });
+  const { data, count } = await home_care_request_service_default.listForPatient(new import_mongoose91.default.Types.ObjectId(patient2._id.toString()), { page: page3, limit, status: query.status });
   return {
     error: false,
     message: "\u062A\u0645 \u062C\u0644\u0628 \u0637\u0644\u0628\u0627\u062A \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u0628\u0646\u062C\u0627\u062D",
@@ -159406,11 +159656,11 @@ var mobileHomeCareRequestsController = new Elysia({
   }
 }).get("/:id", async ({ params, phrase, set }) => {
   const patient2 = await requirePatient2(phrase);
-  if (!import_mongoose89.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose91.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
-  const request = await home_care_request_service_default.getForPatient(new import_mongoose89.default.Types.ObjectId(patient2._id.toString()), params.id);
+  const request = await home_care_request_service_default.getForPatient(new import_mongoose91.default.Types.ObjectId(patient2._id.toString()), params.id);
   if (!request) {
     set.status = 404;
     return { error: true, message: "\u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" };
@@ -159431,11 +159681,11 @@ var mobileHomeCareRequestsController = new Elysia({
   }
 }).patch("/:id/cancel", async ({ params, body, phrase, set }) => {
   const patient2 = await requirePatient2(phrase);
-  if (!import_mongoose89.default.Types.ObjectId.isValid(params.id)) {
+  if (!import_mongoose91.default.Types.ObjectId.isValid(params.id)) {
     set.status = 400;
     return { error: true, message: "\u0645\u0639\u0631\u0641 \u0627\u0644\u0637\u0644\u0628 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D" };
   }
-  const request = await home_care_request_service_default.cancelForPatient(new import_mongoose89.default.Types.ObjectId(patient2._id.toString()), params.id, body.reason, mobileActor(phrase._id, `/mobile/home-care/requests/${params.id}/cancel`));
+  const request = await home_care_request_service_default.cancelForPatient(new import_mongoose91.default.Types.ObjectId(patient2._id.toString()), params.id, body.reason, mobileActor(phrase._id, `/mobile/home-care/requests/${params.id}/cancel`));
   return {
     error: false,
     message: "\u062A\u0645 \u0625\u0644\u063A\u0627\u0621 \u0637\u0644\u0628 \u0627\u0644\u0631\u0639\u0627\u064A\u0629 \u0627\u0644\u0645\u0646\u0632\u0644\u064A\u0629 \u0628\u0646\u062C\u0627\u062D",
@@ -159501,8 +159751,54 @@ async function decision(id3, v2, accept, reason, role2, uid) {
   return { error: false, message: accept ? "\u062A\u0645\u062A \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0629 \u0639\u0644\u0649 \u0639\u0631\u0636 \u0627\u0644\u0633\u0639\u0631 \u0628\u0646\u062C\u0627\u062D" : "\u062A\u0645 \u0631\u0641\u0636 \u0639\u0631\u0636 \u0627\u0644\u0633\u0639\u0631 \u0648\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0637\u0644\u0628 \u0644\u0644\u0635\u064A\u062F\u0644\u064A\u0627\u062A", data: await own(p2._id, id3) };
 }
 
+// src/controller/mobile/notifications.controller.ts
+var import_mongoose92 = __toESM(require_mongoose2(), 1);
+import crypto6 from "crypto";
+init_domain_error();
+var UUID_V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function installationHash(value) {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized || !UUID_V4.test(normalized))
+    throw new DomainError("X-Installation-Id \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "INVALID_INSTALLATION_ID");
+  return crypto6.createHash("sha256").update(normalized).digest("hex");
+}
+function viewer(context) {
+  return context.notificationViewer.kind === "user" ? { userId: context.notificationViewer.userId } : { installationHash: installationHash(context.headers["x-installation-id"]) };
+}
+async function guestWriteLimit(context, value) {
+  if ("userId" in value)
+    return;
+  const ip2 = context.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+  await security_rate_limit_service_default.enforce("NOTIFICATION_GUEST_WRITE", `${value.installationHash}:${ip2}`, "NOTIFICATION_GUEST_RATE_LIMITED");
+}
+var categories = [t.Literal("all"), ...Object.values(INotificationCategoryEnum).map((value) => t.Literal(value))];
+var mobileNotificationsController = new Elysia({ prefix: "/notifications", detail: { tags: [SWAGGER_TAGS.MOBILE.NOTIFICATIONS] } }).use(OptionalMobileAuthPlugin).onError(({ error, set }) => {
+  if (error instanceof DomainError) {
+    set.status = error.status;
+    return { error: true, message: error.message, code: error.code };
+  }
+}).get("/", async (context) => {
+  const page4 = Math.max(1, Number(context.query.page) || 1), limit = Math.min(50, Math.max(1, Number(context.query.limit) || 20));
+  const value = viewer(context), result = await notification_service_default.getMobileInbox(value, { page: page4, limit, category: context.query.category });
+  const pages = Math.ceil(result.total / limit);
+  return { error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0628\u0646\u062C\u0627\u062D", data: result.data, pagination: { page: page4, limit, total: result.total, pages, hasNext: page4 < pages, hasPrev: page4 > 1 }, unread_count: result.unread_count };
+}, { detail: { summary: "Mobile inbox (optional auth)", description: "No Authorization returns visible PUBLIC notifications and requires X-Installation-Id. A valid Patient mobile token returns PUBLIC plus that User\u2019s TARGETED notifications. Presented invalid authorization returns 401. `all` only removes category filtering. is_read is computed; no UI icon or color fields are returned." }, query: t.Object({ page: t.Optional(t.String()), limit: t.Optional(t.String()), category: t.Optional(t.Union(categories)) }), response: { 200: t.Any(), 400: t.Any(), 401: t.Any(), 403: t.Any(), 429: t.Any(), 500: t.Any() } }).get("/unread-count", async (context) => ({ error: false, data: { unread_count: await notification_service_default.unreadCount(viewer(context)) } }), { detail: { summary: "Unread notification count", description: "Optional auth; count covers every visible category." }, response: { 200: t.Any(), 400: t.Any(), 401: t.Any(), 403: t.Any(), 429: t.Any(), 500: t.Any() } }).patch("/read-all", async (context) => {
+  const value = viewer(context);
+  await guestWriteLimit(context, value);
+  const marked_count = await notification_service_default.markAllRead(value);
+  return { error: false, message: "\u062A\u0645 \u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0643\u0645\u0642\u0631\u0648\u0621\u0629", data: { marked_count, unread_count: await notification_service_default.unreadCount(value) } };
+}, { detail: { summary: "Mark all visible notifications read", description: "Guest writes only PUBLIC receipts. A Patient writes PUBLIC plus own TARGETED receipts." }, response: { 200: t.Any(), 400: t.Any(), 401: t.Any(), 403: t.Any(), 429: t.Any(), 500: t.Any() } }).patch("/:id/read", async (context) => {
+  const value = viewer(context);
+  await guestWriteLimit(context, value);
+  if (!import_mongoose92.default.Types.ObjectId.isValid(context.params.id) || !await notification_service_default.markRead(value, context.params.id)) {
+    context.set.status = 404;
+    return { error: true, message: "\u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F" };
+  }
+  return { error: false, message: "\u062A\u0645 \u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u0643\u0645\u0642\u0631\u0648\u0621", data: { unread_count: await notification_service_default.unreadCount(value) } };
+}, { detail: { summary: "Mark one notification read", description: "Idempotent. Invisible or another user\u2019s targeted ID returns 404." }, params: t.Object({ id: t.String() }), response: { 200: t.Any(), 400: t.Any(), 401: t.Any(), 403: t.Any(), 404: t.Any(), 429: t.Any(), 500: t.Any() } });
+
 // src/controller/mobile/index.ts
-var mobilePublicController = new Elysia().use(mobileAuthController).use(mobileAboutUsController).use(mobileAdsController).use(mobileChronicConditionsController).use(mobileDoctorsController).use(mobileSpecialtiesController).use(mobileHomeCareController);
+var mobilePublicController = new Elysia().use(mobileAuthController).use(mobileAboutUsController).use(mobileAdsController).use(mobileChronicConditionsController).use(mobileDoctorsController).use(mobileSpecialtiesController).use(mobileHomeCareController).use(mobileNotificationsController);
 var mobileProtectedController = new Elysia().use(RoleGuardPlugin([IUserRoleEnum.PATIENT])).use(mobileProfileController).use(mobileProfileHealthController).use(mobileChildrenController).use(mobileAppointmentsController).use(mobileHomeCareRequestsController).use(mobilePharmacyRequestsController).use(mobileSuggestionsController).use(mobileDoctorFavoritesController).use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT], TokenAudienceEnum.MOBILE));
 var mobileController = new Elysia({
   prefix: "/mobile"
@@ -159605,12 +159901,12 @@ var ActivityLogPlugin = new Elysia({ name: "activity-log-plugin" }).derive({ as:
 });
 
 // src/models/bootstrap-lock.model.ts
-var import_mongoose90 = __toESM(require_mongoose2(), 1);
-var bootstrapLockSchema = new import_mongoose90.Schema({
+var import_mongoose93 = __toESM(require_mongoose2(), 1);
+var bootstrapLockSchema = new import_mongoose93.Schema({
   _id: { type: String, required: true },
   created_at: { type: Date, required: true }
 }, { versionKey: false, collection: "security_bootstrap_locks" });
-var BootstrapLock = import_mongoose90.models.BootstrapLock || import_mongoose90.model("BootstrapLock", bootstrapLockSchema);
+var BootstrapLock = import_mongoose93.models.BootstrapLock || import_mongoose93.model("BootstrapLock", bootstrapLockSchema);
 var bootstrap_lock_model_default = BootstrapLock;
 
 // src/migrations/ensure-super-admin.migration.ts
@@ -159743,7 +160039,7 @@ async function seedChronicConditions() {
 }
 
 // src/migrations/seed-suggestions.migration.ts
-var import_mongoose91 = __toESM(require_mongoose2(), 1);
+var import_mongoose94 = __toESM(require_mongoose2(), 1);
 var SUGGESTIONS_SEED = [
   "\u0623\u0642\u062A\u0631\u062D \u0625\u0636\u0627\u0641\u0629 \u062A\u0630\u0643\u064A\u0631 \u0628\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0639\u0628\u0631 \u0631\u0633\u0627\u0626\u0644 SMS \u0642\u0628\u0644 \u0627\u0644\u0645\u0648\u0639\u062F \u0628\u0640 24 \u0633\u0627\u0639\u0629.",
   "\u064A\u0641\u0636\u0644 \u062A\u0648\u0641\u064A\u0631 \u062E\u064A\u0627\u0631 \u062D\u062C\u0632 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0641\u064A \u0639\u0637\u0644\u0629 \u0646\u0647\u0627\u064A\u0629 \u0627\u0644\u0623\u0633\u0628\u0648\u0639.",
@@ -159764,10 +160060,10 @@ var SUGGESTIONS_SEED = [
 async function resolveSeedUserId() {
   const patient3 = await users_model_default.findOne({ role: IUserRoleEnum.PATIENT }).select("_id").lean();
   if (patient3?._id)
-    return new import_mongoose91.default.Types.ObjectId(patient3._id);
+    return new import_mongoose94.default.Types.ObjectId(patient3._id);
   const superAdmin = await admins_model_default.findOne({ super_admin: true, is_active: true }).select("user_id").lean();
   if (superAdmin?.user_id)
-    return new import_mongoose91.default.Types.ObjectId(superAdmin.user_id);
+    return new import_mongoose94.default.Types.ObjectId(superAdmin.user_id);
   return null;
 }
 async function seedSuggestions() {
@@ -160037,9 +160333,11 @@ function safeEqual(left, right) {
 }
 function swaggerBasicAuthorized(request) {
   const credentials = parseBasicAuthorization(request);
+  if (!credentials)
+    return false;
   const username = process.env.SWAGGER_USERNAME?.trim() ?? "";
   const password = process.env.SWAGGER_PASSWORD ?? "";
-  return Boolean(credentials) && safeEqual(username, credentials.username) && safeEqual(password, credentials.password);
+  return safeEqual(username, credentials.username) && safeEqual(password, credentials.password);
 }
 function applyHeaders(headers, swaggerPath) {
   headers["X-Content-Type-Options"] = "nosniff";
@@ -160128,7 +160426,7 @@ var ApiErrorPlugin = new Elysia({ name: "api-error-plugin" }).onError({ as: "glo
 });
 
 // src/migrations/backfill-health-profiles.migration.ts
-var import_mongoose92 = __toESM(require_mongoose2(), 1);
+var import_mongoose95 = __toESM(require_mongoose2(), 1);
 async function runHealthProfileBackfill(dependencies) {
   let patientProfilesCreated = 0;
   let childProfilesCreated = 0;
@@ -160160,7 +160458,7 @@ async function backfillHealthProfiles() {
       }).toArray();
     },
     async upsertPatientProfile(patient3) {
-      const chronicConditionIds = (patient3.chronic_condition_ids ?? []).filter((id3) => import_mongoose92.default.Types.ObjectId.isValid(id3)).map((id3) => new import_mongoose92.default.Types.ObjectId(id3));
+      const chronicConditionIds = (patient3.chronic_condition_ids ?? []).filter((id3) => import_mongoose95.default.Types.ObjectId.isValid(id3)).map((id3) => new import_mongoose95.default.Types.ObjectId(id3));
       const result2 = await patient_health_profile_model_default.updateOne({ patient_id: patient3._id }, {
         $setOnInsert: {
           patient_id: patient3._id,
@@ -160176,7 +160474,7 @@ async function backfillHealthProfiles() {
     },
     async listChildIds() {
       const children = await patient_child_model_default.find({}).select({ _id: 1 }).lean().exec();
-      return children.map((child) => new import_mongoose92.default.Types.ObjectId(child._id.toString()));
+      return children.map((child) => new import_mongoose95.default.Types.ObjectId(child._id.toString()));
     },
     async upsertChildProfile(childId) {
       const result2 = await child_health_profile_model_default.updateOne({ child_id: childId }, { $setOnInsert: { child_id: childId } }, { upsert: true }).exec();
@@ -160291,7 +160589,7 @@ async function backfillSpecialtySortOrder() {
 }
 
 // src/services/appointment-notification.service.ts
-var import_mongoose93 = __toESM(require_mongoose2(), 1);
+var import_mongoose96 = __toESM(require_mongoose2(), 1);
 var registered = false;
 var typeByEvent = {
   APPOINTMENT_CREATED: INotificationTypeEnum.APPOINTMENT_BOOKED,
@@ -160303,7 +160601,7 @@ var typeByEvent = {
 };
 async function handle2(event) {
   const type = typeByEvent[event.type];
-  if (!type || !import_mongoose93.default.Types.ObjectId.isValid(event.appointmentId))
+  if (!type || !import_mongoose96.default.Types.ObjectId.isValid(event.appointmentId))
     return;
   const appointment = await appointments_model_default.findById(event.appointmentId).select("patient_id doctor_id starts_at local_date snapshot workflow_version").lean().exec();
   if (!appointment)
@@ -160325,7 +160623,7 @@ async function handle2(event) {
   const body = `${appointment.snapshot.doctor.display_name} - ${local.date} ${local.time}`;
   for (const target of targets) {
     const dedupeKey = `appointment:${event.appointmentId}:${appointment.workflow_version}:${type}:${target.model}:${String(target.id)}`;
-    const { notification, created } = await notification_service_default.createOnce({ recipient_ids: [target.id], recipient_model: target.model, type, title, body, appointment_id: new import_mongoose93.default.Types.ObjectId(event.appointmentId), data: { appointmentId: event.appointmentId, startsAt: new Date(appointment.starts_at).toISOString(), localDate: local.date, localTime: local.time } }, dedupeKey);
+    const { notification, created } = await notification_service_default.createOnce({ recipient_ids: [target.id], recipient_model: target.model, type, title, body, appointment_id: new import_mongoose96.default.Types.ObjectId(event.appointmentId), data: { appointmentId: event.appointmentId, startsAt: new Date(appointment.starts_at).toISOString(), localDate: local.date, localTime: local.time } }, dedupeKey);
     if (created)
       notification_service_default.dispatch(String(notification._id)).catch(() => {
         return;

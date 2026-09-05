@@ -11,6 +11,7 @@ import NotificationRead, { INotificationReaderTypeEnum } from '../models/notific
 import { INotificationAudienceEnum, INotificationCategoryEnum, INotificationPrivacyEnum } from '../interfaces/notification.interface';
 
 export type NotificationViewer = { userId: string } | { installationHash: string };
+export const NOTIFICATION_READ_ALL_BATCH_SIZE = 500;
 export type MobileNotificationInput = {
     category: typeof INotificationCategoryEnum[keyof typeof INotificationCategoryEnum]; type: INotification['type']; title: string; body: string;
     privacy?: typeof INotificationPrivacyEnum[keyof typeof INotificationPrivacyEnum]; source?: { domain: 'appointment'; id: mongoose.Types.ObjectId } | null;
@@ -117,61 +118,83 @@ class NotificationService {
         }
     }
 
-    private visibilityMatch(viewer: NotificationViewer, category?: string) {
-        const now = new Date();
-        const common: any = { visible_at: { $lte: now }, status: { $ne: INotificationStatusEnum.CANCELLED }, expires_at: { $gt: now } };
-        if (category && category !== 'all') common.category = category;
-        if ('installationHash' in viewer) return { ...common, audience: INotificationAudienceEnum.PUBLIC };
-        return { ...common, $or: [{ audience: INotificationAudienceEnum.PUBLIC }, { audience: INotificationAudienceEnum.TARGETED }] };
+    private visibleMatch(now: Date, category?: string): Record<string, unknown> {
+        const match: Record<string, unknown> = { visible_at: { $lte: now }, expires_at: { $gt: now }, status: { $ne: INotificationStatusEnum.CANCELLED } };
+        if (category && category !== 'all') match.category = category;
+        return match;
     }
 
-    private async visibleIds(viewer: NotificationViewer, category?: string): Promise<mongoose.Types.ObjectId[]> {
-        const match = this.visibilityMatch(viewer, category);
-        if ('installationHash' in viewer) return (await this.model.find(match).select('_id').lean().exec()).map((item: any) => item._id);
+    /** Returns an aggregation whose output is exactly the visible feed, never an in-process ID list. */
+    private visiblePipeline(viewer: NotificationViewer, now: Date, category?: string): PipelineStage[] {
+        const visible = this.visibleMatch(now, category);
+        if ('installationHash' in viewer) return [{ $match: { ...visible, audience: INotificationAudienceEnum.PUBLIC } }];
         const userId = new mongoose.Types.ObjectId(viewer.userId);
-        const rows = await this.model.aggregate([{ $match: match }, { $lookup: { from: NotificationRecipient.collection.name, let: { nid: '$_id' }, pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$notification_id', '$$nid'] }, { $eq: ['$user_id', userId] }] } } }], as: '_recipient' } }, { $match: { $or: [{ audience: INotificationAudienceEnum.PUBLIC }, { '_recipient.0': { $exists: true } }] } }, { $project: { _id: 1 } }]).exec();
-        return rows.map((item: any) => item._id);
+        return [
+            { $match: { ...visible, audience: INotificationAudienceEnum.PUBLIC } },
+            { $unionWith: { coll: NotificationRecipient.collection.name, pipeline: [
+                { $match: { user_id: userId } },
+                { $lookup: { from: Notification.collection.name, localField: 'notification_id', foreignField: '_id', as: 'notification' } },
+                { $unwind: '$notification' }, { $replaceRoot: { newRoot: '$notification' } },
+                { $match: { ...visible, audience: INotificationAudienceEnum.TARGETED } },
+            ] } },
+        ];
+    }
+
+    private readLookup(viewer: NotificationViewer): PipelineStage.Lookup {
+        const identity = 'userId' in viewer
+            ? [{ $eq: ['$user_id', new mongoose.Types.ObjectId(viewer.userId)] }]
+            : [{ $eq: ['$installation_key_hash', viewer.installationHash] }];
+        const readerType = 'userId' in viewer ? INotificationReaderTypeEnum.USER : INotificationReaderTypeEnum.INSTALLATION;
+        return { $lookup: { from: NotificationRead.collection.name, let: { notificationId: '$_id' }, pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$notification_id', '$$notificationId'] }, { $eq: ['$reader_type', readerType] }, ...identity] } } }, { $limit: 1 }], as: '_read' } } as PipelineStage.Lookup;
     }
 
     public async getMobileInbox(viewer: NotificationViewer, options: { page: number; limit: number; category?: string }) {
-        const ids = await this.visibleIds(viewer, options.category);
-        const readerMatch = 'userId' in viewer ? { reader_type: INotificationReaderTypeEnum.USER, user_id: new mongoose.Types.ObjectId(viewer.userId) } : { reader_type: INotificationReaderTypeEnum.INSTALLATION, installation_key_hash: viewer.installationHash };
-        const skip = (options.page - 1) * options.limit;
-        const readIdentity = readerMatch.user_id
-            ? [{ $eq: ['$user_id', readerMatch.user_id] }]
-            : [{ $eq: ['$installation_key_hash', readerMatch.installation_key_hash] }];
-        const [rows, unread_count] = await Promise.all([
-            this.model.aggregate([
-                { $match: { _id: { $in: ids } } }, { $sort: { createdAt: -1, _id: -1 } }, { $skip: skip }, { $limit: options.limit },
-                { $lookup: { from: NotificationRead.collection.name, let: { nid: '$_id' }, pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$notification_id', '$$nid'] }, { $eq: ['$reader_type', readerMatch.reader_type] }, ...readIdentity] } } }], as: '_read' } },
-                { $project: { category: 1, type: 1, title: 1, body: 1, target: 1, privacy: 1, createdAt: 1, is_read: { $gt: [{ $size: '$_read' }, 0] }, read_at: { $ifNull: [{ $arrayElemAt: ['$_read.read_at', 0] }, null] } } },
-            ]).exec(),
-            NotificationRead.countDocuments({ notification_id: { $in: ids }, ...readerMatch }).exec().then((read) => ids.length - read),
-        ]);
-        return { data: rows, total: ids.length, unread_count };
+        const now = new Date(), skip = (options.page - 1) * options.limit;
+        const result = await this.model.aggregate([
+            ...this.visiblePipeline(viewer, now, options.category), { $sort: { createdAt: -1, _id: -1 } },
+            { $facet: { data: [{ $skip: skip }, { $limit: options.limit }, this.readLookup(viewer), { $project: { category: 1, type: 1, title: 1, body: 1, target: 1, privacy: 1, createdAt: 1, is_read: { $gt: [{ $size: '$_read' }, 0] }, read_at: { $ifNull: [{ $arrayElemAt: ['$_read.read_at', 0] }, null] } } }], count: [{ $count: 'total' }] } },
+        ]).exec();
+        const aggregate = result[0] ?? { data: [], count: [] };
+        const unread_count = await this.unreadCount(viewer, now);
+        return { data: aggregate.data, total: aggregate.count[0]?.total ?? 0, unread_count };
     }
 
-    public async unreadCount(viewer: NotificationViewer): Promise<number> { return (await this.getMobileInbox(viewer, { page: 1, limit: 1 })).unread_count; }
+    public async unreadCount(viewer: NotificationViewer, now = new Date()): Promise<number> {
+        const result = await this.model.aggregate([
+            ...this.visiblePipeline(viewer, now), this.readLookup(viewer), { $match: { '_read.0': { $exists: false } } }, { $count: 'total' },
+        ]).exec();
+        return result[0]?.total ?? 0;
+    }
+
+    private async findVisibleNotification(viewer: NotificationViewer, id: mongoose.Types.ObjectId, now: Date) {
+        const visible = this.visibleMatch(now);
+        if ('installationHash' in viewer) return this.model.findOne({ _id: id, ...visible, audience: INotificationAudienceEnum.PUBLIC }).select('expires_at').lean().exec();
+        return this.model.aggregate([...this.visiblePipeline(viewer, now), { $match: { _id: id } }, { $limit: 1 }, { $project: { expires_at: 1 } }]).exec().then((rows) => rows[0] ?? null);
+    }
 
     public async markRead(viewer: NotificationViewer, notificationId: string): Promise<boolean> {
         if (!mongoose.Types.ObjectId.isValid(notificationId)) return false;
-        const id = new mongoose.Types.ObjectId(notificationId);
-        const visible = (await this.visibleIds(viewer)).some((candidate) => String(candidate) === String(id));
-        if (!visible) return false;
-        const notification = await this.model.findById(id).select('expires_at').lean().exec();
+        const id = new mongoose.Types.ObjectId(notificationId), notification = await this.findVisibleNotification(viewer, id, new Date());
         if (!notification) return false;
         const identity = 'userId' in viewer ? { reader_type: INotificationReaderTypeEnum.USER, user_id: new mongoose.Types.ObjectId(viewer.userId), installation_key_hash: null } : { reader_type: INotificationReaderTypeEnum.INSTALLATION, user_id: null, installation_key_hash: viewer.installationHash };
         await NotificationRead.updateOne({ notification_id: id, reader_type: identity.reader_type, ...(identity.user_id ? { user_id: identity.user_id } : { installation_key_hash: identity.installation_key_hash }) }, { $setOnInsert: { ...identity, notification_id: id, read_at: new Date(), expires_at: notification.expires_at } }, { upsert: true }).exec();
         return true;
     }
 
-    public async markAllRead(viewer: NotificationViewer): Promise<number> {
-        const ids = await this.visibleIds(viewer);
-        if (!ids.length) return 0;
-        const notifications = await this.model.find({ _id: { $in: ids } }).select('_id expires_at').lean().exec();
+    public async markAllRead(viewer: NotificationViewer, cutoff = new Date()): Promise<number> {
         const identity = 'userId' in viewer ? { reader_type: INotificationReaderTypeEnum.USER, user_id: new mongoose.Types.ObjectId(viewer.userId), installation_key_hash: null } : { reader_type: INotificationReaderTypeEnum.INSTALLATION, user_id: null, installation_key_hash: viewer.installationHash };
-        const result = await NotificationRead.bulkWrite(notifications.map((notification: any) => ({ updateOne: { filter: { notification_id: notification._id, reader_type: identity.reader_type, ...(identity.user_id ? { user_id: identity.user_id } : { installation_key_hash: identity.installation_key_hash }) }, update: { $setOnInsert: { ...identity, notification_id: notification._id, read_at: new Date(), expires_at: notification.expires_at } }, upsert: true } })), { ordered: false });
-        return result.upsertedCount;
+        const cursor = this.model.aggregate([
+            ...this.visiblePipeline(viewer, cutoff), { $match: { createdAt: { $lte: cutoff } } }, this.readLookup(viewer), { $match: { '_read.0': { $exists: false } } }, { $project: { _id: 1, expires_at: 1 } },
+        ]).cursor({ batchSize: NOTIFICATION_READ_ALL_BATCH_SIZE });
+        let marked = 0, batch: Array<{ _id: mongoose.Types.ObjectId; expires_at: Date }> = [];
+        const flush = async () => {
+            if (!batch.length) return;
+            const result = await NotificationRead.bulkWrite(batch.map((notification) => ({ updateOne: { filter: { notification_id: notification._id, reader_type: identity.reader_type, ...(identity.user_id ? { user_id: identity.user_id } : { installation_key_hash: identity.installation_key_hash }) }, update: { $setOnInsert: { ...identity, notification_id: notification._id, read_at: cutoff, expires_at: notification.expires_at } }, upsert: true } })), { ordered: false });
+            marked += result.upsertedCount; batch = [];
+        };
+        for await (const notification of cursor as AsyncIterable<{ _id: mongoose.Types.ObjectId; expires_at: Date }>) { batch.push(notification); if (batch.length === NOTIFICATION_READ_ALL_BATCH_SIZE) await flush(); }
+        await flush();
+        return marked;
     }
 
     public async update(

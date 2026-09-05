@@ -29,6 +29,8 @@ schema.pre('validate', function () {
 });
 schema.index({ notification_id: 1, user_id: 1 }, { unique: true, partialFilterExpression: { reader_type: INotificationReaderTypeEnum.USER } });
 schema.index({ notification_id: 1, installation_key_hash: 1 }, { unique: true, partialFilterExpression: { reader_type: INotificationReaderTypeEnum.INSTALLATION } });
+schema.index({ user_id: 1, notification_id: 1 }, { partialFilterExpression: { reader_type: INotificationReaderTypeEnum.USER } });
+schema.index({ installation_key_hash: 1, notification_id: 1 }, { partialFilterExpression: { reader_type: INotificationReaderTypeEnum.INSTALLATION } });
 schema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 
 export const NotificationRead = (models.NotificationRead as mongoose.Model<INotificationRead>) || model<INotificationRead>('NotificationRead', schema);
