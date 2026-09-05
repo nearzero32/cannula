@@ -25,11 +25,12 @@ import Notification from '../../src/models/notifications.model';
 import NotificationRecipient from '../../src/models/notification-recipient.model';
 import NotificationRead, { INotificationReaderTypeEnum } from '../../src/models/notification-read.model';
 import NotificationDelivery from '../../src/models/notification-delivery.model';
-import { hashPassword } from '../../src/constants/hashing';
+import { hashPassword, isArgon2Hash, verifyPassword } from '../../src/constants/hashing';
 import { seedChronicConditions } from '../../src/migrations/seed-chronic-conditions.migration';
 import { normalizeHomeCareName } from '../../src/services/home-care.validation';
 import { IUserRoleEnum, IUserStatusEnum } from '../../src/interfaces/user.interface';
 import { ISpecialtyStatusEnum } from '../../src/interfaces/specialty.interface';
+import { IChronicConditionStatusEnum } from '../../src/interfaces/chronic-condition.interface';
 import { IClinicStatusEnum } from '../../src/interfaces/clinic.interface';
 import { IAdsStatusEnum } from '../../src/interfaces/ads.interface';
 import { IHomeCareStatusEnum } from '../../src/interfaces/home-care.interface';
@@ -53,8 +54,9 @@ import {
     INotificationAudienceEnum, INotificationCategoryEnum, INotificationPrivacyEnum,
     INotificationRecipientModelEnum, INotificationTypeEnum,
 } from '../../src/interfaces/notification.interface';
+import { INotificationDeliveryRecipientTypeEnum, INotificationDeliveryStatusEnum } from '../../src/interfaces/notification-delivery.interface';
 import {
-    credentialDocument, DEMO_PHONE, DEMO_PIN, deterministicObjectId, knownSeedIds,
+    credentialDocument, DEMO_PHONE, DEMO_PIN, deterministicObjectId, knownSeedIds, SeedEntityError,
     relativeDates, RESET_ENTITY_KEYS, type ResetEntity, type SeedImageMode,
 } from './core';
 import {
@@ -64,7 +66,7 @@ import {
     TARGETED_NOTIFICATIONS,
 } from './fixtures';
 
-type Model = { updateOne(filter: unknown, update: unknown, options?: unknown): PromiseLike<unknown>; deleteMany(filter: unknown): PromiseLike<unknown> };
+type Model = { modelName?: string; updateOne(filter: unknown, update: unknown, options?: unknown): PromiseLike<unknown>; deleteMany(filter: unknown): PromiseLike<unknown> };
 type SeedIds = {
     demoPatientUserId: mongoose.Types.ObjectId;
     demoPatientProfileId: mongoose.Types.ObjectId;
@@ -76,9 +78,25 @@ type SeedIds = {
 async function upsert(model: Model, entity: string, key: string, payload: Record<string, unknown>) {
     const _id = deterministicObjectId(entity, key);
     try {
-        await model.updateOne({ _id }, { $set: payload }, { upsert: true, runValidators: true, setDefaultsOnInsert: true });
+        await model.updateOne(
+            { _id },
+            { $set: payload, $setOnInsert: { _id } },
+            { upsert: true, runValidators: true, setDefaultsOnInsert: true }
+        );
     } catch (error) {
-        throw new Error(`Seed failed for ${entity}:${key}`, { cause: error });
+        const phaseByEntity: Record<string, string> = {
+            specialty: 'specialties', clinic: 'clinics', 'doctor-user': 'doctor-users', doctor: 'doctors',
+            availability: 'doctor-availability', ad: 'ads', 'home-care-category': 'home-care-categories',
+            'home-care-service': 'home-care-services', 'nurse-user': 'nurse-users', nurse: 'nurses',
+            'pharmacy-user': 'pharmacy-users', pharmacy: 'pharmacies', 'patient-user': 'patient-user',
+            patient: 'patient', 'health-profile': 'health-profile', child: 'children',
+            'child-health-profile': 'child-health-profiles', favorite: 'favorites', appointment: 'appointments',
+            'home-care-request': 'home-care-requests', 'pharmacy-request': 'pharmacy-requests',
+            suggestion: 'suggestions', 'about-us': 'about-us', notification: 'notifications',
+            'notification-recipient': 'notification-recipients', 'notification-read': 'notification-reads',
+        };
+        const phase = phaseByEntity[entity] ?? entity;
+        throw new SeedEntityError(phase, `${entity}:${key}`, model.modelName ?? entity, error);
     }
     return _id;
 }
@@ -398,6 +416,8 @@ export async function seedMobileDataset(now: Date, imageMode: SeedImageMode): Pr
     }
 
     for (let index = 0; index < SUGGESTIONS.length; index++) {
+        const existing = await Suggestion.exists({ suggestion: SUGGESTIONS[index], is_deleted: false });
+        if (existing) continue;
         await upsert(Suggestion, 'suggestion', `suggestion-${index + 1}`, {
             user_id: demoPatientUserId, suggestion: SUGGESTIONS[index], is_deleted: false, deleted_at: null, deleted_by: null,
         });
@@ -481,5 +501,56 @@ export function seedSummary(ids?: SeedIds) {
         doctorIds: (ids?.doctorIds ?? knownSeedIds('doctors', 'doctor')).map(String),
         specialtyIds: (ids?.specialtyIds ?? knownSeedIds('specialties', 'specialty')).map(String),
         clinicIds: (ids?.clinicIds ?? knownSeedIds('clinics', 'clinic')).map(String),
+    };
+}
+
+export async function auditMobileSeed() {
+    const publicNotificationIds = knownSeedIds('publicNotifications', 'notification');
+    const targetedNotificationIds = knownSeedIds('targetedNotifications', 'notification');
+    const notificationIds = [...publicNotificationIds, ...targetedNotificationIds];
+    const doctorIds = knownSeedIds('doctors', 'doctor');
+    const counts = {
+        Specialties: await Specialty.countDocuments({ _id: { $in: knownSeedIds('specialties', 'specialty') } }),
+        Clinics: await Clinic.countDocuments({ _id: { $in: knownSeedIds('clinics', 'clinic') } }),
+        Doctors: await Doctor.countDocuments({ _id: { $in: doctorIds } }),
+        DoctorAvailabilities: await DoctorAvailability.countDocuments({ _id: { $in: knownSeedIds('availabilities', 'availability') } }),
+        Ads: await Ads.countDocuments({ _id: { $in: knownSeedIds('ads', 'ad') } }),
+        ChronicConditions: await ChronicCondition.countDocuments({ status: IChronicConditionStatusEnum.ACTIVE }),
+        HomeCareCategories: await HomeCareCategory.countDocuments({ seed_key: { $in: HOME_CARE_CATEGORIES.map(item => item[2]) } }),
+        HomeCareServices: await HomeCareService.countDocuments({ _id: { $in: knownSeedIds('homeCareServices', 'home-care-service') } }),
+        Nurses: await Nurse.countDocuments({ _id: { $in: knownSeedIds('nurses', 'nurse') } }),
+        Pharmacies: await Pharmacy.countDocuments({ _id: { $in: knownSeedIds('pharmacies', 'pharmacy') } }),
+        Patients: await Patient.countDocuments({ _id: deterministicObjectId('patient', 'mobile-demo') }),
+        Children: await PatientChild.countDocuments({ _id: { $in: knownSeedIds('children', 'child') } }),
+        Favorites: await DoctorFavorite.countDocuments({ _id: { $in: knownSeedIds('favorites', 'favorite') } }),
+        Appointments: await Appointment.countDocuments({ _id: { $in: knownSeedIds('appointments', 'appointment') } }),
+        HomeCareRequests: await HomeCareRequest.countDocuments({ _id: { $in: knownSeedIds('homeCareRequests', 'home-care-request') } }),
+        PharmacyRequests: await PharmacyTreatmentRequest.countDocuments({ _id: { $in: knownSeedIds('pharmacyRequests', 'pharmacy-request') } }),
+        PublicNotifications: await Notification.countDocuments({ _id: { $in: publicNotificationIds }, audience: INotificationAudienceEnum.PUBLIC }),
+        TargetedNotifications: await Notification.countDocuments({ _id: { $in: targetedNotificationIds }, audience: INotificationAudienceEnum.TARGETED }),
+        NotificationReads: await NotificationRead.countDocuments({ _id: { $in: knownSeedIds('notificationReads', 'notification-read') } }),
+        SharedSuggestions: await Suggestion.countDocuments({ suggestion: { $in: SUGGESTIONS }, is_deleted: false }),
+    };
+    const eligibleDoctors = await Doctor.countDocuments({
+        _id: { $in: doctorIds }, ...DOCTOR_PUBLIC_VISIBILITY,
+    });
+    const doctorImages = await Doctor.countDocuments({ _id: { $in: doctorIds }, profile_photo: /^https:\/\// });
+    const adImages = await Ads.countDocuments({ _id: { $in: knownSeedIds('ads', 'ad') }, image: /^https:\/\// });
+    const pendingPublicPush = await NotificationDelivery.countDocuments({
+        notification_id: { $in: notificationIds }, recipient_type: INotificationDeliveryRecipientTypeEnum.PUBLIC_BROADCAST,
+        status: INotificationDeliveryStatusEnum.PENDING,
+    });
+    const pendingUserPush = await NotificationDelivery.countDocuments({
+        notification_id: { $in: notificationIds }, recipient_type: INotificationDeliveryRecipientTypeEnum.USER,
+        status: INotificationDeliveryStatusEnum.PENDING,
+    });
+    const user = await User.findById(deterministicObjectId('patient-user', 'mobile-demo')).select('+password_hash phone role status').lean().exec();
+    return {
+        counts, eligibleDoctors, doctorImages, adImages, pendingPublicPush, pendingUserPush,
+        unreadTargeted: counts.TargetedNotifications - counts.NotificationReads,
+        demoPatient: {
+            exists: Boolean(user), phone: user?.phone ?? null, argon2Only: isArgon2Hash(user?.password_hash),
+            pinValid: user?.password_hash ? await verifyPassword(DEMO_PIN, user.password_hash) : false,
+        },
     };
 }

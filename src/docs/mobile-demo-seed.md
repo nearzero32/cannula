@@ -4,11 +4,32 @@
 
 ## Commands
 
-Configure `MONGODB_URI` (or the seed-specific `MOBILE_SEED_MONGODB_URI`) and run:
+Configure `SEED_MONGODB_URI` or `MONGODB_URI` and run:
 
 ```bash
 bun run seed:mobile
 ```
+
+For local execution, the seed-only URI takes precedence without changing the application's normal connection setting:
+
+```text
+SEED_MONGODB_URI -> MONGODB_URI
+```
+
+When Bun runs on the Windows host while MongoDB runs in Docker, `mongo` is only a Docker-network hostname. Point the seeder at the published host port instead. PowerShell example:
+
+```powershell
+$env:SEED_MONGODB_URI = "mongodb://<user>:<password>@127.0.0.1:27017/cannula?authSource=cannula&replicaSet=rs0&directConnection=true"
+bun run seed:mobile
+```
+
+Bash-compatible example:
+
+```bash
+SEED_MONGODB_URI="mongodb://<user>:<password>@127.0.0.1:27017/cannula?authSource=cannula&replicaSet=rs0&directConnection=true" bun run seed:mobile
+```
+
+The seeder does not rewrite or mutate `MONGODB_URI`.
 
 Safely remove only known seed records and recreate them:
 

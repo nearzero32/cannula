@@ -28,6 +28,74 @@ export interface SeedConnectionPlan {
     productionLike: boolean;
 }
 
+type MongoLikeError = Error & {
+    code?: number | string;
+    keyPattern?: Record<string, unknown>;
+    keyValue?: Record<string, unknown>;
+    errors?: Record<string, { message?: string }>;
+};
+
+const SECRET_KEY = /password|password_hash|pin|secret|token|uri/i;
+function safeRecord(value: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+    if (!value) return undefined;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, SECRET_KEY.test(key) ? '[REDACTED]' : item]));
+}
+function redactMongoCredentials(value: string): string {
+    return value.replace(/(mongodb(?:\+srv)?:\/\/)[^\s/@:]+:[^\s/@]+@/gi, '$1[REDACTED]@');
+}
+
+export class SeedEntityError extends Error {
+    readonly phase: string;
+    readonly seedKey: string;
+    readonly entity: string;
+    readonly originalName: string;
+    readonly mongoCode?: number | string;
+    readonly keyPattern?: Record<string, unknown>;
+    readonly keyValue?: Record<string, unknown>;
+    readonly validationErrors?: Record<string, string>;
+
+    constructor(phase: string, seedKey: string, entity: string, cause: unknown) {
+        const original = cause instanceof Error ? cause as MongoLikeError : new Error(String(cause)) as MongoLikeError;
+        super(`Seed failed for ${seedKey}: ${original.message}`, { cause: original });
+        this.name = 'SeedEntityError';
+        this.phase = phase;
+        this.seedKey = seedKey;
+        this.entity = entity;
+        this.originalName = original.name || 'Error';
+        this.mongoCode = original.code;
+        this.keyPattern = safeRecord(original.keyPattern);
+        this.keyValue = safeRecord(original.keyValue);
+        if (original.errors) {
+            this.validationErrors = Object.fromEntries(Object.entries(original.errors).map(([path, detail]) => [path, detail.message ?? 'Validation failed']));
+        }
+    }
+}
+
+export function formatSeedError(error: unknown, includeStack: boolean): string {
+    if (!(error instanceof SeedEntityError)) {
+        const message = error instanceof Error ? error.message : String(error);
+        const stack = includeStack && error instanceof Error ? `\n${error.stack ?? ''}` : '';
+        return redactMongoCredentials(`${message}${stack}`);
+    }
+    const cause = error.cause as MongoLikeError | undefined;
+    const lines = [
+        'Seed failed:',
+        `  phase: ${error.phase}`,
+        `  key: ${error.seedKey}`,
+        `  entity: ${error.entity}`,
+        `  error: ${error.originalName}`,
+        `  details: ${cause?.message ?? error.message}`,
+    ];
+    if (error.mongoCode !== undefined) lines.push(`  mongoCode: ${error.mongoCode}`);
+    if (error.keyPattern) lines.push(`  keyPattern: ${JSON.stringify(error.keyPattern)}`);
+    if (error.keyValue) lines.push(`  keyValue: ${JSON.stringify(error.keyValue)}`);
+    if (error.validationErrors) {
+        for (const [path, message] of Object.entries(error.validationErrors)) lines.push(`  validation.${path}: ${message}`);
+    }
+    if (includeStack && cause?.stack) lines.push(`  stack:\n${cause.stack}`);
+    return redactMongoCredentials(lines.join('\n'));
+}
+
 export function deterministicObjectId(entity: string, key: string): mongoose.Types.ObjectId {
     const hex = crypto.createHash('sha256').update(`${MOBILE_SEED_NAMESPACE}:${entity}:${key}`).digest('hex').slice(0, 24);
     return new mongoose.Types.ObjectId(hex);
@@ -72,15 +140,20 @@ export function resolveConnectionPlan(options: SeedOptions, env: Record<string, 
     if (options.target === 'remote' && !options.allowRemote) {
         throw new Error('Remote seed refused: pass --allow-remote explicitly.');
     }
-    const uri = options.target === 'remote'
+    const rawUri = options.target === 'remote'
         ? env.SEED_MONGODB_URI
-        : env.MOBILE_SEED_MONGODB_URI ?? env.MONGODB_URI;
-    if (!uri) throw new Error(options.target === 'remote'
+        : env.SEED_MONGODB_URI ?? env.MONGODB_URI;
+    if (!rawUri) throw new Error(options.target === 'remote'
         ? 'SEED_MONGODB_URI is required for --target=remote.'
-        : 'MOBILE_SEED_MONGODB_URI or MONGODB_URI is required for local seeding.');
+        : 'SEED_MONGODB_URI or MONGODB_URI is required for local seeding.');
     let parsed: URL;
-    try { parsed = new URL(uri); } catch { throw new Error('MongoDB URI is invalid.'); }
+    try { parsed = new URL(rawUri); } catch { throw new Error('MongoDB URI is invalid.'); }
     if (parsed.protocol !== 'mongodb:' && parsed.protocol !== 'mongodb+srv:') throw new Error('MongoDB URI must use mongodb:// or mongodb+srv://.');
+    if (!parsed.username && env.MONGODB_USER && env.MONGODB_PASSWORD) {
+        parsed.username = env.MONGODB_USER;
+        parsed.password = env.MONGODB_PASSWORD;
+    }
+    const uri = parsed.toString();
     const host = parsed.host;
     const database = databaseFromUri(parsed);
     const productionLike = env.NODE_ENV === 'production' || /(^|[-_.])(prod|production|live)([-_.]|$)/i.test(`${host} ${database}`);
@@ -88,6 +161,15 @@ export function resolveConnectionPlan(options: SeedOptions, env: Record<string, 
         throw new Error(`Production-like target refused. Require --allow-production-seed --confirm=${PRODUCTION_CONFIRMATION}.`);
     }
     return { uri, host, database, target: options.target, productionLike };
+}
+
+export function mongoConnectionErrorMessage(error: unknown, host: string, runningInDocker: boolean): string {
+    const message = error instanceof Error ? error.message : String(error);
+    const hostname = host.replace(/^\[/, '').replace(/\](:\d+)?$/, '').split(':')[0]?.toLowerCase();
+    if (hostname === 'mongo' && !runningInDocker) {
+        return `${message}\nThe hostname "mongo" is available only inside the Docker network. From the Windows host, set SEED_MONGODB_URI to the published MongoDB address (usually 127.0.0.1:27017) and rerun the seed.`;
+    }
+    return message;
 }
 
 export interface RelativeDateFactory {

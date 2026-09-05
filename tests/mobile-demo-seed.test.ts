@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 import mongoose from 'mongoose';
 import {
-    credentialDocument, deterministicObjectId, knownSeedIds, parseSeedArgs, relativeDates,
+    credentialDocument, deterministicObjectId, formatSeedError, knownSeedIds, mongoConnectionErrorMessage, parseSeedArgs, relativeDates,
     RESET_ENTITY_KEYS, resolveConnectionPlan, validAvailabilityPeriods,
+    SeedEntityError,
 } from '../scripts/mobile-seed/core';
 import {
     AVAILABILITY_PATTERNS, DOCTOR_NAMES, DOCTOR_PUBLIC_VISIBILITY,
@@ -28,6 +29,63 @@ describe('mobile demo seed pure contracts', () => {
         const remote = parseSeedArgs(['--target=remote']);
         expect(() => resolveConnectionPlan(remote, { SEED_MONGODB_URI: 'mongodb://staging.example/cannula_stage' })).toThrow('--allow-remote');
         expect(resolveConnectionPlan({ ...remote, allowRemote: true }, { SEED_MONGODB_URI: 'mongodb://staging.example/cannula_stage' }).database).toBe('cannula_stage');
+    });
+
+    test('local target prefers SEED_MONGODB_URI without changing application configuration', () => {
+        const plan = resolveConnectionPlan(parseSeedArgs([]), {
+            SEED_MONGODB_URI: 'mongodb://127.0.0.1:27017/cannula_seed',
+            MONGODB_URI: 'mongodb://mongo:27017/cannula',
+        });
+        expect(plan.host).toBe('127.0.0.1:27017');
+        expect(plan.database).toBe('cannula_seed');
+    });
+
+    test('seed direct connection composes the existing Mongo credential variables', () => {
+        const plan = resolveConnectionPlan(parseSeedArgs([]), {
+            MONGODB_URI: 'mongodb://mongo:27017/cannula?authSource=cannula',
+            MONGODB_USER: 'seed-user', MONGODB_PASSWORD: 'p@ssword',
+        });
+        const parsed = new URL(plan.uri);
+        expect(parsed.username).toBe('seed-user');
+        expect(parsed.password).toBe('p%40ssword');
+        expect(parsed.host).toBe('mongo:27017');
+    });
+
+    test('Docker-network hostname failures provide a host-execution hint', () => {
+        const message = mongoConnectionErrorMessage(new Error('getaddrinfo ENOTFOUND mongo'), 'mongo:27017', false);
+        expect(message).toContain('Docker network');
+        expect(message).toContain('SEED_MONGODB_URI');
+        expect(message).toContain('127.0.0.1:27017');
+        expect(mongoConnectionErrorMessage(new Error('failed'), 'mongo:27017', true)).toBe('failed');
+    });
+
+    test('entity failures retain Mongo diagnostics while redacting credentials', () => {
+        const cause = Object.assign(new Error('duplicate mongodb://demo:secret@mongo/cannula'), {
+            name: 'MongoServerError', code: 11000,
+            keyPattern: { name: 1 }, keyValue: { name: 'طب عام', password_hash: 'secret' },
+        });
+        const error = new SeedEntityError('specialties', 'specialty:specialty-1', 'Specialty', cause);
+        const output = formatSeedError(error, false);
+        expect(error.cause).toBe(cause);
+        expect(output).toContain('phase: specialties');
+        expect(output).toContain('mongoCode: 11000');
+        expect(output).toContain('"name":"طب عام"');
+        expect(output).not.toContain('demo:secret');
+        expect(output).not.toContain('password_hash":"secret');
+    });
+
+    test('validation failures expose individual schema paths', () => {
+        const cause = Object.assign(new Error('Specialty validation failed'), {
+            name: 'ValidationError', errors: { status: { message: '`ACTIVE` is not a valid enum value' } },
+        });
+        const output = formatSeedError(new SeedEntityError('specialties', 'specialty:specialty-1', 'Specialty', cause), false);
+        expect(output).toContain('validation.status: `ACTIVE` is not a valid enum value');
+    });
+
+    test('generic upsert keeps deterministic _id out of mutable $set', async () => {
+        const source = await Bun.file(new URL('../scripts/mobile-seed/runner.ts', import.meta.url)).text();
+        expect(source).toContain('$setOnInsert: { _id }');
+        expect(source).not.toMatch(/\$set:\s*\{\s*_id/);
     });
 
     test('production-like targets require the dangerous flag and exact confirmation', () => {
