@@ -10,6 +10,8 @@ export const INotificationTypeEnum = {
     APPOINTMENT_NO_SHOW: 'appointment_no_show',
     APPOINTMENT_RESCHEDULED: 'appointment_rescheduled',
     GENERAL: 'general',
+    HOME_CARE_ASSIGNED: 'home_care_assigned', HOME_CARE_ON_THE_WAY: 'home_care_on_the_way', HOME_CARE_ARRIVED: 'home_care_arrived', HOME_CARE_IN_PROGRESS: 'home_care_in_progress', HOME_CARE_COMPLETED: 'home_care_completed', HOME_CARE_CANCELLED: 'home_care_cancelled', HOME_CARE_REJECTED: 'home_care_rejected',
+    PHARMACY_UNDER_REVIEW: 'pharmacy_under_review', PHARMACY_QUOTATION_READY: 'pharmacy_quotation_ready', PHARMACY_CONFIRMED: 'pharmacy_confirmed', PHARMACY_PREPARING: 'pharmacy_preparing', PHARMACY_READY_FOR_DELIVERY: 'pharmacy_ready_for_delivery', PHARMACY_OUT_FOR_DELIVERY: 'pharmacy_out_for_delivery', PHARMACY_DELIVERED: 'pharmacy_delivered', PHARMACY_CANCELLED: 'pharmacy_cancelled', PHARMACY_REJECTED: 'pharmacy_rejected',
 } as const;
 
 export type INotificationType =
@@ -53,8 +55,8 @@ export interface INotification extends IBaseDocument {
     audience?: INotificationAudience;
     category?: INotificationCategory;
     privacy?: INotificationPrivacy;
-    source?: { domain: 'appointment'; id: mongoose.Types.ObjectId } | null;
-    target?: { type: 'appointment'; id: mongoose.Types.ObjectId } | null;
+    source?: { domain: 'appointment'|'home_care_request'|'pharmacy_treatment_request'; id: mongoose.Types.ObjectId } | null;
+    target?: { type: 'appointment'|'home_care_request'|'pharmacy_treatment_request'; id: mongoose.Types.ObjectId } | null;
     visible_at?: Date;
     expires_at?: Date;
     /** @deprecated Legacy delivery/admin fields. Mobile inbox uses recipients and read receipts. */
