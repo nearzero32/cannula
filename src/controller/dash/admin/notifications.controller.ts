@@ -12,6 +12,7 @@ import {
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, ProtectedApiErrorResponses, UnprocessableEntityResponseSchema, ValidationErrorResponseSchema } from '../../../schemas/api-response.schema';
 import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
 import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
+import notificationAnalyticsService from '../../../services/notification-analytics.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -21,6 +22,7 @@ export const notificationsController = new Elysia({
 })
     .use(AuthPlugin())
     .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SETTINGS))
+    .get('/:id/analytics',async({params,set})=>{try{return{error:false,message:'تم جلب تحليلات الإشعار بنجاح',data:await notificationAnalyticsService.getSummary(params.id)}}catch(error){if(error instanceof Error&&'status' in error){set.status=(error as any).status;return{error:true,message:error.message}}throw error}},{params:t.Object({id:t.String()}),detail:{summary:'Notification analytics',description:'TARGETED uses NotificationRecipient as denominator. PUBLIC has no known denominator: targeted_count, unread_count, and read_rate are null; only observed unique reads are counted.'},response:{200:GenericDataResponseSchema,400:BadRequestResponseSchema,404:NotFoundResponseSchema,...ProtectedApiErrorResponses}})
 
     // List all notifications with filters
     .get(
