@@ -39,7 +39,11 @@ describeWithMongo('Appointment concurrency against MongoDB replica set', () => {
             };
         },
     };
-    const service = new AppointmentWorkflowService(undefined, fakeSlots as any);
+    const service = new AppointmentWorkflowService(undefined, fakeSlots as any, {
+        append: async () => undefined,
+        scheduleForConfirmedAppointment: async () => undefined,
+        cancelFutureForAppointment: async () => undefined,
+    });
     const actor = { type: AppointmentActorTypeEnum.ADMIN };
     const booking = (localTime: string) => ({
         patientId: String(patientId), doctorId: String(doctorId), clinicId: String(clinicId), date,

@@ -37,6 +37,18 @@ export interface AppointmentBookingInput {
 }
 export interface AppointmentRescheduleInput { doctorId?: string; clinicId?: string; specialtyId?: string | null; date: string; startsAt: string; reason?: string | null }
 
+export interface AppointmentWorkflowNotifier {
+    append: typeof appendAppointmentNotification;
+    scheduleForConfirmedAppointment: typeof appointmentReminderService.scheduleForConfirmedAppointment;
+    cancelFutureForAppointment: typeof appointmentReminderService.cancelFutureForAppointment;
+}
+
+const appointmentWorkflowNotifier: AppointmentWorkflowNotifier = {
+    append: (...args) => appendAppointmentNotification(...args),
+    scheduleForConfirmedAppointment: (...args) => appointmentReminderService.scheduleForConfirmedAppointment(...args),
+    cancelFutureForAppointment: (...args) => appointmentReminderService.cancelFutureForAppointment(...args),
+};
+
 export const APPOINTMENT_TRANSITIONS = {
     confirm: { from: [IAppointmentStatusEnum.PENDING], to: IAppointmentStatusEnum.CONFIRMED, event: AppointmentHistoryEventEnum.CONFIRMED, timestamp: 'confirmed_at' },
     checkIn: { from: [IAppointmentStatusEnum.CONFIRMED], to: IAppointmentStatusEnum.CHECKED_IN, event: AppointmentHistoryEventEnum.CHECKED_IN, timestamp: 'checked_in_at' },
@@ -55,7 +67,11 @@ export function initialAppointmentStatus(autoConfirm: boolean, explicit?: typeof
 }
 
 export class AppointmentWorkflowService {
-    constructor(private transactions: AppointmentTransactionRunner = transactionRunner, private slots: AppointmentSlotService = appointmentSlotService) {}
+    constructor(
+        private transactions: AppointmentTransactionRunner = transactionRunner,
+        private slots: AppointmentSlotService = appointmentSlotService,
+        private notifications: AppointmentWorkflowNotifier = appointmentWorkflowNotifier,
+    ) {}
 
     async create(input: AppointmentBookingInput, actor: AppointmentActor, now = new Date()) {
         let result: AppointmentDocument;
@@ -106,7 +122,7 @@ export class AppointmentWorkflowService {
             rescheduled_from: rescheduledFrom ? oid(rescheduledFrom) : null, confirmed_at: status === IAppointmentStatusEnum.CONFIRMED ? now : null, workflow_version: 0,
         };
         const appointment = session ? (await Appointment.create([payload], { session }))[0] : await Appointment.create(payload);
-        await this.history(appointment, AppointmentHistoryEventEnum.CREATED, actor, null, status, input.reason, rescheduledFrom ? { rescheduledFrom } : null, session); await appendAppointmentNotification(appointment,rescheduledFrom?'RESCHEDULED':'CREATED',actor.type,session); if(status===IAppointmentStatusEnum.CONFIRMED)await appointmentReminderService.scheduleForConfirmedAppointment(appointment,session,now);
+        await this.history(appointment, AppointmentHistoryEventEnum.CREATED, actor, null, status, input.reason, rescheduledFrom ? { rescheduledFrom } : null, session); await this.notifications.append(appointment,rescheduledFrom?'RESCHEDULED':'CREATED',actor.type,session); if(status===IAppointmentStatusEnum.CONFIRMED)await this.notifications.scheduleForConfirmedAppointment(appointment,session,now);
         return appointment;
     }
     private async owned(id: string, actor: AppointmentActor, session: ClientSession | null) {
@@ -124,7 +140,7 @@ export class AppointmentWorkflowService {
             const set: Record<string, unknown> = { status: policy.to }; if (policy.timestamp) set[policy.timestamp] = now;
             const updated = await inSession(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, workflow_version: current.workflow_version }, { $set: set, $inc: { workflow_version: 1 } }, { returnDocument: 'after', runValidators: true }), session).exec();
             if (!updated) throw new DomainError('تم تعديل الموعد بالتزامن', 409, 'APPOINTMENT_INVALID_TRANSITION');
-            await this.history(updated, policy.event, actor, current.status, policy.to, reason, null, session); if(action==='confirm'||action==='complete'||action==='noShow')await appendAppointmentNotification(updated,action==='confirm'?'CONFIRMED':action==='complete'?'COMPLETED':'NO_SHOW',actor.type,session); if(action==='confirm')await appointmentReminderService.scheduleForConfirmedAppointment(updated,session,now); if(action==='complete'||action==='noShow')await appointmentReminderService.cancelFutureForAppointment(updated._id,session); return updated;
+            await this.history(updated, policy.event, actor, current.status, policy.to, reason, null, session); if(action==='confirm'||action==='complete'||action==='noShow')await this.notifications.append(updated,action==='confirm'?'CONFIRMED':action==='complete'?'COMPLETED':'NO_SHOW',actor.type,session); if(action==='confirm')await this.notifications.scheduleForConfirmedAppointment(updated,session,now); if(action==='complete'||action==='noShow')await this.notifications.cancelFutureForAppointment(updated._id,session); return updated;
         });
         await this.afterMutation(result, APPOINTMENT_TRANSITIONS[action].event, actor, { reason }); return result;
     }
@@ -144,7 +160,7 @@ export class AppointmentWorkflowService {
             const cancellation = { reason: clean(reason), actor_type: actor.type, actor_user_id: actor.userId ? oid(actor.userId) : null, at: now };
             const updated = await inSession(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, workflow_version: current.workflow_version }, { $set: { status: IAppointmentStatusEnum.CANCELLED, cancellation }, $inc: { workflow_version: 1 } }, { returnDocument: 'after' }), session).exec();
             if (!updated) throw new DomainError('تم تعديل الموعد بالتزامن', 409, 'APPOINTMENT_INVALID_TRANSITION');
-            await this.history(updated, AppointmentHistoryEventEnum.CANCELLED, actor, current.status, IAppointmentStatusEnum.CANCELLED, reason, null, session); await appendAppointmentNotification(updated,'CANCELLED',actor.type,session); await appointmentReminderService.cancelFutureForAppointment(updated._id,session); return updated;
+            await this.history(updated, AppointmentHistoryEventEnum.CANCELLED, actor, current.status, IAppointmentStatusEnum.CANCELLED, reason, null, session); await this.notifications.append(updated,'CANCELLED',actor.type,session); await this.notifications.cancelFutureForAppointment(updated._id,session); return updated;
         });
         await this.afterMutation(result, AppointmentHistoryEventEnum.CANCELLED, actor, { reason }); return result;
     }
@@ -174,7 +190,7 @@ export class AppointmentWorkflowService {
             if (!updated) throw new DomainError('تم تعديل الموعد بالتزامن', 409, 'APPOINTMENT_INVALID_TRANSITION');
             await this.history(updated, AppointmentHistoryEventEnum.RESCHEDULED_FROM, actor, current.status, IAppointmentStatusEnum.RESCHEDULED, input.reason, { rescheduledTo: String(replacement._id) }, session);
             await this.history(replacement, AppointmentHistoryEventEnum.RESCHEDULED_TO, actor, null, replacement.status, input.reason, { rescheduledFrom: String(current._id) }, session);
-            await appointmentReminderService.cancelFutureForAppointment(updated._id, session);
+            await this.notifications.cancelFutureForAppointment(updated._id, session);
                 return { previous: updated, appointment: replacement };
             });
         } catch (error) {

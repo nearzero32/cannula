@@ -22,6 +22,7 @@ const nurseBId = new mongoose.Types.ObjectId('507f191e810c19729de86104');
 const userA = '507f191e810c19729de86105';
 const userB = '507f191e810c19729de86106';
 const adminId = '507f191e810c19729de86107';
+const noNotifications = { homeCare: async () => null };
 
 function query<T>(result: T) {
     const chain: any = { exec: async () => result };
@@ -44,7 +45,7 @@ function quietWrites() { spyOn(historyService, 'append').mockResolvedValue(); sp
 
 describe('Home Care open-pool atomic claim', () => {
     test('available pool is restricted to active Nurse qualifications and claimable OPEN states', async () => {
-        const service = new HomeCareDispatchService(); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
+        const service = new HomeCareDispatchService(noNotifications); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
         const find = spyOn(HomeCareRequest, 'find').mockReturnValue(query([]) as never);
         spyOn(HomeCareRequest, 'countDocuments').mockReturnValue(query(0) as never);
         await service.listAvailable(userA, { page: 1, limit: 10 });
@@ -55,7 +56,7 @@ describe('Home Care open-pool atomic claim', () => {
     });
 
     test('my requests and detail are always scoped to the authenticated Nurse id', async () => {
-        const service = new HomeCareDispatchService(); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
+        const service = new HomeCareDispatchService(noNotifications); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
         const find = spyOn(HomeCareRequest, 'find').mockReturnValue(query([]) as never); spyOn(HomeCareRequest, 'countDocuments').mockReturnValue(query(0) as never);
         await service.listMine(userA, { page: 1, limit: 10 });
         expect(((find.mock.calls as any)[0][0] as any)['dispatch.nurse_id']).toEqual(nurseAId);
@@ -66,7 +67,7 @@ describe('Home Care open-pool atomic claim', () => {
 
     for (const initial of [IHomeCareRequestStatusEnum.PENDING, IHomeCareRequestStatusEnum.CONFIRMED]) {
         test(`eligible Nurse atomically claims ${initial} and records the winner`, async () => {
-            const service = new HomeCareDispatchService(), snapshot = request(initial), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
+            const service = new HomeCareDispatchService(noNotifications), snapshot = request(initial), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
             spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse()); quietWrites();
             let reads = 0; spyOn(HomeCareRequest, 'findById').mockImplementation(() => query(reads++ === 0 ? snapshot : updated) as never);
             const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(updated) as never);
@@ -84,7 +85,7 @@ describe('Home Care open-pool atomic claim', () => {
     }
 
     test('two simultaneous Nurse claims produce exactly one winner and one conflict', async () => {
-        const service = new HomeCareDispatchService(), snapshot = request(), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
+        const service = new HomeCareDispatchService(noNotifications), snapshot = request(), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
         spyOn(nurseService, 'requireActiveByUserId').mockImplementation(async id => id === userA ? nurse() : nurse(nurseBId, userB));
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(snapshot) as never); quietWrites();
         let open = true;
@@ -100,7 +101,7 @@ describe('Home Care open-pool atomic claim', () => {
     });
 
     test('Nurse claim and Admin direct assignment compete for one OPEN winner', async () => {
-        const service = new HomeCareDispatchService(), snapshot = request(), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
+        const service = new HomeCareDispatchService(noNotifications), snapshot = request(), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
         spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
         spyOn(nurseService, 'requireActiveQualified').mockResolvedValue(nurse(nurseBId, userB));
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(snapshot) as never); quietWrites();
@@ -116,7 +117,7 @@ describe('Home Care open-pool atomic claim', () => {
     });
 
     test('unqualified Nurse is rejected before the atomic write', async () => {
-        const service = new HomeCareDispatchService();
+        const service = new HomeCareDispatchService(noNotifications);
         spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse(nurseAId, userA, []));
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(request()) as never);
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate');
@@ -127,7 +128,7 @@ describe('Home Care open-pool atomic claim', () => {
 
 describe('Home Care lifecycle and Admin CAS operations', () => {
     test('allows only each owned Nurse lifecycle step and closes completion', async () => {
-        const service = new HomeCareDispatchService();
+        const service = new HomeCareDispatchService(noNotifications);
         const transitions = [
             ['assigned', 'on_the_way'], ['on_the_way', 'arrived'], ['arrived', 'in_progress'], ['in_progress', 'completed'],
         ] as const;
@@ -149,14 +150,14 @@ describe('Home Care lifecycle and Admin CAS operations', () => {
     });
 
     test('stale lifecycle update loses after Admin changes current state', async () => {
-        const service = new HomeCareDispatchService(), fakeSession: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} }; mock.restore(); spyOn(mongoose, 'startSession').mockResolvedValue(fakeSession); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
+        const service = new HomeCareDispatchService(noNotifications), fakeSession: any = { withTransaction: async (callback: any) => await callback(), endSession: async () => {} }; mock.restore(); spyOn(mongoose, 'startSession').mockResolvedValue(fakeSession); spyOn(nurseService, 'requireActiveByUserId').mockResolvedValue(nurse());
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 2)) as never);
         spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(null) as never);
         await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ON_THE_WAY, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
     });
 
     test('rejects skipped, replayed, completed, and wrong-Nurse operational actions', async () => {
-        const service = new HomeCareDispatchService();
+        const service = new HomeCareDispatchService(noNotifications);
         await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.ASSIGNED, IHomeCareRequestStatusEnum.ARRIVED, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
         await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.ON_THE_WAY, IHomeCareRequestStatusEnum.COMPLETED, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
         await expect(service.transition(userA, String(requestId), IHomeCareRequestStatusEnum.COMPLETED, IHomeCareRequestStatusEnum.ON_THE_WAY, actor(userA, 'nurse', String(nurseAId)))).rejects.toMatchObject({ status: 409 });
@@ -165,7 +166,7 @@ describe('Home Care lifecycle and Admin CAS operations', () => {
     });
 
     test('Admin direct assignment competes on the same OPEN state', async () => {
-        const service = new HomeCareDispatchService(), snapshot = request(), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
+        const service = new HomeCareDispatchService(noNotifications), snapshot = request(), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseAId, 1);
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(snapshot) as never); spyOn(nurseService, 'requireActiveQualified').mockResolvedValue(nurse()); quietWrites();
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(updated) as never);
         await service.assign(String(requestId), String(nurseAId), actor(adminId, 'admin'));
@@ -175,7 +176,7 @@ describe('Home Care lifecycle and Admin CAS operations', () => {
     });
 
     test('Admin reassign resets to ASSIGNED and requires reason after dispatch begins', async () => {
-        const service = new HomeCareDispatchService(), current = request(IHomeCareRequestStatusEnum.IN_PROGRESS, nurseAId, 4), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseBId, 5);
+        const service = new HomeCareDispatchService(noNotifications), current = request(IHomeCareRequestStatusEnum.IN_PROGRESS, nurseAId, 4), updated = request(IHomeCareRequestStatusEnum.ASSIGNED, nurseBId, 5);
         spyOn(HomeCareRequest, 'findById').mockReturnValue(query(current) as never); spyOn(nurseService, 'requireActiveQualified').mockResolvedValue(nurse(nurseBId, userB));
         await expect(service.reassign(String(requestId), String(nurseBId), null, actor(adminId, 'admin'))).rejects.toThrow('مطلوب');
         quietWrites(); const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(updated) as never);
@@ -185,7 +186,7 @@ describe('Home Care lifecycle and Admin CAS operations', () => {
     });
 
     test('Admin unassign returns work to CONFIRMED OPEN pool and reopen rejects COMPLETED', async () => {
-        const service = new HomeCareDispatchService(), current = request(IHomeCareRequestStatusEnum.ON_THE_WAY, nurseAId, 2), opened = request(IHomeCareRequestStatusEnum.CONFIRMED, null, 3);
+        const service = new HomeCareDispatchService(noNotifications), current = request(IHomeCareRequestStatusEnum.ON_THE_WAY, nurseAId, 2), opened = request(IHomeCareRequestStatusEnum.CONFIRMED, null, 3);
         let reads = 0; spyOn(HomeCareRequest, 'findById').mockImplementation(() => query(reads++ === 0 ? current : opened) as never); quietWrites();
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate').mockReturnValue(query(opened) as never);
         await service.unassign(String(requestId), 'إعادة إلى الحوض', actor(adminId, 'admin'));

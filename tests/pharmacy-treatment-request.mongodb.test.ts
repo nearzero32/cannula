@@ -14,7 +14,8 @@ import { backfillPharmacyWorkflow } from '../src/migrations/backfill-pharmacy-wo
 const mongoUri=process.env.MONGODB_TEST_URI,describeWithMongo=mongoUri?describe:describe.skip;
 describeWithMongo('Pharmacy workflow transactions against MongoDB replica set',()=>{
     const databaseName=`cannula_pharmacy_workflow_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    const service=new PharmacyTreatmentRequestService();
+    const noNotifications={pharmacy:async()=>null};
+    const service=new PharmacyTreatmentRequestService(undefined,undefined,noNotifications);
     const patientId=new mongoose.Types.ObjectId(),patientUserId=new mongoose.Types.ObjectId(),adminId=new mongoose.Types.ObjectId();
     let pharmacies:{profile:any;user:any}[]=[];
     const actor=(user:string,type:'PATIENT'|'PHARMACY'|'ADMIN')=>({user_id:user,type,endpoint:'/integration-test'} as const);
@@ -74,5 +75,5 @@ describeWithMongo('Pharmacy workflow transactions against MongoDB replica set',(
         expect(await backfillPharmacyWorkflow()).toEqual({versions:0,acceptedSnapshots:0});
         expect(snapshot(await TreatmentRequest.collection.find({_id:{$in:ids}}).sort({request_number:1}).toArray())).toEqual(snapshot(after));
     });
-    test('history insertion failure rolls back the request mutation',async()=>{const item=await request(),a=pharmacies[0];const failingHistory={create:async()=>{throw new Error('injected history failure')}};const rollbackService=new PharmacyTreatmentRequestService(new MongoosePharmacyTransactionRunner(),failingHistory);let failure:unknown;try{await rollbackService.claim(String(a.user._id),String(item._id),actor(String(a.user._id),'PHARMACY'));}catch(error){failure=error;}expect(failure).toBeInstanceOf(Error);expect((failure as Error).message).toContain('injected history failure');const final=await TreatmentRequest.findById(item._id);expect(final?.status).toBe(S.OPEN);expect(final?.workflowVersion).toBe(0);expect(final?.dispatch.version).toBe(0);expect(final?.dispatch.pharmacy_id).toBeNull();expect(final?.accepted_quotation).toBeNull();expect(await History.countDocuments({request_id:item._id})).toBe(0);});
+    test('history insertion failure rolls back the request mutation',async()=>{const item=await request(),a=pharmacies[0];const failingHistory={create:async()=>{throw new Error('injected history failure')}};const rollbackService=new PharmacyTreatmentRequestService(new MongoosePharmacyTransactionRunner(),failingHistory,noNotifications);let failure:unknown;try{await rollbackService.claim(String(a.user._id),String(item._id),actor(String(a.user._id),'PHARMACY'));}catch(error){failure=error;}expect(failure).toBeInstanceOf(Error);expect((failure as Error).message).toContain('injected history failure');const final=await TreatmentRequest.findById(item._id);expect(final?.status).toBe(S.OPEN);expect(final?.workflowVersion).toBe(0);expect(final?.dispatch.version).toBe(0);expect(final?.dispatch.pharmacy_id).toBeNull();expect(final?.accepted_quotation).toBeNull();expect(await History.countDocuments({request_id:item._id})).toBe(0);});
 });

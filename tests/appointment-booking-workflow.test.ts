@@ -7,7 +7,6 @@ import AppointmentDayLock from '../src/models/appointment-day-lock.model';
 import Patient from '../src/models/patients.model';
 import Doctor from '../src/models/doctors.model';
 import PatientChild from '../src/models/patient-child.model';
-import domainNotificationService from '../src/services/domain-notification.service';
 import { AppointmentWorkflowService } from '../src/services/appointment-workflow.service';
 import { directAppointmentTransactionRunner } from '../src/services/appointment-transaction.service';
 import { AppointmentActorTypeEnum, AppointmentBeneficiaryTypeEnum, IAppointmentBookingSourceEnum, IAppointmentStatusEnum } from '../src/interfaces/appointment.interface';
@@ -19,6 +18,11 @@ describe('Appointment booking workflow', () => {
     const userId = new mongoose.Types.ObjectId();
     let sequence = 0;
     let createdPayload: any;
+    const noNotifications = {
+        append: async () => undefined,
+        scheduleForConfirmedAppointment: async () => undefined,
+        cancelFutureForAppointment: async () => undefined,
+    };
 
     function arrange(options: { autoConfirm?: boolean; child?: any } = {}) {
         sequence = 0; createdPayload = undefined;
@@ -26,7 +30,6 @@ describe('Appointment booking workflow', () => {
         spyOn(AppointmentCounter, 'findOneAndUpdate').mockImplementation(() => ({ exec: async () => ({ sequence: ++sequence }) }) as never);
         spyOn(Patient, 'findById').mockReturnValue({ select() { return this; }, session() { return this; }, lean() { return this; }, exec: async () => ({ _id: patientId, user_id: userId, full_name: 'مريض أصلي', status: 'active' }) } as never);
         spyOn(Doctor, 'findById').mockReturnValue({ select() { return this; }, session() { return this; }, lean() { return this; }, exec: async () => ({ _id: doctorId, user_id: new mongoose.Types.ObjectId() }) } as never);
-        spyOn(domainNotificationService, 'targeted').mockResolvedValue({} as never);
         spyOn(PatientChild, 'findOne').mockReturnValue({ exec: async () => options.child ?? null } as never);
         spyOn(Appointment, 'create').mockImplementation(async (payload: any) => {
             createdPayload = payload;
@@ -37,7 +40,7 @@ describe('Appointment booking workflow', () => {
             slot: { startsAt: '2026-09-10T06:00:00.000Z', endsAt: '2026-09-10T06:30:00.000Z', blockedStartsAt: '2026-09-10T05:50:00.000Z', blockedEndsAt: '2026-09-10T06:40:00.000Z' },
             context: { doctor: { _id: doctorId, display_name: 'الاسم المحفوظ', profile_photo: null, consultation_fee: 25000, currency: 'IQD', accept_auto_booking: options.autoConfirm ?? false }, clinic: { _id: clinicId, name: 'العيادة المحفوظة', address: 'بغداد' }, specialty: null },
         }) };
-        return new AppointmentWorkflowService(directAppointmentTransactionRunner, slots as any);
+        return new AppointmentWorkflowService(directAppointmentTransactionRunner, slots as any, noNotifications);
     }
 
     const input = (beneficiary: any = { type: AppointmentBeneficiaryTypeEnum.SELF }) => ({

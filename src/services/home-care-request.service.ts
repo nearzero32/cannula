@@ -27,7 +27,7 @@ import {
 import { localDateTimeToUtc, toBaghdadLocal } from './appointment-time.service';
 import { homeCareBaghdadDateRange } from './home-care-date.service';
 import { runHomeCareTransaction } from './home-care-transaction.service';
-import domainNotificationService from './domain-notification.service';
+import domainNotificationService, { type HomeCareDomainNotifier } from './domain-notification.service';
 
 export const HOME_CARE_REQUEST_MIN_LEAD_MINUTES = 30;
 
@@ -129,6 +129,8 @@ function withSafePopulation(query: any) {
 }
 
 export class HomeCareRequestService {
+    constructor(private readonly notifications: HomeCareDomainNotifier = domainNotificationService) {}
+
     public async createForPatient(
         patientId: mongoose.Types.ObjectId,
         input: HomeCareRequestCreateInput,
@@ -278,7 +280,7 @@ export class HomeCareRequestService {
         ).exec();
         if (!updated) throw new DomainError('لا يمكنك إلغاء هذا الطلب في حالته الحالية', 409);
         await this.appendMutationHistory(updated, HomeCareHistoryEventEnum.REQUEST_CANCELLED, actor, current.status, updated.status, cancellationReason, session);
-        if (previousNurseId) await domainNotificationService.homeCare(updated, 'cancelled', [previousNurseId], session, 'nurses');
+        if (previousNurseId) await this.notifications.homeCare(updated, 'cancelled', [previousNurseId], session, 'nurses');
         return { updated, current };
         });
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { reason }, actor);
@@ -346,7 +348,7 @@ export class HomeCareRequestService {
             ).exec();
             if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
             await this.appendMutationHistory(updated, HomeCareHistoryEventEnum.STATUS_CHANGED, actor, current.status, updated.status, null, session);
-            await domainNotificationService.homeCare(updated, 'confirmed', [], session, 'patient');
+            await this.notifications.homeCare(updated, 'confirmed', [], session, 'patient');
             return { updated, current };
         });
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { status }, actor);
@@ -387,7 +389,7 @@ export class HomeCareRequestService {
         ).exec();
         if (!updated) throw new DomainError('تم تحديث الطلب بواسطة مستخدم آخر، يرجى المحاولة مجدداً', 409);
         await this.appendMutationHistory(updated, HomeCareHistoryEventEnum.REQUEST_CANCELLED, actor, current.status, updated.status, cancellationReason, session);
-        await domainNotificationService.homeCare(updated, 'cancelled', previousNurseId ? [previousNurseId] : [], session, 'patient_and_nurses');
+        await this.notifications.homeCare(updated, 'cancelled', previousNurseId ? [previousNurseId] : [], session, 'patient_and_nurses');
         return { updated, current };
         });
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { reason }, actor);
@@ -407,7 +409,7 @@ export class HomeCareRequestService {
             ).exec();
             if (!updated) throw new DomainError('لا يمكن رفض هذا الطلب في حالته الحالية', 409);
             await this.appendMutationHistory(updated, HomeCareHistoryEventEnum.REQUEST_REJECTED, actor, current.status, updated.status, normalized, session);
-            await domainNotificationService.homeCare(updated, 'rejected', [], session, 'patient');
+            await this.notifications.homeCare(updated, 'rejected', [], session, 'patient');
             return { updated, current };
         });
         await this.logWrite('PATCH', IActivityLogActionEnum.UPDATE, updated, current, { reason: normalized }, actor);

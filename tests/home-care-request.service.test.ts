@@ -25,6 +25,7 @@ const childId = new mongoose.Types.ObjectId('507f191e810c19729de860ea');
 const serviceId = new mongoose.Types.ObjectId('507f191e810c19729de860eb');
 const categoryId = new mongoose.Types.ObjectId('507f191e810c19729de860ec');
 const userId = '507f191e810c19729de860ed';
+const noNotifications = { homeCare: async () => null };
 const actor = {
     user_id: userId,
     user_type: 'patient' as const,
@@ -101,7 +102,7 @@ function mockCreateFoundation(requestService: HomeCareRequestService) {
 
 describe('Home Care request creation', () => {
     test('rejects invalid and unavailable services', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         await expect(requestService.createForPatient(patientId, { ...input, service_id: 'bad' }, actor))
             .rejects.toThrow('معرف الخدمة غير صالح');
         spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(null);
@@ -110,7 +111,7 @@ describe('Home Care request creation', () => {
     });
 
     test('creates a SELF request with server-owned snapshot and status', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         mockCreateFoundation(requestService);
         let createdPayload: any;
         spyOn(HomeCareRequest, 'create').mockImplementation((async (payload: any) => {
@@ -132,7 +133,7 @@ describe('Home Care request creation', () => {
     });
 
     test('creates a CHILD request only for an owned active child', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         mockCreateFoundation(requestService);
         const owned = spyOn(patientChildService, 'requireOwnedChild').mockResolvedValue({
             _id: childId,
@@ -149,7 +150,7 @@ describe('Home Care request creation', () => {
     });
 
     test('rejects an invalid child identifier when supplied', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(serviceDocument() as never);
         await expect(requestService.createForPatient(
             patientId,
@@ -159,7 +160,7 @@ describe('Home Care request creation', () => {
     });
 
     test('rejects another patient child and inactive children', async () => {
-        const foreignService = new HomeCareRequestService();
+        const foreignService = new HomeCareRequestService(noNotifications);
         spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(serviceDocument() as never);
         spyOn(patientChildService, 'requireOwnedChild').mockRejectedValue(new Error('الطفل غير موجود'));
         await expect(foreignService.createForPatient(
@@ -169,7 +170,7 @@ describe('Home Care request creation', () => {
         )).rejects.toThrow('الطفل غير موجود');
 
         mock.restore();
-        const inactiveService = new HomeCareRequestService();
+        const inactiveService = new HomeCareRequestService(noNotifications);
         spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(serviceDocument() as never);
         spyOn(patientChildService, 'requireOwnedChild').mockResolvedValue({
             _id: childId,
@@ -208,7 +209,7 @@ describe('Home Care patient ownership and cancellation', () => {
         };
         const find = spyOn(HomeCareRequest, 'find').mockReturnValue(chain);
         spyOn(HomeCareRequest, 'countDocuments').mockReturnValue({ exec: async () => 0 } as never);
-        const result = await new HomeCareRequestService().listForPatient(patientId, { page: 2, limit: 5 });
+        const result = await new HomeCareRequestService(noNotifications).listForPatient(patientId, { page: 2, limit: 5 });
         expect(find).toHaveBeenCalledWith({ patient_id: patientId });
         expect(result).toEqual({ data: [], count: 0 });
     });
@@ -216,7 +217,7 @@ describe('Home Care patient ownership and cancellation', () => {
     test('patient detail lookup hides another patient request as not found', async () => {
         const chain: any = { populate: () => chain, exec: async () => null };
         const findOne = spyOn(HomeCareRequest, 'findOne').mockReturnValue(chain);
-        expect(await new HomeCareRequestService().getForPatient(
+        expect(await new HomeCareRequestService(noNotifications).getForPatient(
             patientId,
             '507f191e810c19729de860ef'
         )).toBeNull();
@@ -228,7 +229,7 @@ describe('Home Care patient ownership and cancellation', () => {
 
     for (const status of [IHomeCareRequestStatusEnum.PENDING, IHomeCareRequestStatusEnum.CONFIRMED]) {
         test(`patient can cancel ${status}`, async () => {
-            const requestService = new HomeCareRequestService();
+            const requestService = new HomeCareRequestService(noNotifications);
             const current = requestDocument({ status });
             const updated = requestDocument({ status: IHomeCareRequestStatusEnum.CANCELLED });
             spyOn(HomeCareRequest, 'findOne').mockReturnValue(sessionQuery(current) as never);
@@ -256,7 +257,7 @@ describe('Home Care patient ownership and cancellation', () => {
     }
 
     test('patient cannot cancel an in-progress request', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         spyOn(HomeCareRequest, 'findOne').mockReturnValue(sessionQuery(null) as never);
         const update = spyOn(HomeCareRequest, 'findOneAndUpdate');
         await expect(requestService.cancelForPatient(
@@ -278,7 +279,7 @@ describe('Home Care dashboard request operations', () => {
     };
 
     test('applies an allowed status transition with an atomic current-status filter', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         const current = requestDocument({ status: IHomeCareRequestStatusEnum.PENDING });
         const updated = requestDocument({ status: IHomeCareRequestStatusEnum.CONFIRMED });
         spyOn(HomeCareRequest, 'findById').mockReturnValue(sessionQuery(current) as never);
@@ -304,7 +305,7 @@ describe('Home Care dashboard request operations', () => {
     });
 
     test('rejects forbidden dashboard transitions before persistence', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         spyOn(requestService, 'getForDashboard').mockResolvedValue(requestDocument({
             status: IHomeCareRequestStatusEnum.PENDING,
         }));
@@ -318,7 +319,7 @@ describe('Home Care dashboard request operations', () => {
     });
 
     test('admin cancellation records actor type and reason', async () => {
-        const requestService = new HomeCareRequestService();
+        const requestService = new HomeCareRequestService(noNotifications);
         const current = requestDocument({ status: IHomeCareRequestStatusEnum.CONFIRMED });
         const updated = requestDocument({ status: IHomeCareRequestStatusEnum.CANCELLED });
         spyOn(HomeCareRequest, 'findById').mockReturnValue(sessionQuery(current) as never);

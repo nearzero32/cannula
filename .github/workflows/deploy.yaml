@@ -28,6 +28,7 @@ jobs:
           --health-retries 10
     env:
       NODE_ENV: test
+      # Required syntactically by application config imports; pure tests do not connect to it.
       MONGODB_URI: mongodb://127.0.0.1:27017/cannula_ci
       REDIS_HOST: 127.0.0.1
       REDIS_PORT: 16380
@@ -45,28 +46,43 @@ jobs:
         run: bun install --frozen-lockfile
       - name: TypeScript
         run: bun run typecheck
-      - name: Tests
+      - name: Pure unit and contract tests (Mongo integrations skipped)
         run: bun test
       - name: Real Redis security integration
-        run: bun test tests/session-lifecycle.redis.integration.test.ts tests/security-rate-limit.redis.integration.test.ts
+        run: |
+          bun test tests/session-lifecycle.redis.integration.test.ts
+          bun test tests/security-rate-limit.redis.integration.test.ts
         env:
           REDIS_TEST_URL: redis://127.0.0.1:16380
       - name: Start isolated Mongo replica set
         run: |
-          docker run --name cannula-ci-mongo -d -p 127.0.0.1:27020:27017 mongo:8.2.12 mongod --replSet rs0 --bind_ip_all
+          docker run --name cannula-ci-mongo -d -p 127.0.0.1:27020:27020 mongo:8.2.12 mongod --port 27020 --replSet rs0 --bind_ip_all
           for attempt in $(seq 1 30); do
-            if docker exec cannula-ci-mongo mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok' | grep -q 1; then break; fi
+            if docker exec cannula-ci-mongo mongosh --quiet --port 27020 --eval 'db.adminCommand({ ping: 1 }).ok' | grep -q 1; then break; fi
             sleep 2
           done
-          docker exec cannula-ci-mongo mongosh --quiet --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27017"}]})'
-          sleep 3
+          docker exec cannula-ci-mongo mongosh --quiet --port 27020 --eval 'rs.initiate({_id:"rs0",members:[{_id:0,host:"127.0.0.1:27020"}]})'
+          for attempt in $(seq 1 30); do
+            if [ "$(docker exec cannula-ci-mongo mongosh --quiet --port 27020 --eval 'db.hello().isWritablePrimary')" = "true" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "Mongo replica set did not become primary" >&2
+          exit 1
       - name: Real Mongo transaction integration
         run: |
           MONGODB_AUTH_TEST_URI="$MONGODB_BASE/cannula_auth_ci?replicaSet=rs0&directConnection=true" bun test tests/auth-flow.mongodb.integration.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_pharmacy_ci?replicaSet=rs0&directConnection=true" bun test tests/pharmacy-treatment-request.mongodb.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_appointment_ci?replicaSet=rs0&directConnection=true" bun test tests/appointment-concurrency.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/p8c?replicaSet=rs0&directConnection=true" bun test tests/notification-phase8c.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_phase7a_ci?replicaSet=rs0&directConnection=true" bun test tests/home-care-phase7a.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_phase7b1_ci?replicaSet=rs0&directConnection=true" bun test tests/home-care-phase7b1.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_phase7b2_ci?replicaSet=rs0&directConnection=true" bun test tests/home-care-phase7b2.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/cannula_notification_phase8b_ci?replicaSet=rs0&directConnection=true" bun test tests/notification-phase8b.mongodb.test.ts
         env:
           MONGODB_BASE: mongodb://127.0.0.1:27020
+      - name: Stop isolated Mongo replica set
+        if: always()
+        run: docker rm --force cannula-ci-mongo
       - name: Production build
         run: bun run build
 

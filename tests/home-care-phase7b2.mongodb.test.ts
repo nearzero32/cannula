@@ -17,8 +17,9 @@ import { HomeCareHistoryEventEnum as Event } from '../src/interfaces/home-care-r
 
 const mongoUri = process.env.MONGODB_TEST_URI;
 const describeWithMongo = mongoUri ? describe : describe.skip;
-const dispatchService = new HomeCareDispatchService();
-const requestService = new HomeCareRequestService();
+const noNotifications = { homeCare: async () => null };
+const dispatchService = new HomeCareDispatchService(noNotifications);
+const requestService = new HomeCareRequestService(noNotifications);
 
 describeWithMongo('Home Care Phase 7B2 Nurse operational transactions against MongoDB 8 replica set', () => {
     const databaseName = `cannula_home_care_phase7b2_${Date.now()}_${Math.random().toString(16).slice(2)}`;
@@ -88,6 +89,6 @@ describeWithMongo('Home Care Phase 7B2 Nurse operational transactions against Mo
     test('full progression is transactional, exact, and terminal', async () => {
         const item = await request(Status.ASSIGNED, 10); const steps = [[Status.ASSIGNED, Status.ON_THE_WAY], [Status.ON_THE_WAY, Status.ARRIVED], [Status.ARRIVED, Status.IN_PROGRESS], [Status.IN_PROGRESS, Status.COMPLETED]] as const;
         for (let index = 0; index < steps.length; index += 1) { const [from, to] = steps[index]; await transition(item, from, to); const result = await final(item._id); expect(result?.status).toBe(to); expect(String(result?.dispatch.nurse_id)).toBe(String(nurseA._id)); expect(result?.dispatch.status).toBe(to === Status.COMPLETED ? Dispatch.CLOSED : Dispatch.CLAIMED); expect(result?.dispatch.version).toBe(11 + index); expect(await HomeCareRequestHistory.countDocuments({ request_id: item._id })).toBe(index + 1); }
-        await expect(transition(item, Status.IN_PROGRESS, Status.COMPLETED)).rejects.toMatchObject({ status: 409 }); const result = await final(item._id); expect(result?.dispatch.version).toBe(14); expect(await HomeCareRequestHistory.countDocuments({ request_id: item._id })).toBe(4);
+        await expect(transition(item, Status.COMPLETED, Status.ON_THE_WAY)).rejects.toMatchObject({ status: 409 }); const result = await final(item._id); expect(result?.dispatch.version).toBe(14); expect(await HomeCareRequestHistory.countDocuments({ request_id: item._id })).toBe(4);
     });
 });

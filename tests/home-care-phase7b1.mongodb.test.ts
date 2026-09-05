@@ -16,7 +16,7 @@ import { HomeCareHistoryEventEnum as Event } from '../src/interfaces/home-care-r
 
 const mongoUri = process.env.MONGODB_TEST_URI;
 const describeWithMongo = mongoUri ? describe : describe.skip;
-const service = new HomeCareDispatchService();
+const service = new HomeCareDispatchService({ homeCare: async () => null });
 
 describeWithMongo('Home Care Phase 7B1 admin dispatch transactions against MongoDB 8 replica set', () => {
     const databaseName = `cannula_home_care_phase7b1_${Date.now()}_${Math.random().toString(16).slice(2)}`;

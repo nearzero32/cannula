@@ -41,12 +41,12 @@ describe('Appointment transactional notification architecture', () => {
         const workflow = await Bun.file(new URL('../src/services/appointment-workflow.service.ts', import.meta.url)).text();
         const reminder = await Bun.file(new URL('../src/services/appointment-reminder.service.ts', import.meta.url)).text();
         for (const token of ['scheduleForConfirmedAppointment', 'cancelFutureForAppointment']) expect(workflow).toContain(token);
-        expect(workflow).toContain("if(action==='confirm')await appointmentReminderService.scheduleForConfirmedAppointment(updated,session,now)");
-        expect(workflow).toContain("if(action==='complete'||action==='noShow')await appointmentReminderService.cancelFutureForAppointment(updated._id,session)");
-        expect(workflow).toContain("await appointmentReminderService.cancelFutureForAppointment(updated._id,session)");
+        expect(workflow).toContain("if(action==='confirm')await this.notifications.scheduleForConfirmedAppointment(updated,session,now)");
+        expect(workflow).toContain("if(action==='complete'||action==='noShow')await this.notifications.cancelFutureForAppointment(updated._id,session)");
+        expect(workflow).toContain("await this.notifications.cancelFutureForAppointment(updated._id,session)");
         expect(workflow).toContain('this.createInTransaction(booking, actor, session, now, String(current._id), true)');
-        expect(workflow).toContain('await appointmentReminderService.cancelFutureForAppointment(updated._id, session)');
-        expect(workflow).toContain('if(status===IAppointmentStatusEnum.CONFIRMED)await appointmentReminderService.scheduleForConfirmedAppointment(appointment,session,now)');
+        expect(workflow).toContain('await this.notifications.cancelFutureForAppointment(updated._id, session)');
+        expect(workflow).toContain('if(status===IAppointmentStatusEnum.CONFIRMED)await this.notifications.scheduleForConfirmedAppointment(appointment,session,now)');
         expect(workflow).not.toContain('appointmentDomainEventService.publish');
         expect(reminder).toContain('APPOINTMENT_REMINDER');
         expect(reminder).not.toMatch(/OneSignal|notificationService\.dispatch|createAndDispatch|sendPush|node-schedule/);
