@@ -9,6 +9,9 @@ import { oneSignal } from '../lib/onesignal';
 import NotificationRecipient from '../models/notification-recipient.model';
 import NotificationRead, { INotificationReaderTypeEnum } from '../models/notification-read.model';
 import { INotificationAudienceEnum, INotificationCategoryEnum, INotificationPrivacyEnum } from '../interfaces/notification.interface';
+import notificationDeliveryService from './notification-delivery.service';
+import NotificationDelivery from '../models/notification-delivery.model';
+import { INotificationDeliveryStatusEnum } from '../interfaces/notification-delivery.interface';
 
 export type NotificationViewer = { userId: string } | { installationHash: string };
 export const NOTIFICATION_READ_ALL_BATCH_SIZE = 500;
@@ -86,7 +89,7 @@ class NotificationService {
 
     /** New content API. Public notifications deliberately have no recipient rows. */
     public async createPublic(input: MobileNotificationInput): Promise<NotificationDocument> {
-        return this.create({ ...input, audience: INotificationAudienceEnum.PUBLIC, recipient_ids: [], recipient_model: INotificationRecipientModelEnum.ALL, status: INotificationStatusEnum.PENDING, is_read: false, visible_at: input.visible_at ?? new Date(), expires_at: input.expires_at ?? new Date(Date.now() + 7776000000) });
+        const notification=await this.create({ ...input, audience: INotificationAudienceEnum.PUBLIC, recipient_ids: [], recipient_model: INotificationRecipientModelEnum.ALL, status: INotificationStatusEnum.PENDING, is_read: false, visible_at: input.visible_at ?? new Date(), expires_at: input.expires_at ?? new Date(Date.now() + 7776000000) });await notificationDeliveryService.enqueueForNotification(notification);return notification;
     }
 
     /** Creates content and User-id recipients atomically; it never dispatches push. */
@@ -102,6 +105,7 @@ class NotificationService {
                 const created = await this.model.create([{ ...input, audience: INotificationAudienceEnum.TARGETED, recipient_ids: [], recipient_model: INotificationRecipientModelEnum.USER, status: INotificationStatusEnum.PENDING, is_read: false, visible_at: input.visible_at ?? new Date(), expires_at: expires }], { session });
                 notification = created[0]!;
                 await NotificationRecipient.insertMany(uniqueUserIds.map((user_id) => ({ notification_id: notification._id, user_id: new mongoose.Types.ObjectId(user_id), expires_at: expires })), { session, ordered: true });
+                await notificationDeliveryService.enqueueForNotification(notification,session);
             });
             return notification;
         } finally { await session.endSession(); }
@@ -226,7 +230,9 @@ class NotificationService {
     }
 
     public async cancel(id: string): Promise<NotificationDocument | null> {
-        return this.update(id, { status: INotificationStatusEnum.CANCELLED });
+        const notification = await this.update(id, { status: INotificationStatusEnum.CANCELLED });
+        if (notification) await NotificationDelivery.updateMany({ notification_id: notification._id, status: { $in: [INotificationDeliveryStatusEnum.PENDING, INotificationDeliveryStatusEnum.FAILED] } }, { $set: { status: INotificationDeliveryStatusEnum.CANCELLED, next_attempt_at: null, lease_expires_at: null, processing_started_at: null } }).exec();
+        return notification;
     }
 
     // ─── Delivery ────────────────────────────────────────────────────────────
