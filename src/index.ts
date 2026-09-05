@@ -25,7 +25,6 @@ import { normalizeDoctorBookingSettings } from './migrations/normalize-doctor-bo
 import { backfillDoctorDisplayOrder } from './migrations/backfill-doctor-display-order.migration';
 import { backfillAdsBanners } from './migrations/backfill-ads-banners.migration';
 import { backfillSpecialtySortOrder } from './migrations/backfill-specialty-sort-order.migration';
-import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
 import { assertProductionConfiguration, assertSwaggerConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from './config/production.config';
 import { HttpSecurityPlugin } from './middleware/http-security.middleware';
 import notificationDeliveryWorker from './services/notification-delivery-worker.service';
@@ -59,7 +58,6 @@ async function bootstrap() {
     await backfillDoctorDisplayOrder();
     await backfillAdsBanners();
     await backfillSpecialtySortOrder();
-    registerAppointmentNotificationHandler();
 
     // Connect Redis
     await RedisClient.getInstance().connect();
