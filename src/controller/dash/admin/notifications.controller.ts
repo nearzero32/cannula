@@ -13,6 +13,7 @@ import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedRe
 import { AdminPermissionGuardPlugin } from '../../../middleware/authorization.middleware';
 import { IAdminPermissionEnum } from '../../../interfaces/admin.interface';
 import notificationAnalyticsService from '../../../services/notification-analytics.service';
+import notificationDeliveryAdminService from '../../../services/notification-delivery-admin.service';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -23,6 +24,9 @@ export const notificationsController = new Elysia({
     .use(AuthPlugin())
     .use(AdminPermissionGuardPlugin(IAdminPermissionEnum.MANAGE_SETTINGS))
     .get('/:id/analytics',async({params,set})=>{try{return{error:false,message:'تم جلب تحليلات الإشعار بنجاح',data:await notificationAnalyticsService.getSummary(params.id)}}catch(error){if(error instanceof Error&&'status' in error){set.status=(error as any).status;return{error:true,message:error.message}}throw error}},{params:t.Object({id:t.String()}),detail:{summary:'Notification analytics',description:'TARGETED uses NotificationRecipient as denominator. PUBLIC has no known denominator: targeted_count, unread_count, and read_rate are null; only observed unique reads are counted.'},response:{200:GenericDataResponseSchema,400:BadRequestResponseSchema,404:NotFoundResponseSchema,...ProtectedApiErrorResponses}})
+    .get('/:id/delivery',async({params,set})=>{try{return{error:false,message:'تم جلب ملخص التسليم بنجاح',data:await notificationDeliveryAdminService.summary(params.id)}}catch(error){if(error instanceof Error&&'status'in error){set.status=(error as any).status;return{error:true,message:error.message}}throw error}},{params:t.Object({id:t.String()}),detail:{summary:'Notification delivery summary',description:'Delivery counts describe push processing, not inbox reads.'},response:{200:GenericDataResponseSchema,400:BadRequestResponseSchema,404:NotFoundResponseSchema,...ProtectedApiErrorResponses}})
+    .get('/:id/deliveries',async({params,query,set})=>{try{const r=await notificationDeliveryAdminService.list(params.id,{page:Number(query.page)||1,limit:Number(query.limit)||20,status:query.status});return{error:false,message:'تم جلب عمليات التسليم بنجاح',data:r.data,pagination:{page:r.page,limit:r.limit,total:r.total,pages:Math.ceil(r.total/r.limit),hasNext:r.page*r.limit<r.total,hasPrev:r.page>1}}}catch(error){if(error instanceof Error&&'status'in error){set.status=(error as any).status;return{error:true,message:error.message}}throw error}},{params:t.Object({id:t.String()}),query:t.Object({page:t.Optional(t.String()),limit:t.Optional(t.String()),status:t.Optional(t.Union([t.Literal('pending'),t.Literal('processing'),t.Literal('delivered'),t.Literal('failed'),t.Literal('dead'),t.Literal('cancelled')]))}),detail:{summary:'Notification deliveries',description:'Paginated delivery operations. Ownership and provider secrets are never returned.'},response:{200:GenericPaginatedResponseSchema,400:BadRequestResponseSchema,404:NotFoundResponseSchema,...ProtectedApiErrorResponses}})
+    .post('/:notificationId/deliveries/:deliveryId/retry',async({params,set})=>{try{return{error:false,message:'تمت جدولة إعادة المحاولة بنجاح',data:await notificationDeliveryAdminService.retry(params.notificationId,params.deliveryId)}}catch(error){if(error instanceof Error&&'status'in error){set.status=(error as any).status;return{error:true,message:error.message}}throw error}},{params:t.Object({notificationId:t.String(),deliveryId:t.String()}),detail:{summary:'Retry failed notification delivery',description:'Only FAILED or DEAD deliveries can be reset to PENDING. Delivered, cancelled, processing, and cancelled-parent deliveries return 409.'},response:{200:GenericDataResponseSchema,400:BadRequestResponseSchema,404:NotFoundResponseSchema,409:UnprocessableEntityResponseSchema,...ProtectedApiErrorResponses}})
 
     // List all notifications with filters
     .get(
@@ -167,8 +171,9 @@ export const notificationsController = new Elysia({
                 scheduled_at: body.scheduled_at ? new Date(body.scheduled_at) : null,
             };
 
-            // Scheduled → save only. Instant → save and dispatch to OneSignal.
-            const notification = isScheduled
+            // New-core public/User notifications enqueue durable work immediately;
+            // legacy profile-ID schedules retain their compatibility behavior.
+            const notification = isScheduled && !isBroadcast && body.recipient_model !== INotificationRecipientModelEnum.USER
                 ? await notificationService.create({
                     ...payload,
                     status: INotificationStatusEnum.SCHEDULED,

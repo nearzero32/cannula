@@ -245,6 +245,16 @@ class NotificationService {
         const notification = await this.getById(id);
         if (!notification) return null;
 
+        // New-core notifications are durable work. Profile-ID legacy records cannot
+        // safely be translated to User identities, so their compatibility path stays put.
+        if (notification.audience === INotificationAudienceEnum.PUBLIC || notification.recipient_model === INotificationRecipientModelEnum.USER) {
+            if (notification.audience !== INotificationAudienceEnum.PUBLIC && notification.recipient_ids.length) {
+                await NotificationRecipient.bulkWrite(notification.recipient_ids.map((user_id) => ({ updateOne: { filter: { notification_id: notification._id, user_id }, update: { $setOnInsert: { notification_id: notification._id, user_id, expires_at: notification.expires_at } }, upsert: true } })), { ordered: false });
+            }
+            await notificationDeliveryService.enqueueForNotification(notification);
+            return notification;
+        }
+
         const result = await oneSignal.sendPush({
             external_ids: notification.recipient_ids.map((id) => id.toString()),
             send_to_all:
@@ -274,6 +284,12 @@ class NotificationService {
     public async createAndDispatch(
         payload: Partial<INotification>
     ): Promise<NotificationDocument | null> {
+        if (payload.recipient_model === INotificationRecipientModelEnum.ALL) {
+            return this.createPublic({ ...payload as MobileNotificationInput, visible_at: payload.visible_at, expires_at: payload.expires_at });
+        }
+        if (payload.recipient_model === INotificationRecipientModelEnum.USER) {
+            return this.createTargeted({ ...payload as MobileNotificationInput, visible_at: payload.visible_at, expires_at: payload.expires_at }, payload.recipient_ids ?? []);
+        }
         const notification = await this.create({
             ...payload,
             status: INotificationStatusEnum.PENDING,

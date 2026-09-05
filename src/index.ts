@@ -28,6 +28,7 @@ import { backfillSpecialtySortOrder } from './migrations/backfill-specialty-sort
 import { registerAppointmentNotificationHandler } from './services/appointment-notification.service';
 import { assertProductionConfiguration, assertSwaggerConfiguration, isSwaggerEnabled, parseAllowedOrigins, requestBodyLimitBytes } from './config/production.config';
 import { HttpSecurityPlugin } from './middleware/http-security.middleware';
+import notificationDeliveryWorker from './services/notification-delivery-worker.service';
 
 const HEALTH_TIMEOUT_MS = 2_000;
 
@@ -110,6 +111,8 @@ async function bootstrap() {
         .listen({ port: Number(process.env.PORT || 3001), hostname: process.env.HOST || '0.0.0.0' });
 
     console.log(JSON.stringify({ level: 'info', event: 'server_started', port: app.server?.port }));
+    // Mongo is connected above; scheduling is non-blocking and each replica claims atomically.
+    notificationDeliveryWorker.start();
 
     let shuttingDown = false;
     const shutdown = async (signal: string) => {
@@ -120,6 +123,7 @@ async function bootstrap() {
         force.unref();
         try {
             await Promise.race([app.stop(), new Promise((_, reject) => setTimeout(() => reject(new Error('drain timeout')), 10_000))]);
+            await notificationDeliveryWorker.stop();
             await Promise.allSettled([RedisClient.getInstance().disconnect(), db.disconnect()]);
             clearTimeout(force);
             process.exit(0);
