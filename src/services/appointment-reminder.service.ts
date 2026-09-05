@@ -1,6 +1,127 @@
-import mongoose,{type ClientSession}from'mongoose';import Patient from'../models/patients.model';import Notification from'../models/notifications.model';import NotificationDelivery from'../models/notification-delivery.model';import domainNotificationService from'./domain-notification.service';import{INotificationCategoryEnum as C,INotificationPrivacyEnum as P,INotificationTypeEnum as T,INotificationStatusEnum as NS}from'../interfaces/notification.interface';import{INotificationDeliveryStatusEnum as DS}from'../interfaces/notification-delivery.interface';import{toBaghdadLocal}from'./appointment-time.service';
-export const APPOINTMENT_REMINDER_OFFSETS_MINUTES=[1440,120]as const;
-export function reminderTimes(startsAt:Date,now:Date){return APPOINTMENT_REMINDER_OFFSETS_MINUTES.map(offset=>({offset,at:new Date(startsAt.getTime()-offset*60000)})).filter(x=>x.at>now)}
-export function reminderDedupeKey(a:any,offset:number,userId:any){return`appointment:${a._id}:${a.workflow_version}:reminder:${offset}:${userId}`}
-class AppointmentReminderService{async scheduleForConfirmedAppointment(a:any,session:ClientSession|null,now=new Date()){const patient=await Patient.findById(a.patient_id).select('user_id').session(session).lean().exec();if(!patient?.user_id)throw new Error('APPOINTMENT_REMINDER_IDENTITY_MISSING');const local=toBaghdadLocal(new Date(a.starts_at));for(const{offset,at}of reminderTimes(new Date(a.starts_at),now))await domainNotificationService.targeted({userIds:[patient.user_id],session:session??undefined,dedupeKey:reminderDedupeKey(a,offset,patient.user_id),payload:{category:C.APPOINTMENTS,privacy:P.NORMAL,type:T.APPOINTMENT_REMINDER,title:'تذكير بالموعد',body:`موعدك مع د. ${a.snapshot.doctor.display_name} بتاريخ ${local.date} الساعة ${local.time}`,source:{domain:'appointment',id:a._id},target:{type:'appointment',id:a._id},appointment_id:a._id,visible_at:at,scheduled_at:at}})}async cancelFutureForAppointment(id:any,session:ClientSession|null){const notes=await Notification.find({appointment_id:id,type:T.APPOINTMENT_REMINDER,status:{$ne:NS.CANCELLED}}).select('_id').session(session).lean().exec();const ids=notes.map(x=>x._id);if(!ids.length)return;await Notification.updateMany({_id:{$in:ids}},{$set:{status:NS.CANCELLED}},{session:session??undefined});await NotificationDelivery.updateMany({notification_id:{$in:ids},status:{$in:[DS.PENDING,DS.FAILED]}},{$set:{status:DS.CANCELLED,next_attempt_at:null,claim_token:null,lease_expires_at:null,processing_started_at:null}},{session:session??undefined})}}
+import type { ClientSession } from 'mongoose';
+import Patient from '../models/patients.model';
+import Notification from '../models/notifications.model';
+import NotificationDelivery from '../models/notification-delivery.model';
+import domainNotificationService from './domain-notification.service';
+import {
+    INotificationCategoryEnum,
+    INotificationPrivacyEnum,
+    INotificationStatusEnum,
+    INotificationTypeEnum,
+} from '../interfaces/notification.interface';
+import { INotificationDeliveryStatusEnum } from '../interfaces/notification-delivery.interface';
+import { toBaghdadLocal } from './appointment-time.service';
+
+export const APPOINTMENT_REMINDER_OFFSETS_MINUTES = [1440, 120] as const;
+
+export interface FutureAppointmentReminder {
+    offsetMinutes: number;
+    reminderAt: Date;
+}
+
+export function getFutureReminderTimes(
+    startsAt: Date,
+    now: Date,
+    offsetsMinutes: readonly number[] = APPOINTMENT_REMINDER_OFFSETS_MINUTES
+): FutureAppointmentReminder[] {
+    return offsetsMinutes
+        .map(offsetMinutes => ({
+            offsetMinutes,
+            reminderAt: new Date(startsAt.getTime() - offsetMinutes * 60_000),
+        }))
+        .filter(({ reminderAt }) => reminderAt.getTime() > now.getTime());
+}
+
+export function appointmentReminderDedupeKey(
+    appointmentId: unknown,
+    workflowVersion: number,
+    offsetMinutes: number,
+    patientUserId: unknown
+): string {
+    return `appointment:${appointmentId}:${workflowVersion}:reminder:${offsetMinutes}:${patientUserId}`;
+}
+
+export function appointmentReminderContent(doctorDisplayName: string, startsAt: Date) {
+    const local = toBaghdadLocal(startsAt);
+    return {
+        title: 'تذكير بالموعد',
+        body: `موعدك مع د. ${doctorDisplayName} بتاريخ ${local.date} الساعة ${local.time}`,
+    };
+}
+
+class AppointmentReminderService {
+    async scheduleForConfirmedAppointment(appointment: any, session: ClientSession | null, now = new Date()) {
+        const patient = await Patient.findById(appointment.patient_id)
+            .select('user_id').session(session).lean().exec();
+        if (!patient?.user_id) throw new Error('APPOINTMENT_REMINDER_IDENTITY_MISSING');
+
+        const content = appointmentReminderContent(
+            appointment.snapshot.doctor.display_name,
+            new Date(appointment.starts_at)
+        );
+        for (const { offsetMinutes, reminderAt } of getFutureReminderTimes(new Date(appointment.starts_at), now)) {
+            await domainNotificationService.targeted({
+                userIds: [patient.user_id],
+                session: session ?? undefined,
+                dedupeKey: appointmentReminderDedupeKey(
+                    appointment._id,
+                    appointment.workflow_version,
+                    offsetMinutes,
+                    patient.user_id
+                ),
+                payload: {
+                    category: INotificationCategoryEnum.APPOINTMENTS,
+                    privacy: INotificationPrivacyEnum.NORMAL,
+                    type: INotificationTypeEnum.APPOINTMENT_REMINDER,
+                    ...content,
+                    source: { domain: 'appointment', id: appointment._id },
+                    target: { type: 'appointment', id: appointment._id },
+                    appointment_id: appointment._id,
+                    visible_at: reminderAt,
+                    scheduled_at: reminderAt,
+                },
+            });
+        }
+    }
+
+    async cancelFutureForAppointment(appointmentId: unknown, session: ClientSession | null) {
+        const reminders = await Notification.find({
+            appointment_id: appointmentId,
+            type: INotificationTypeEnum.APPOINTMENT_REMINDER,
+            status: { $ne: INotificationStatusEnum.CANCELLED },
+        }).select('_id').session(session).lean().exec();
+        if (!reminders.length) return;
+
+        const reminderIds = reminders.map(reminder => reminder._id);
+        const deliveredIds = new Set((await NotificationDelivery.find({
+            notification_id: { $in: reminderIds },
+            status: INotificationDeliveryStatusEnum.DELIVERED,
+        }).select('notification_id').session(session).lean().exec()).map(row => String(row.notification_id)));
+        const cancellableIds = reminderIds.filter(id => !deliveredIds.has(String(id)));
+        if (!cancellableIds.length) return;
+
+        await Notification.updateMany(
+            { _id: { $in: cancellableIds } },
+            { $set: { status: INotificationStatusEnum.CANCELLED } },
+            { session: session ?? undefined }
+        );
+        await NotificationDelivery.updateMany(
+            {
+                notification_id: { $in: cancellableIds },
+                status: { $in: [INotificationDeliveryStatusEnum.PENDING, INotificationDeliveryStatusEnum.FAILED] },
+            },
+            {
+                $set: {
+                    status: INotificationDeliveryStatusEnum.CANCELLED,
+                    next_attempt_at: null,
+                    claim_token: null,
+                    lease_expires_at: null,
+                    processing_started_at: null,
+                },
+            },
+            { session: session ?? undefined }
+        );
+    }
+}
+
 export default new AppointmentReminderService();

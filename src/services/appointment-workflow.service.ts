@@ -174,6 +174,7 @@ export class AppointmentWorkflowService {
             if (!updated) throw new DomainError('تم تعديل الموعد بالتزامن', 409, 'APPOINTMENT_INVALID_TRANSITION');
             await this.history(updated, AppointmentHistoryEventEnum.RESCHEDULED_FROM, actor, current.status, IAppointmentStatusEnum.RESCHEDULED, input.reason, { rescheduledTo: String(replacement._id) }, session);
             await this.history(replacement, AppointmentHistoryEventEnum.RESCHEDULED_TO, actor, null, replacement.status, input.reason, { rescheduledFrom: String(current._id) }, session);
+            await appointmentReminderService.cancelFutureForAppointment(updated._id, session);
                 return { previous: updated, appointment: replacement };
             });
         } catch (error) {

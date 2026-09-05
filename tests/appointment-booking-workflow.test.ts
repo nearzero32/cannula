@@ -5,7 +5,9 @@ import AppointmentHistory from '../src/models/appointment-history.model';
 import AppointmentCounter from '../src/models/appointment-counter.model';
 import AppointmentDayLock from '../src/models/appointment-day-lock.model';
 import Patient from '../src/models/patients.model';
+import Doctor from '../src/models/doctors.model';
 import PatientChild from '../src/models/patient-child.model';
+import domainNotificationService from '../src/services/domain-notification.service';
 import { AppointmentWorkflowService } from '../src/services/appointment-workflow.service';
 import { directAppointmentTransactionRunner } from '../src/services/appointment-transaction.service';
 import { AppointmentActorTypeEnum, AppointmentBeneficiaryTypeEnum, IAppointmentBookingSourceEnum, IAppointmentStatusEnum } from '../src/interfaces/appointment.interface';
@@ -22,7 +24,9 @@ describe('Appointment booking workflow', () => {
         sequence = 0; createdPayload = undefined;
         spyOn(AppointmentDayLock, 'findOneAndUpdate').mockReturnValue({ exec: async () => ({ revision: 1 }) } as never);
         spyOn(AppointmentCounter, 'findOneAndUpdate').mockImplementation(() => ({ exec: async () => ({ sequence: ++sequence }) }) as never);
-        spyOn(Patient, 'findById').mockReturnValue({ exec: async () => ({ _id: patientId, full_name: 'مريض أصلي', status: 'active' }) } as never);
+        spyOn(Patient, 'findById').mockReturnValue({ select() { return this; }, session() { return this; }, lean() { return this; }, exec: async () => ({ _id: patientId, user_id: userId, full_name: 'مريض أصلي', status: 'active' }) } as never);
+        spyOn(Doctor, 'findById').mockReturnValue({ select() { return this; }, session() { return this; }, lean() { return this; }, exec: async () => ({ _id: doctorId, user_id: new mongoose.Types.ObjectId() }) } as never);
+        spyOn(domainNotificationService, 'targeted').mockResolvedValue({} as never);
         spyOn(PatientChild, 'findOne').mockReturnValue({ exec: async () => options.child ?? null } as never);
         spyOn(Appointment, 'create').mockImplementation(async (payload: any) => {
             createdPayload = payload;

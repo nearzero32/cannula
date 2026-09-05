@@ -47,7 +47,7 @@ Allowed dedicated operations are:
 
 There is no generic status-write endpoint. Patient cancel/reschedule obeys the cancellation window; patient reschedule also requires `allow_reschedule`. Doctor/Admin operations are not subject to the customer window. Patient booking starts confirmed only when `accept_auto_booking` is true. Admin creation may explicitly choose pending or confirmed and is limited to `admin_panel` or `phone` sources.
 
-Appointment mutations and availability mutations write domain history or operational `ActivityLog` as applicable. After a transaction commits, workflow events create deduplicated immediate notification records and dispatch them through the existing notification service: creation targets Patient and Doctor, confirmation/completion/no-show target Patient, cancellation targets the opposite party, and rescheduling targets Patient and Doctor. Provider failures do not roll back the appointment. There is no durable scheduler in this repository, so appointment reminders remain explicitly `DURABLE_APPOINTMENT_REMINDERS_PENDING`; no in-memory timer was added.
+Appointment mutations write domain history and deduplicated immediate notification records in the same transaction: creation targets Patient and Doctor, confirmation/completion/no-show target Patient, cancellation targets the opposite party, and rescheduling targets Patient and Doctor. Confirmed appointments also create durable 24-hour and 2-hour Patient reminder deliveries when those times are still in the future. Cancellation, rescheduling, completion, and no-show cancel outstanding reminder work. Provider delivery remains asynchronous, and no in-memory appointment timer is used.
 
 ## API routes
 
