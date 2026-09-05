@@ -51,6 +51,7 @@ export const SWAGGER_TAGS = {
         SUGGESTIONS: 'Mobile - Suggestions',
         ADS: 'Mobile - Ads',
         ABOUT_US: 'Mobile - About Us',
+        NOTIFICATIONS: 'Mobile - Notifications',
     },
 } as const;
 
@@ -96,6 +97,7 @@ export const SWAGGER_TAG_DEFINITIONS = [
     { name: SWAGGER_TAGS.MOBILE.SUGGESTIONS, 'x-displayName': 'Suggestions', description: 'اقتراحات المريض' },
     { name: SWAGGER_TAGS.MOBILE.ADS, 'x-displayName': 'Ads', description: 'عرض الإعلانات في تطبيق المريض' },
     { name: SWAGGER_TAGS.MOBILE.ABOUT_US, 'x-displayName': 'About Us', description: 'عرض محتوى من نحن في تطبيق المريض' },
+    { name: SWAGGER_TAGS.MOBILE.NOTIFICATIONS, 'x-displayName': 'Notifications', description: 'صندوق الإشعارات العام والموجّه' },
 ];
 
 export const SWAGGER_TAG_GROUPS = [
@@ -156,6 +158,7 @@ export const SWAGGER_TAG_GROUPS = [
             SWAGGER_TAGS.MOBILE.SUGGESTIONS,
             SWAGGER_TAGS.MOBILE.ADS,
             SWAGGER_TAGS.MOBILE.ABOUT_US,
+            SWAGGER_TAGS.MOBILE.NOTIFICATIONS,
         ],
     },
 ];

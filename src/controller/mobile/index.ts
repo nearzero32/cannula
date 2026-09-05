@@ -16,6 +16,7 @@ import { mobileAppointmentsController } from './appointments.controller';
 import { mobileHomeCareRequestsController } from './home-care-requests.controller';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { mobilePharmacyRequestsController } from './pharmacy-requests.controller';
+import { mobileNotificationsController } from './notifications.controller';
 import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { TokenAudienceEnum } from '../../constants/jwt';
@@ -28,7 +29,8 @@ const mobilePublicController = new Elysia()
     .use(mobileChronicConditionsController)
     .use(mobileDoctorsController)
     .use(mobileSpecialtiesController)
-    .use(mobileHomeCareController);
+    .use(mobileHomeCareController)
+    .use(mobileNotificationsController);
 
 /** Protected mobile routes — each controller explicitly applies the mobile AuthPlugin audience. */
 const mobileProtectedController = new Elysia()

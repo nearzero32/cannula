@@ -34,7 +34,10 @@ const requestBodySchema = t.Object({
         lng: t.Number({ minimum: -180, maximum: 180 }),
     }, { additionalProperties: false }),
     notes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
-}, { additionalProperties: false });
+}, {
+    additionalProperties: false,
+    examples: [{ service_id: '507f1f77bcf86cd799439011', child_id: null, requested_date: '2099-01-02', preferred_time: '10:30', address: { address_text: 'بغداد - المنصور', lat: 33.3128, lng: 44.3615 }, notes: 'يرجى الاتصال قبل الوصول' }],
+});
 
 const cancellationBodySchema = t.Object({
     reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),

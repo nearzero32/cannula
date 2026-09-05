@@ -16,6 +16,7 @@ import {
 interface OpenApiOperation {
     responses?: Record<string, unknown>;
     tags?: string[];
+    requestBody?: unknown;
 }
 
 interface OpenApiDocument {
@@ -200,6 +201,26 @@ describe('API response documentation coverage', () => {
         expect(historyPath?.post).toBeUndefined();
         expect(historyPath?.patch).toBeUndefined();
         expect(historyPath?.delete).toBeUndefined();
+    });
+
+    test('Home Care OpenAPI reflects Phase 7 workflow restrictions and route surface', async () => {
+        const app = new Elysia({ prefix: '/api' }).use(openapi(swaggerConfig)).use(dashboardController).use(mobileController);
+        const document = await (await app.handle(new Request('http://localhost/api/swagger/json'))).json() as OpenApiDocument;
+        const operation = (path: string, method: string) => document.paths?.[path]?.[method];
+        const adminBase = '/api/dash/admin/home-care/requests/{id}', nurseBase = '/api/dash/nurse/home-care/{id}';
+        const status = operation(`${adminBase}/status`, 'patch');
+        expect(status).toBeDefined();
+        expect(JSON.stringify(status?.requestBody)).toContain('confirmed');
+        expect(JSON.stringify(status?.requestBody)).not.toContain('in_progress');
+        expect(Object.keys(status?.responses ?? {})).toContain('409');
+        for (const suffix of ['reject', 'assign', 'reassign', 'unassign', 'reopen', 'cancel', 'internal-note']) expect(operation(`${adminBase}/${suffix}`, 'patch')).toBeDefined();
+        expect(Object.keys(operation(`${adminBase}/history`, 'get')?.responses ?? {})).toContain('400');
+        for (const suffix of ['claim', 'on-the-way', 'arrived', 'start', 'complete']) expect(operation(`${nurseBase}/${suffix}`, 'patch')).toBeDefined();
+        expect(Object.keys(operation('/api/mobile/home-care/requests/{id}/cancel', 'patch')?.responses ?? {})).toContain('409');
+        const mobileResponse = JSON.stringify(operation('/api/mobile/home-care/requests/', 'post')?.responses);
+        expect(mobileResponse).not.toContain('internal_notes');
+        expect(mobileResponse).not.toContain('assigned_by_user_id');
+        expect(mobileResponse).not.toContain('"version"');
     });
 });
 

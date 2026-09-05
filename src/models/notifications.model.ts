@@ -3,6 +3,7 @@ import {
     INotificationTypeEnum,
     INotificationRecipientModelEnum,
     INotificationStatusEnum,
+    INotificationAudienceEnum, INotificationCategoryEnum, INotificationPrivacyEnum,
 } from '../interfaces/notification.interface';
 import type { INotification } from '../interfaces/notification.interface';
 
@@ -10,6 +11,13 @@ export type NotificationDocument = mongoose.Document & INotification;
 
 const notificationSchema = new Schema<NotificationDocument>(
     {
+        audience: { type: String, enum: Object.values(INotificationAudienceEnum), default: INotificationAudienceEnum.TARGETED, index: true },
+        category: { type: String, enum: Object.values(INotificationCategoryEnum), default: INotificationCategoryEnum.SYSTEM, index: true },
+        privacy: { type: String, enum: Object.values(INotificationPrivacyEnum), default: INotificationPrivacyEnum.NORMAL },
+        source: { type: new Schema({ domain: { type: String, enum: ['appointment'] }, id: { type: Schema.Types.ObjectId } }, { _id: false }), default: null },
+        target: { type: new Schema({ type: { type: String, enum: ['appointment'] }, id: { type: Schema.Types.ObjectId } }, { _id: false }), default: null },
+        visible_at: { type: Date, default: Date.now, index: true },
+        expires_at: { type: Date, default: () => new Date(Date.now() + 7776000000) },
         dedupe_key: { type: String, trim: true, default: null },
         /**
          * Entities receiving the notification.
@@ -156,12 +164,13 @@ notificationSchema.index({ status: 1, scheduled_at: 1 });
  * Fetch all notifications for a recipient in chronological order.
  */
 notificationSchema.index({ recipient_ids: 1, createdAt: -1 });
-notificationSchema.index({ dedupe_key: 1 }, { unique: true, sparse: true });
+notificationSchema.index({ dedupe_key: 1 }, { unique: true, partialFilterExpression: { dedupe_key: { $type: 'string' } } });
+notificationSchema.index({ audience: 1, category: 1, visible_at: 1, createdAt: -1, _id: -1 });
 
 /**
  * Auto-delete notifications after 90 days.
  */
-notificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+notificationSchema.index({ expires_at: 1 }, { expireAfterSeconds: 0 });
 
 export const Notification =
     (models.Notification as mongoose.Model<NotificationDocument>) ||

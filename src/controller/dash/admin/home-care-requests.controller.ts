@@ -163,17 +163,17 @@ export const homeCareRequestsAdminController = new Elysia({
         if (!request) throw new DomainError('الطلب غير موجود', 404);
         const history = await homeCareRequestHistoryService.list(params.id);
         return { error: false, message: 'تم جلب سجل الطلب بنجاح', data: history.map(formatHistory) };
-    }, { params: t.Object({ id: t.String() }), response: { 200: HomeCareHistoryListResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } })
+    }, { params: t.Object({ id: t.String() }), response: { 200: HomeCareHistoryListResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } })
     .patch('/:id/assign', async ({ params, body, phrase }) => {
         await requireOperationalAccess(phrase._id, phrase.role);
         const request = await homeCareDispatchService.assign(params.id, body.nurse_id, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/assign`));
         return { error: false, message: 'تم تعيين الممرض بنجاح', data: formatHomeCareRequestForDashboard(request) };
-    }, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String() }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } })
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String() }, { additionalProperties: false, examples: [{ nurse_id: '507f1f77bcf86cd799439012' }] }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } })
     .patch('/:id/reassign', async ({ params, body, phrase }) => {
         await requireOperationalAccess(phrase._id, phrase.role);
         const request = await homeCareDispatchService.reassign(params.id, body.nurse_id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/reassign`));
         return { error: false, message: 'تم إعادة تعيين الممرض بنجاح', data: formatHomeCareRequestForDashboard(request) };
-    }, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String(), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } })
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ nurse_id: t.String(), reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))) }, { additionalProperties: false, examples: [{ nurse_id: '507f1f77bcf86cd799439013', reason: 'تبديل تشغيلي للممرض' }] }), response: { 200: DashboardHomeCareRequestResponseSchema, 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: t.Union([ValidationErrorResponseSchema, UnprocessableEntityResponseSchema]), ...ProtectedApiErrorResponses } })
     .patch('/:id/unassign', async ({ params, body, phrase }) => {
         await requireOperationalAccess(phrase._id, phrase.role);
         const request = await homeCareDispatchService.unassign(params.id, body.reason, dispatchActor(phrase._id, `/dash/admin/home-care/requests/${params.id}/unassign`));
@@ -207,7 +207,7 @@ export const homeCareRequestsAdminController = new Elysia({
         };
     }, {
         params: t.Object({ id: t.String() }),
-        body: t.Object({ status: t.Enum(IHomeCareRequestStatusEnum) }, { additionalProperties: false }),
+        body: t.Object({ status: t.Literal(IHomeCareRequestStatusEnum.CONFIRMED) }, { additionalProperties: false }),
         response: {
             200: DashboardHomeCareRequestResponseSchema,
             400: BadRequestResponseSchema,
@@ -238,7 +238,7 @@ export const homeCareRequestsAdminController = new Elysia({
         params: t.Object({ id: t.String() }),
         body: t.Object({
             reason: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
-        }, { additionalProperties: false }),
+        }, { additionalProperties: false, examples: [{ reason: 'إلغاء طارئ أثناء تنفيذ الخدمة' }] }),
         response: {
             200: DashboardHomeCareRequestResponseSchema,
             400: BadRequestResponseSchema,

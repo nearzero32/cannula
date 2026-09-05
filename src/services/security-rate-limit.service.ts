@@ -11,7 +11,7 @@ return {current <= tonumber(ARGV[2]) and 1 or 0, math.max(0, tonumber(ARGV[2]) -
 export const AUTH_RATE_POLICIES = {
     OTP_START_PHONE:{limit:5,window:600}, OTP_START_IP:{limit:30,window:600}, OTP_RESEND_PHONE:{limit:6,window:600}, OTP_RESEND_IP:{limit:30,window:600},
     OTP_VERIFY_PHONE:{limit:20,window:600}, OTP_VERIFY_IP:{limit:60,window:600}, PIN_PHONE:{limit:5,window:600}, PIN_IP:{limit:30,window:600},
-    SUPPORT_ADMIN:{limit:10,window:3600}, SUPPORT_FLOW:{limit:2,window:600}, UPLOAD_USER:{limit:10,window:60},
+    SUPPORT_ADMIN:{limit:10,window:3600}, SUPPORT_FLOW:{limit:2,window:600}, UPLOAD_USER:{limit:10,window:60}, NOTIFICATION_GUEST_WRITE:{limit:30,window:60},
 } as const;
 export type AuthRatePolicy = keyof typeof AUTH_RATE_POLICIES;
 export interface RateLimitResult { allowed:boolean; remaining:number; retryAfterSeconds:number }
