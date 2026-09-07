@@ -39,6 +39,7 @@ Read state is viewer-specific and computed from read receipts; never trust legac
 | `general` | admin-selected | informational; target may be null |
 | `home_care_confirmed`, `home_care_assigned`, `home_care_on_the_way`, `home_care_arrived`, `home_care_in_progress`, `home_care_completed`, `home_care_cancelled`, `home_care_rejected` | services/home_care_request | open Home Care request |
 | `pharmacy_under_review`, `pharmacy_quotation_ready`, `pharmacy_quotation_declined`, `pharmacy_confirmed`, `pharmacy_preparing`, `pharmacy_ready_for_delivery`, `pharmacy_out_for_delivery`, `pharmacy_delivered`, `pharmacy_cancelled`, `pharmacy_rejected`, `pharmacy_reopened` | medications/pharmacy_treatment_request | open Pharmacy request |
+| `medication_reminder` | medications/patient_medication | in-app only; open Medication Dose; never delivered by OneSignal |
 
 Targets are semantic, not frontend routes:
 
@@ -47,8 +48,11 @@ switch (notification.target?.type) {
   case 'appointment': openAppointment(notification.target!.id); break;
   case 'home_care_request': openHomeCareRequest(notification.target!.id); break;
   case 'pharmacy_treatment_request': openPharmacyRequest(notification.target!.id); break;
+  case 'medication_dose': openMedicationDose(notification.target!.id); break;
 }
 ```
+
+Medication reminders use `visible_at = dose.scheduled_at`, so they are absent from inbox and unread counts before the scheduled instant. Their read receipt never changes the dose status. Device alerts are Local Notifications scheduled from the medication reminder sync API; the backend creates no `NotificationDelivery` row for them.
 
 Inbox may contain the full allowed title/body. For `privacy: "sensitive"`, push delivery uses generic title `Cannula` and body `لديك إشعار جديد`; never assume push text equals inbox text. Group Today/Yesterday/Previous locally using Baghdad time.
 
@@ -63,4 +67,3 @@ flowchart LR
 ```
 
 Arabic: `all` ليست قيمة مخزنة، وحالة القراءة تخص المستخدم أو تثبيت الجهاز الحالي فقط.
-

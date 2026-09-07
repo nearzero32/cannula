@@ -46,7 +46,7 @@ var __export = (target, all) => {
 var __esm = (fn, res) => () => (fn && (res = fn(fn = 0)), res);
 var __require = import.meta.require;
 
-// node_modules/elysia/node_modules/fast-decode-uri-component/index.js
+// node_modules/fast-decode-uri-component/index.js
 var require_fast_decode_uri_component = __commonJS((exports, module) => {
   var UTF8_ACCEPT = 12;
   var UTF8_REJECT = 0;
@@ -493,12 +493,12 @@ var require_fast_decode_uri_component = __commonJS((exports, module) => {
   module.exports = decodeURIComponent2;
 });
 
-// node_modules/token-types/node_modules/ieee754/index.js
+// node_modules/ieee754/index.js
 var init_ieee754 = __esm(() => {
   /*! ieee754. BSD-3-Clause License. Feross Aboukhadijeh <https://feross.org/opensource> */
 });
 
-// node_modules/token-types/node_modules/@borewit/text-codec/lib/index.js
+// node_modules/@borewit/text-codec/lib/index.js
 function utf8Decoder() {
   if (typeof globalThis.TextDecoder === "undefined")
     return;
@@ -1309,7 +1309,7 @@ var init_core = __esm(() => {
   init_AbstractTokenizer();
 });
 
-// node_modules/@tokenizer/inflate/node_modules/ms/index.js
+// node_modules/ms/index.js
 var require_ms = __commonJS((exports, module) => {
   var s = 1000;
   var m = s * 60;
@@ -2794,14 +2794,10 @@ async function decompressDeflateRawWithLimit(data, { maximumLength = maximumZipE
       }
       totalLength += value.length;
       if (totalLength > maximumLength) {
-        await reader.cancel().catch(() => {});
+        await reader.cancel();
         throw new Error(`ZIP entry decompressed data exceeds ${maximumLength} bytes`);
       }
       chunks.push(value);
-    }
-  } catch (error) {
-    if (error.code !== "ERR_TRAILING_JUNK_AFTER_STREAM_END") {
-      throw error;
     }
   } finally {
     reader.releaseLock();
@@ -4832,8 +4828,8 @@ class FileTypeParser {
         mime: "image/x-icon"
       };
     }
-    await tokenizer.peekBuffer(this.buffer, { length: Math.min(4 + this.options.mpegOffsetTolerance, fileSize), mayBeLess: true });
-    if (this.buffer.length >= 4 + this.options.mpegOffsetTolerance) {
+    await tokenizer.peekBuffer(this.buffer, { length: Math.min(2 + this.options.mpegOffsetTolerance, fileSize), mayBeLess: true });
+    if (this.buffer.length >= 2 + this.options.mpegOffsetTolerance) {
       for (let depth = 0;depth <= this.options.mpegOffsetTolerance; ++depth) {
         const type = this.scanMpeg(depth);
         if (type) {
@@ -4933,22 +4929,16 @@ class FileTypeParser {
   scanMpeg(offset) {
     if (this.check([255, 224], { offset, mask: [255, 224] })) {
       if (this.check([16], { offset: offset + 1, mask: [22] })) {
+        if (this.check([8], { offset: offset + 1, mask: [8] })) {
+          return {
+            ext: "aac",
+            mime: "audio/aac"
+          };
+        }
         return {
           ext: "aac",
           mime: "audio/aac"
         };
-      }
-      if (this.check([255, 254], { offset })) {
-        return;
-      }
-      if (this.check([8], { offset: offset + 1, mask: [24] })) {
-        return;
-      }
-      if (this.check([240], { offset: offset + 2, mask: [240] })) {
-        return;
-      }
-      if (this.check([12], { offset: offset + 2, mask: [12] })) {
-        return;
       }
       if (this.check([2], { offset: offset + 1, mask: [6] })) {
         return {
@@ -4987,7 +4977,7 @@ var init_source = __esm(() => {
   init_ebml();
   init_png();
   init_asf();
-  maximumMpegOffsetTolerance = reasonableDetectionSizeInBytes - 4;
+  maximumMpegOffsetTolerance = reasonableDetectionSizeInBytes - 2;
   maximumNestedGzipDetectionSizeInBytes = maximumUntrustedSkipSizeInBytes;
   maximumId3HeaderSizeInBytes = maximumUntrustedSkipSizeInBytes;
   maximumTiffStreamIfdOffsetInBytes = 1024 * 1024;
@@ -4996,7 +4986,7 @@ var init_source = __esm(() => {
   supportedMimeTypes = new Set(mimeTypes);
 });
 
-// node_modules/elysia/node_modules/cookie/dist/index.js
+// node_modules/cookie/dist/index.js
 var require_dist = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.parseCookie = parseCookie;
@@ -5241,7 +5231,7 @@ var require_dist = __commonJS((exports) => {
   }
 });
 
-// node_modules/mongoose/node_modules/ms/index.js
+// node_modules/debug/node_modules/ms/index.js
 var require_ms2 = __commonJS((exports, module) => {
   var s = 1000;
   var m = s * 60;
@@ -43340,7 +43330,7 @@ var require_utils3 = __commonJS((exports) => {
    * Module dependencies.
    */
   var UUID = require_bson().UUID;
-  var ms = require_ms2();
+  var ms = require_ms();
   var mpath = require_mpath();
   var ObjectId2 = require_objectid();
   var PopulateOptions = require_populateOptions();
@@ -56344,6 +56334,521 @@ var require_utils4 = __commonJS((exports) => {
   };
 });
 
+// node_modules/mquery/node_modules/debug/src/common.js
+var require_common6 = __commonJS((exports, module) => {
+  function setup(env3) {
+    createDebug.debug = createDebug;
+    createDebug.default = createDebug;
+    createDebug.coerce = coerce;
+    createDebug.disable = disable;
+    createDebug.enable = enable;
+    createDebug.enabled = enabled;
+    createDebug.humanize = require_ms();
+    createDebug.destroy = destroy;
+    Object.keys(env3).forEach((key) => {
+      createDebug[key] = env3[key];
+    });
+    createDebug.names = [];
+    createDebug.skips = [];
+    createDebug.formatters = {};
+    function selectColor(namespace) {
+      let hash2 = 0;
+      for (let i = 0;i < namespace.length; i++) {
+        hash2 = (hash2 << 5) - hash2 + namespace.charCodeAt(i);
+        hash2 |= 0;
+      }
+      return createDebug.colors[Math.abs(hash2) % createDebug.colors.length];
+    }
+    createDebug.selectColor = selectColor;
+    function createDebug(namespace) {
+      let prevTime;
+      let enableOverride = null;
+      let namespacesCache;
+      let enabledCache;
+      function debug3(...args) {
+        if (!debug3.enabled) {
+          return;
+        }
+        const self2 = debug3;
+        const curr = Number(new Date);
+        const ms = curr - (prevTime || curr);
+        self2.diff = ms;
+        self2.prev = prevTime;
+        self2.curr = curr;
+        prevTime = curr;
+        args[0] = createDebug.coerce(args[0]);
+        if (typeof args[0] !== "string") {
+          args.unshift("%O");
+        }
+        let index = 0;
+        args[0] = args[0].replace(/%([a-zA-Z%])/g, (match, format) => {
+          if (match === "%%") {
+            return "%";
+          }
+          index++;
+          const formatter = createDebug.formatters[format];
+          if (typeof formatter === "function") {
+            const val = args[index];
+            match = formatter.call(self2, val);
+            args.splice(index, 1);
+            index--;
+          }
+          return match;
+        });
+        createDebug.formatArgs.call(self2, args);
+        const logFn = self2.log || createDebug.log;
+        logFn.apply(self2, args);
+      }
+      debug3.namespace = namespace;
+      debug3.useColors = createDebug.useColors();
+      debug3.color = createDebug.selectColor(namespace);
+      debug3.extend = extend2;
+      debug3.destroy = createDebug.destroy;
+      Object.defineProperty(debug3, "enabled", {
+        enumerable: true,
+        configurable: false,
+        get: () => {
+          if (enableOverride !== null) {
+            return enableOverride;
+          }
+          if (namespacesCache !== createDebug.namespaces) {
+            namespacesCache = createDebug.namespaces;
+            enabledCache = createDebug.enabled(namespace);
+          }
+          return enabledCache;
+        },
+        set: (v) => {
+          enableOverride = v;
+        }
+      });
+      if (typeof createDebug.init === "function") {
+        createDebug.init(debug3);
+      }
+      return debug3;
+    }
+    function extend2(namespace, delimiter) {
+      const newDebug = createDebug(this.namespace + (typeof delimiter === "undefined" ? ":" : delimiter) + namespace);
+      newDebug.log = this.log;
+      return newDebug;
+    }
+    function enable(namespaces) {
+      createDebug.save(namespaces);
+      createDebug.namespaces = namespaces;
+      createDebug.names = [];
+      createDebug.skips = [];
+      const split = (typeof namespaces === "string" ? namespaces : "").trim().replace(/\s+/g, ",").split(",").filter(Boolean);
+      for (const ns of split) {
+        if (ns[0] === "-") {
+          createDebug.skips.push(ns.slice(1));
+        } else {
+          createDebug.names.push(ns);
+        }
+      }
+    }
+    function matchesTemplate(search, template) {
+      let searchIndex = 0;
+      let templateIndex = 0;
+      let starIndex = -1;
+      let matchIndex = 0;
+      while (searchIndex < search.length) {
+        if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === "*")) {
+          if (template[templateIndex] === "*") {
+            starIndex = templateIndex;
+            matchIndex = searchIndex;
+            templateIndex++;
+          } else {
+            searchIndex++;
+            templateIndex++;
+          }
+        } else if (starIndex !== -1) {
+          templateIndex = starIndex + 1;
+          matchIndex++;
+          searchIndex = matchIndex;
+        } else {
+          return false;
+        }
+      }
+      while (templateIndex < template.length && template[templateIndex] === "*") {
+        templateIndex++;
+      }
+      return templateIndex === template.length;
+    }
+    function disable() {
+      const namespaces = [
+        ...createDebug.names,
+        ...createDebug.skips.map((namespace) => "-" + namespace)
+      ].join(",");
+      createDebug.enable("");
+      return namespaces;
+    }
+    function enabled(name) {
+      for (const skip of createDebug.skips) {
+        if (matchesTemplate(name, skip)) {
+          return false;
+        }
+      }
+      for (const ns of createDebug.names) {
+        if (matchesTemplate(name, ns)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    function coerce(val) {
+      if (val instanceof Error) {
+        return val.stack || val.message;
+      }
+      return val;
+    }
+    function destroy() {
+      console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+    }
+    createDebug.enable(createDebug.load());
+    return createDebug;
+  }
+  module.exports = setup;
+});
+
+// node_modules/mquery/node_modules/debug/src/browser.js
+var require_browser3 = __commonJS((exports, module) => {
+  exports.formatArgs = formatArgs;
+  exports.save = save;
+  exports.load = load;
+  exports.useColors = useColors;
+  exports.storage = localstorage();
+  exports.destroy = (() => {
+    let warned2 = false;
+    return () => {
+      if (!warned2) {
+        warned2 = true;
+        console.warn("Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+      }
+    };
+  })();
+  exports.colors = [
+    "#0000CC",
+    "#0000FF",
+    "#0033CC",
+    "#0033FF",
+    "#0066CC",
+    "#0066FF",
+    "#0099CC",
+    "#0099FF",
+    "#00CC00",
+    "#00CC33",
+    "#00CC66",
+    "#00CC99",
+    "#00CCCC",
+    "#00CCFF",
+    "#3300CC",
+    "#3300FF",
+    "#3333CC",
+    "#3333FF",
+    "#3366CC",
+    "#3366FF",
+    "#3399CC",
+    "#3399FF",
+    "#33CC00",
+    "#33CC33",
+    "#33CC66",
+    "#33CC99",
+    "#33CCCC",
+    "#33CCFF",
+    "#6600CC",
+    "#6600FF",
+    "#6633CC",
+    "#6633FF",
+    "#66CC00",
+    "#66CC33",
+    "#9900CC",
+    "#9900FF",
+    "#9933CC",
+    "#9933FF",
+    "#99CC00",
+    "#99CC33",
+    "#CC0000",
+    "#CC0033",
+    "#CC0066",
+    "#CC0099",
+    "#CC00CC",
+    "#CC00FF",
+    "#CC3300",
+    "#CC3333",
+    "#CC3366",
+    "#CC3399",
+    "#CC33CC",
+    "#CC33FF",
+    "#CC6600",
+    "#CC6633",
+    "#CC9900",
+    "#CC9933",
+    "#CCCC00",
+    "#CCCC33",
+    "#FF0000",
+    "#FF0033",
+    "#FF0066",
+    "#FF0099",
+    "#FF00CC",
+    "#FF00FF",
+    "#FF3300",
+    "#FF3333",
+    "#FF3366",
+    "#FF3399",
+    "#FF33CC",
+    "#FF33FF",
+    "#FF6600",
+    "#FF6633",
+    "#FF9900",
+    "#FF9933",
+    "#FFCC00",
+    "#FFCC33"
+  ];
+  function useColors() {
+    if (typeof window !== "undefined" && window.process && (window.process.type === "renderer" || window.process.__nwjs)) {
+      return true;
+    }
+    if (typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/(edge|trident)\/(\d+)/)) {
+      return false;
+    }
+    let m;
+    return typeof document !== "undefined" && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance || typeof window !== "undefined" && window.console && (window.console.firebug || window.console.exception && window.console.table) || typeof navigator !== "undefined" && navigator.userAgent && (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m[1], 10) >= 31 || typeof navigator !== "undefined" && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/);
+  }
+  function formatArgs(args) {
+    args[0] = (this.useColors ? "%c" : "") + this.namespace + (this.useColors ? " %c" : " ") + args[0] + (this.useColors ? "%c " : " ") + "+" + module.exports.humanize(this.diff);
+    if (!this.useColors) {
+      return;
+    }
+    const c = "color: " + this.color;
+    args.splice(1, 0, c, "color: inherit");
+    let index = 0;
+    let lastC = 0;
+    args[0].replace(/%[a-zA-Z%]/g, (match) => {
+      if (match === "%%") {
+        return;
+      }
+      index++;
+      if (match === "%c") {
+        lastC = index;
+      }
+    });
+    args.splice(lastC, 0, c);
+  }
+  exports.log = console.debug || console.log || (() => {});
+  function save(namespaces) {
+    try {
+      if (namespaces) {
+        exports.storage.setItem("debug", namespaces);
+      } else {
+        exports.storage.removeItem("debug");
+      }
+    } catch (error) {}
+  }
+  function load() {
+    let r;
+    try {
+      r = exports.storage.getItem("debug") || exports.storage.getItem("DEBUG");
+    } catch (error) {}
+    if (!r && typeof process !== "undefined" && "env" in process) {
+      r = process.env.DEBUG;
+    }
+    return r;
+  }
+  function localstorage() {
+    try {
+      return localStorage;
+    } catch (error) {}
+  }
+  module.exports = require_common6()(exports);
+  var { formatters } = module.exports;
+  formatters.j = function(v) {
+    try {
+      return JSON.stringify(v);
+    } catch (error) {
+      return "[UnexpectedJSONParseError]: " + error.message;
+    }
+  };
+});
+
+// node_modules/mquery/node_modules/debug/src/node.js
+var require_node4 = __commonJS((exports, module) => {
+  var tty = __require("tty");
+  var util = __require("util");
+  exports.init = init;
+  exports.log = log;
+  exports.formatArgs = formatArgs;
+  exports.save = save;
+  exports.load = load;
+  exports.useColors = useColors;
+  exports.destroy = util.deprecate(() => {}, "Instance method `debug.destroy()` is deprecated and no longer does anything. It will be removed in the next major version of `debug`.");
+  exports.colors = [6, 2, 3, 4, 5, 1];
+  try {
+    const supportsColor = (()=>{throw new Error("Cannot require module "+"supports-color");})();
+    if (supportsColor && (supportsColor.stderr || supportsColor).level >= 2) {
+      exports.colors = [
+        20,
+        21,
+        26,
+        27,
+        32,
+        33,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        56,
+        57,
+        62,
+        63,
+        68,
+        69,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        92,
+        93,
+        98,
+        99,
+        112,
+        113,
+        128,
+        129,
+        134,
+        135,
+        148,
+        149,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        178,
+        179,
+        184,
+        185,
+        196,
+        197,
+        198,
+        199,
+        200,
+        201,
+        202,
+        203,
+        204,
+        205,
+        206,
+        207,
+        208,
+        209,
+        214,
+        215,
+        220,
+        221
+      ];
+    }
+  } catch (error) {}
+  exports.inspectOpts = Object.keys(process.env).filter((key) => {
+    return /^debug_/i.test(key);
+  }).reduce((obj, key) => {
+    const prop = key.substring(6).toLowerCase().replace(/_([a-z])/g, (_2, k2) => {
+      return k2.toUpperCase();
+    });
+    let val = process.env[key];
+    if (/^(yes|on|true|enabled)$/i.test(val)) {
+      val = true;
+    } else if (/^(no|off|false|disabled)$/i.test(val)) {
+      val = false;
+    } else if (val === "null") {
+      val = null;
+    } else {
+      val = Number(val);
+    }
+    obj[prop] = val;
+    return obj;
+  }, {});
+  function useColors() {
+    return "colors" in exports.inspectOpts ? Boolean(exports.inspectOpts.colors) : tty.isatty(process.stderr.fd);
+  }
+  function formatArgs(args) {
+    const { namespace: name, useColors: useColors2 } = this;
+    if (useColors2) {
+      const c = this.color;
+      const colorCode = "\x1B[3" + (c < 8 ? c : "8;5;" + c);
+      const prefix = `  ${colorCode};1m${name} \x1B[0m`;
+      args[0] = prefix + args[0].split(`
+`).join(`
+` + prefix);
+      args.push(colorCode + "m+" + module.exports.humanize(this.diff) + "\x1B[0m");
+    } else {
+      args[0] = getDate() + name + " " + args[0];
+    }
+  }
+  function getDate() {
+    if (exports.inspectOpts.hideDate) {
+      return "";
+    }
+    return new Date().toISOString() + " ";
+  }
+  function log(...args) {
+    return process.stderr.write(util.formatWithOptions(exports.inspectOpts, ...args) + `
+`);
+  }
+  function save(namespaces) {
+    if (namespaces) {
+      process.env.DEBUG = namespaces;
+    } else {
+      delete process.env.DEBUG;
+    }
+  }
+  function load() {
+    return process.env.DEBUG;
+  }
+  function init(debug3) {
+    debug3.inspectOpts = {};
+    const keys = Object.keys(exports.inspectOpts);
+    for (let i = 0;i < keys.length; i++) {
+      debug3.inspectOpts[keys[i]] = exports.inspectOpts[keys[i]];
+    }
+  }
+  module.exports = require_common6()(exports);
+  var { formatters } = module.exports;
+  formatters.o = function(v) {
+    this.inspectOpts.colors = this.useColors;
+    return util.inspect(v, this.inspectOpts).split(`
+`).map((str) => str.trim()).join(" ");
+  };
+  formatters.O = function(v) {
+    this.inspectOpts.colors = this.useColors;
+    return util.inspect(v, this.inspectOpts);
+  };
+});
+
+// node_modules/mquery/node_modules/debug/src/index.js
+var require_src3 = __commonJS((exports, module) => {
+  if (typeof process === "undefined" || process.type === "renderer" || false || process.__nwjs) {
+    module.exports = require_browser3();
+  } else {
+    module.exports = require_node4();
+  }
+});
+
 // node_modules/mquery/lib/permissions.js
 var require_permissions = __commonJS((exports) => {
   var denied = exports;
@@ -56434,7 +56939,7 @@ var require_collection4 = __commonJS((exports, module) => {
 });
 
 // node_modules/mquery/lib/collection/node.js
-var require_node4 = __commonJS((exports, module) => {
+var require_node5 = __commonJS((exports, module) => {
   var Collection = require_collection4();
 
   class NodeCollection extends Collection {
@@ -56490,7 +56995,7 @@ var require_collection5 = __commonJS((exports, module) => {
   if (env3.type == "unknown") {
     throw new Error("Unknown environment");
   }
-  module.exports = env3.isNode ? require_node4() : env3.isMongo ? require_collection4() : require_collection4();
+  module.exports = env3.isNode ? require_node5() : env3.isMongo ? require_collection4() : require_collection4();
 });
 
 // node_modules/mquery/lib/mquery.js
@@ -56498,7 +57003,7 @@ var require_mquery = __commonJS((exports, module) => {
   var assert3 = __require("assert");
   var util = __require("util");
   var utils = require_utils4();
-  var debug3 = require_src2()("mquery");
+  var debug3 = require_src3()("mquery");
   function Query(criteria, options) {
     if (!(this instanceof Query))
       return new Query(criteria, options);
@@ -91247,119 +91752,9 @@ var require_TokenExpiredError = __commonJS((exports, module) => {
   module.exports = TokenExpiredError;
 });
 
-// node_modules/jsonwebtoken/node_modules/ms/index.js
-var require_ms3 = __commonJS((exports, module) => {
-  var s = 1000;
-  var m = s * 60;
-  var h = m * 60;
-  var d = h * 24;
-  var w = d * 7;
-  var y = d * 365.25;
-  module.exports = function(val, options) {
-    options = options || {};
-    var type = typeof val;
-    if (type === "string" && val.length > 0) {
-      return parse3(val);
-    } else if (type === "number" && isFinite(val)) {
-      return options.long ? fmtLong(val) : fmtShort(val);
-    }
-    throw new Error("val is not a non-empty string or a valid number. val=" + JSON.stringify(val));
-  };
-  function parse3(str) {
-    str = String(str);
-    if (str.length > 100) {
-      return;
-    }
-    var match = /^(-?(?:\d+)?\.?\d+) *(milliseconds?|msecs?|ms|seconds?|secs?|s|minutes?|mins?|m|hours?|hrs?|h|days?|d|weeks?|w|years?|yrs?|y)?$/i.exec(str);
-    if (!match) {
-      return;
-    }
-    var n = parseFloat(match[1]);
-    var type = (match[2] || "ms").toLowerCase();
-    switch (type) {
-      case "years":
-      case "year":
-      case "yrs":
-      case "yr":
-      case "y":
-        return n * y;
-      case "weeks":
-      case "week":
-      case "w":
-        return n * w;
-      case "days":
-      case "day":
-      case "d":
-        return n * d;
-      case "hours":
-      case "hour":
-      case "hrs":
-      case "hr":
-      case "h":
-        return n * h;
-      case "minutes":
-      case "minute":
-      case "mins":
-      case "min":
-      case "m":
-        return n * m;
-      case "seconds":
-      case "second":
-      case "secs":
-      case "sec":
-      case "s":
-        return n * s;
-      case "milliseconds":
-      case "millisecond":
-      case "msecs":
-      case "msec":
-      case "ms":
-        return n;
-      default:
-        return;
-    }
-  }
-  function fmtShort(ms) {
-    var msAbs = Math.abs(ms);
-    if (msAbs >= d) {
-      return Math.round(ms / d) + "d";
-    }
-    if (msAbs >= h) {
-      return Math.round(ms / h) + "h";
-    }
-    if (msAbs >= m) {
-      return Math.round(ms / m) + "m";
-    }
-    if (msAbs >= s) {
-      return Math.round(ms / s) + "s";
-    }
-    return ms + "ms";
-  }
-  function fmtLong(ms) {
-    var msAbs = Math.abs(ms);
-    if (msAbs >= d) {
-      return plural(ms, msAbs, d, "day");
-    }
-    if (msAbs >= h) {
-      return plural(ms, msAbs, h, "hour");
-    }
-    if (msAbs >= m) {
-      return plural(ms, msAbs, m, "minute");
-    }
-    if (msAbs >= s) {
-      return plural(ms, msAbs, s, "second");
-    }
-    return ms + " ms";
-  }
-  function plural(ms, msAbs, n, name) {
-    var isPlural = msAbs >= n * 1.5;
-    return Math.round(ms / n) + " " + name + (isPlural ? "s" : "");
-  }
-});
-
 // node_modules/jsonwebtoken/lib/timespan.js
 var require_timespan = __commonJS((exports, module) => {
-  var ms = require_ms3();
+  var ms = require_ms();
   module.exports = function(time3, iat) {
     var timestamp = iat || Math.floor(Date.now() / 1000);
     if (typeof time3 === "string") {
@@ -99225,7 +99620,7 @@ ${value}\r
   exports.v4 = v4;
 });
 
-// node_modules/@smithy/core/node_modules/tslib/tslib.js
+// node_modules/tslib/tslib.js
 var require_tslib = __commonJS((exports, module) => {
   var __extends;
   var __assign;
@@ -99830,7 +100225,7 @@ var require_tslib = __commonJS((exports, module) => {
   });
 });
 
-// node_modules/@smithy/core/node_modules/@smithy/is-array-buffer/dist-cjs/index.js
+// node_modules/@smithy/is-array-buffer/dist-cjs/index.js
 var require_dist_cjs2 = __commonJS((exports, module) => {
   var __defProp3 = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -99858,7 +100253,7 @@ var require_dist_cjs2 = __commonJS((exports, module) => {
   var isArrayBuffer = /* @__PURE__ */ __name((arg) => typeof ArrayBuffer === "function" && arg instanceof ArrayBuffer || Object.prototype.toString.call(arg) === "[object ArrayBuffer]", "isArrayBuffer");
 });
 
-// node_modules/@smithy/core/node_modules/@smithy/util-buffer-from/dist-cjs/index.js
+// node_modules/@smithy/util-buffer-from/dist-cjs/index.js
 var require_dist_cjs3 = __commonJS((exports, module) => {
   var __defProp3 = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -99900,7 +100295,7 @@ var require_dist_cjs3 = __commonJS((exports, module) => {
   }, "fromString");
 });
 
-// node_modules/@smithy/core/node_modules/@smithy/util-utf8/dist-cjs/index.js
+// node_modules/@smithy/util-utf8/dist-cjs/index.js
 var require_dist_cjs4 = __commonJS((exports, module) => {
   var __defProp3 = Object.defineProperty;
   var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -99952,7 +100347,7 @@ var require_dist_cjs4 = __commonJS((exports, module) => {
   }, "toUtf8");
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/util/build/main/convertToBuffer.js
+// node_modules/@aws-crypto/util/build/main/convertToBuffer.js
 var require_convertToBuffer = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.convertToBuffer = undefined;
@@ -99974,7 +100369,7 @@ var require_convertToBuffer = __commonJS((exports) => {
   exports.convertToBuffer = convertToBuffer;
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/util/build/main/isEmptyData.js
+// node_modules/@aws-crypto/util/build/main/isEmptyData.js
 var require_isEmptyData = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.isEmptyData = undefined;
@@ -99987,7 +100382,7 @@ var require_isEmptyData = __commonJS((exports) => {
   exports.isEmptyData = isEmptyData;
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/util/build/main/numToUint8.js
+// node_modules/@aws-crypto/util/build/main/numToUint8.js
 var require_numToUint8 = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.numToUint8 = undefined;
@@ -100002,7 +100397,7 @@ var require_numToUint8 = __commonJS((exports) => {
   exports.numToUint8 = numToUint8;
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/util/build/main/uint32ArrayFrom.js
+// node_modules/@aws-crypto/util/build/main/uint32ArrayFrom.js
 var require_uint32ArrayFrom = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.uint32ArrayFrom = undefined;
@@ -100021,7 +100416,7 @@ var require_uint32ArrayFrom = __commonJS((exports) => {
   exports.uint32ArrayFrom = uint32ArrayFrom;
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/util/build/main/index.js
+// node_modules/@aws-crypto/util/build/main/index.js
 var require_main = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.uint32ArrayFrom = exports.numToUint8 = exports.isEmptyData = exports.convertToBuffer = undefined;
@@ -100043,7 +100438,7 @@ var require_main = __commonJS((exports) => {
   } });
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/crc32/build/main/aws_crc32.js
+// node_modules/@aws-crypto/crc32/build/main/aws_crc32.js
 var require_aws_crc32 = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.AwsCrc32 = undefined;
@@ -100074,7 +100469,7 @@ var require_aws_crc32 = __commonJS((exports) => {
   exports.AwsCrc32 = AwsCrc32;
 });
 
-// node_modules/@smithy/core/node_modules/@aws-crypto/crc32/build/main/index.js
+// node_modules/@aws-crypto/crc32/build/main/index.js
 var require_main2 = __commonJS((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.AwsCrc32 = exports.Crc32 = exports.crc32 = undefined;
@@ -103461,7 +103856,7 @@ var require_dist_cjs5 = __commonJS((exports) => {
   exports.setFeature = setFeature;
 });
 
-// node_modules/@aws-sdk/core/node_modules/bowser/es5.js
+// node_modules/bowser/es5.js
 var require_es5 = __commonJS((exports, module) => {
   (function(e, t2) {
     typeof exports == "object" && typeof module == "object" ? module.exports = t2() : typeof define == "function" && define.amd ? define([], t2) : typeof exports == "object" ? exports.bowser = t2() : e.bowser = t2();
@@ -104303,7 +104698,7 @@ var require_es5 = __commonJS((exports, module) => {
 
 // node_modules/@aws-sdk/core/dist-cjs/submodules/client/index.js
 var require_client3 = __commonJS((exports) => {
-  var __dirname = "C:\\Users\\muska\\OneDrive\\Documents\\GitHub\\cannula\\node_modules\\@aws-sdk\\core\\dist-cjs\\submodules\\client";
+  var __dirname = "C:\\Users\\alpha\\Documents\\GitHub\\alphaCode\\cannula\\node_modules\\@aws-sdk\\core\\dist-cjs\\submodules\\client";
   var { Retry, RETRY_MODES } = require_retry();
   var { HttpRequest, parseUrl } = require_protocols();
   var { InvokeStore } = require_invoke_store();
@@ -105315,614 +105710,9 @@ More information can be found at: https://a.co/c895JFp`);
   exports.userAgentMiddleware = userAgentMiddleware;
 });
 
-// node_modules/@aws-sdk/checksums/node_modules/tslib/tslib.js
-var require_tslib2 = __commonJS((exports, module) => {
-  var __extends;
-  var __assign;
-  var __rest;
-  var __decorate;
-  var __param;
-  var __esDecorate;
-  var __runInitializers;
-  var __propKey;
-  var __setFunctionName;
-  var __metadata;
-  var __awaiter;
-  var __generator;
-  var __exportStar;
-  var __values;
-  var __read;
-  var __spread;
-  var __spreadArrays;
-  var __spreadArray;
-  var __await;
-  var __asyncGenerator;
-  var __asyncDelegator;
-  var __asyncValues;
-  var __makeTemplateObject;
-  var __importStar;
-  var __importDefault;
-  var __classPrivateFieldGet2;
-  var __classPrivateFieldSet2;
-  var __classPrivateFieldIn;
-  var __createBinding;
-  var __addDisposableResource;
-  var __disposeResources;
-  var __rewriteRelativeImportExtension;
-  (function(factory) {
-    var root = typeof global === "object" ? global : typeof self === "object" ? self : typeof this === "object" ? this : {};
-    if (typeof define === "function" && define.amd) {
-      define("tslib", ["exports"], function(exports2) {
-        factory(createExporter(root, createExporter(exports2)));
-      });
-    } else if (typeof module === "object" && typeof exports === "object") {
-      factory(createExporter(root, createExporter(exports)));
-    } else {
-      factory(createExporter(root));
-    }
-    function createExporter(exports2, previous) {
-      if (exports2 !== root) {
-        if (typeof Object.create === "function") {
-          Object.defineProperty(exports2, "__esModule", { value: true });
-        } else {
-          exports2.__esModule = true;
-        }
-      }
-      return function(id, v) {
-        return exports2[id] = previous ? previous(id, v) : v;
-      };
-    }
-  })(function(exporter) {
-    var extendStatics = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(d, b) {
-      d.__proto__ = b;
-    } || function(d, b) {
-      for (var p in b)
-        if (Object.prototype.hasOwnProperty.call(b, p))
-          d[p] = b[p];
-    };
-    __extends = function(d, b) {
-      if (typeof b !== "function" && b !== null)
-        throw new TypeError("Class extends value " + String(b) + " is not a constructor or null");
-      extendStatics(d, b);
-      function __() {
-        this.constructor = d;
-      }
-      d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __);
-    };
-    __assign = Object.assign || function(t2) {
-      for (var s, i = 1, n = arguments.length;i < n; i++) {
-        s = arguments[i];
-        for (var p in s)
-          if (Object.prototype.hasOwnProperty.call(s, p))
-            t2[p] = s[p];
-      }
-      return t2;
-    };
-    __rest = function(s, e) {
-      var t2 = {};
-      for (var p in s)
-        if (Object.prototype.hasOwnProperty.call(s, p) && e.indexOf(p) < 0)
-          t2[p] = s[p];
-      if (s != null && typeof Object.getOwnPropertySymbols === "function")
-        for (var i = 0, p = Object.getOwnPropertySymbols(s);i < p.length; i++) {
-          if (e.indexOf(p[i]) < 0 && Object.prototype.propertyIsEnumerable.call(s, p[i]))
-            t2[p[i]] = s[p[i]];
-        }
-      return t2;
-    };
-    __decorate = function(decorators, target, key, desc) {
-      var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
-      if (typeof Reflect === "object" && typeof Reflect.decorate === "function")
-        r = Reflect.decorate(decorators, target, key, desc);
-      else
-        for (var i = decorators.length - 1;i >= 0; i--)
-          if (d = decorators[i])
-            r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
-      return c > 3 && r && Object.defineProperty(target, key, r), r;
-    };
-    __param = function(paramIndex, decorator) {
-      return function(target, key) {
-        decorator(target, key, paramIndex);
-      };
-    };
-    __esDecorate = function(ctor, descriptorIn, decorators, contextIn, initializers, extraInitializers) {
-      function accept(f) {
-        if (f !== undefined && typeof f !== "function")
-          throw new TypeError("Function expected");
-        return f;
-      }
-      var kind = contextIn.kind, key = kind === "getter" ? "get" : kind === "setter" ? "set" : "value";
-      var target = !descriptorIn && ctor ? contextIn["static"] ? ctor : ctor.prototype : null;
-      var descriptor = descriptorIn || (target ? Object.getOwnPropertyDescriptor(target, contextIn.name) : {});
-      var _2, done = false;
-      for (var i = decorators.length - 1;i >= 0; i--) {
-        var context = {};
-        for (var p in contextIn)
-          context[p] = p === "access" ? {} : contextIn[p];
-        for (var p in contextIn.access)
-          context.access[p] = contextIn.access[p];
-        context.addInitializer = function(f) {
-          if (done)
-            throw new TypeError("Cannot add initializers after decoration has completed");
-          extraInitializers.push(accept(f || null));
-        };
-        var result = (0, decorators[i])(kind === "accessor" ? { get: descriptor.get, set: descriptor.set } : descriptor[key], context);
-        if (kind === "accessor") {
-          if (result === undefined)
-            continue;
-          if (result === null || typeof result !== "object")
-            throw new TypeError("Object expected");
-          if (_2 = accept(result.get))
-            descriptor.get = _2;
-          if (_2 = accept(result.set))
-            descriptor.set = _2;
-          if (_2 = accept(result.init))
-            initializers.unshift(_2);
-        } else if (_2 = accept(result)) {
-          if (kind === "field")
-            initializers.unshift(_2);
-          else
-            descriptor[key] = _2;
-        }
-      }
-      if (target)
-        Object.defineProperty(target, contextIn.name, descriptor);
-      done = true;
-    };
-    __runInitializers = function(thisArg, initializers, value) {
-      var useValue = arguments.length > 2;
-      for (var i = 0;i < initializers.length; i++) {
-        value = useValue ? initializers[i].call(thisArg, value) : initializers[i].call(thisArg);
-      }
-      return useValue ? value : undefined;
-    };
-    __propKey = function(x) {
-      return typeof x === "symbol" ? x : "".concat(x);
-    };
-    __setFunctionName = function(f, name, prefix) {
-      if (typeof name === "symbol")
-        name = name.description ? "[".concat(name.description, "]") : "";
-      return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
-    };
-    __metadata = function(metadataKey, metadataValue) {
-      if (typeof Reflect === "object" && typeof Reflect.metadata === "function")
-        return Reflect.metadata(metadataKey, metadataValue);
-    };
-    __awaiter = function(thisArg, _arguments, P, generator) {
-      function adopt(value) {
-        return value instanceof P ? value : new P(function(resolve) {
-          resolve(value);
-        });
-      }
-      return new (P || (P = Promise))(function(resolve, reject) {
-        function fulfilled(value) {
-          try {
-            step(generator.next(value));
-          } catch (e) {
-            reject(e);
-          }
-        }
-        function rejected(value) {
-          try {
-            step(generator["throw"](value));
-          } catch (e) {
-            reject(e);
-          }
-        }
-        function step(result) {
-          result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
-        }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-      });
-    };
-    __generator = function(thisArg, body) {
-      var _2 = { label: 0, sent: function() {
-        if (t2[0] & 1)
-          throw t2[1];
-        return t2[1];
-      }, trys: [], ops: [] }, f, y, t2, g = Object.create((typeof Iterator === "function" ? Iterator : Object).prototype);
-      return g.next = verb(0), g["throw"] = verb(1), g["return"] = verb(2), typeof Symbol === "function" && (g[Symbol.iterator] = function() {
-        return this;
-      }), g;
-      function verb(n) {
-        return function(v) {
-          return step([n, v]);
-        };
-      }
-      function step(op) {
-        if (f)
-          throw new TypeError("Generator is already executing.");
-        while (g && (g = 0, op[0] && (_2 = 0)), _2)
-          try {
-            if (f = 1, y && (t2 = op[0] & 2 ? y["return"] : op[0] ? y["throw"] || ((t2 = y["return"]) && t2.call(y), 0) : y.next) && !(t2 = t2.call(y, op[1])).done)
-              return t2;
-            if (y = 0, t2)
-              op = [op[0] & 2, t2.value];
-            switch (op[0]) {
-              case 0:
-              case 1:
-                t2 = op;
-                break;
-              case 4:
-                _2.label++;
-                return { value: op[1], done: false };
-              case 5:
-                _2.label++;
-                y = op[1];
-                op = [0];
-                continue;
-              case 7:
-                op = _2.ops.pop();
-                _2.trys.pop();
-                continue;
-              default:
-                if (!(t2 = _2.trys, t2 = t2.length > 0 && t2[t2.length - 1]) && (op[0] === 6 || op[0] === 2)) {
-                  _2 = 0;
-                  continue;
-                }
-                if (op[0] === 3 && (!t2 || op[1] > t2[0] && op[1] < t2[3])) {
-                  _2.label = op[1];
-                  break;
-                }
-                if (op[0] === 6 && _2.label < t2[1]) {
-                  _2.label = t2[1];
-                  t2 = op;
-                  break;
-                }
-                if (t2 && _2.label < t2[2]) {
-                  _2.label = t2[2];
-                  _2.ops.push(op);
-                  break;
-                }
-                if (t2[2])
-                  _2.ops.pop();
-                _2.trys.pop();
-                continue;
-            }
-            op = body.call(thisArg, _2);
-          } catch (e) {
-            op = [6, e];
-            y = 0;
-          } finally {
-            f = t2 = 0;
-          }
-        if (op[0] & 5)
-          throw op[1];
-        return { value: op[0] ? op[1] : undefined, done: true };
-      }
-    };
-    __exportStar = function(m, o) {
-      for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(o, p))
-          __createBinding(o, m, p);
-    };
-    __createBinding = Object.create ? function(o, m, k2, k22) {
-      if (k22 === undefined)
-        k22 = k2;
-      var desc = Object.getOwnPropertyDescriptor(m, k2);
-      if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-        desc = { enumerable: true, get: function() {
-          return m[k2];
-        } };
-      }
-      Object.defineProperty(o, k22, desc);
-    } : function(o, m, k2, k22) {
-      if (k22 === undefined)
-        k22 = k2;
-      o[k22] = m[k2];
-    };
-    __values = function(o) {
-      var s = typeof Symbol === "function" && Symbol.iterator, m = s && o[s], i = 0;
-      if (m)
-        return m.call(o);
-      if (o && typeof o.length === "number")
-        return {
-          next: function() {
-            if (o && i >= o.length)
-              o = undefined;
-            return { value: o && o[i++], done: !o };
-          }
-        };
-      throw new TypeError(s ? "Object is not iterable." : "Symbol.iterator is not defined.");
-    };
-    __read = function(o, n) {
-      var m = typeof Symbol === "function" && o[Symbol.iterator];
-      if (!m)
-        return o;
-      var i = m.call(o), r, ar = [], e;
-      try {
-        while ((n === undefined || n-- > 0) && !(r = i.next()).done)
-          ar.push(r.value);
-      } catch (error) {
-        e = { error };
-      } finally {
-        try {
-          if (r && !r.done && (m = i["return"]))
-            m.call(i);
-        } finally {
-          if (e)
-            throw e.error;
-        }
-      }
-      return ar;
-    };
-    __spread = function() {
-      for (var ar = [], i = 0;i < arguments.length; i++)
-        ar = ar.concat(__read(arguments[i]));
-      return ar;
-    };
-    __spreadArrays = function() {
-      for (var s = 0, i = 0, il = arguments.length;i < il; i++)
-        s += arguments[i].length;
-      for (var r = Array(s), k2 = 0, i = 0;i < il; i++)
-        for (var a = arguments[i], j = 0, jl = a.length;j < jl; j++, k2++)
-          r[k2] = a[j];
-      return r;
-    };
-    __spreadArray = function(to, from, pack) {
-      if (pack || arguments.length === 2)
-        for (var i = 0, l = from.length, ar;i < l; i++) {
-          if (ar || !(i in from)) {
-            if (!ar)
-              ar = Array.prototype.slice.call(from, 0, i);
-            ar[i] = from[i];
-          }
-        }
-      return to.concat(ar || Array.prototype.slice.call(from));
-    };
-    __await = function(v) {
-      return this instanceof __await ? (this.v = v, this) : new __await(v);
-    };
-    __asyncGenerator = function(thisArg, _arguments, generator) {
-      if (!Symbol.asyncIterator)
-        throw new TypeError("Symbol.asyncIterator is not defined.");
-      var g = generator.apply(thisArg, _arguments || []), i, q = [];
-      return i = Object.create((typeof AsyncIterator === "function" ? AsyncIterator : Object).prototype), verb("next"), verb("throw"), verb("return", awaitReturn), i[Symbol.asyncIterator] = function() {
-        return this;
-      }, i;
-      function awaitReturn(f) {
-        return function(v) {
-          return Promise.resolve(v).then(f, reject);
-        };
-      }
-      function verb(n, f) {
-        if (g[n]) {
-          i[n] = function(v) {
-            return new Promise(function(a, b) {
-              q.push([n, v, a, b]) > 1 || resume(n, v);
-            });
-          };
-          if (f)
-            i[n] = f(i[n]);
-        }
-      }
-      function resume(n, v) {
-        try {
-          step(g[n](v));
-        } catch (e) {
-          settle(q[0][3], e);
-        }
-      }
-      function step(r) {
-        r.value instanceof __await ? Promise.resolve(r.value.v).then(fulfill, reject) : settle(q[0][2], r);
-      }
-      function fulfill(value) {
-        resume("next", value);
-      }
-      function reject(value) {
-        resume("throw", value);
-      }
-      function settle(f, v) {
-        if (f(v), q.shift(), q.length)
-          resume(q[0][0], q[0][1]);
-      }
-    };
-    __asyncDelegator = function(o) {
-      var i, p;
-      return i = {}, verb("next"), verb("throw", function(e) {
-        throw e;
-      }), verb("return"), i[Symbol.iterator] = function() {
-        return this;
-      }, i;
-      function verb(n, f) {
-        i[n] = o[n] ? function(v) {
-          return (p = !p) ? { value: __await(o[n](v)), done: false } : f ? f(v) : v;
-        } : f;
-      }
-    };
-    __asyncValues = function(o) {
-      if (!Symbol.asyncIterator)
-        throw new TypeError("Symbol.asyncIterator is not defined.");
-      var m = o[Symbol.asyncIterator], i;
-      return m ? m.call(o) : (o = typeof __values === "function" ? __values(o) : o[Symbol.iterator](), i = {}, verb("next"), verb("throw"), verb("return"), i[Symbol.asyncIterator] = function() {
-        return this;
-      }, i);
-      function verb(n) {
-        i[n] = o[n] && function(v) {
-          return new Promise(function(resolve, reject) {
-            v = o[n](v), settle(resolve, reject, v.done, v.value);
-          });
-        };
-      }
-      function settle(resolve, reject, d, v) {
-        Promise.resolve(v).then(function(v2) {
-          resolve({ value: v2, done: d });
-        }, reject);
-      }
-    };
-    __makeTemplateObject = function(cooked, raw) {
-      if (Object.defineProperty) {
-        Object.defineProperty(cooked, "raw", { value: raw });
-      } else {
-        cooked.raw = raw;
-      }
-      return cooked;
-    };
-    var __setModuleDefault = Object.create ? function(o, v) {
-      Object.defineProperty(o, "default", { enumerable: true, value: v });
-    } : function(o, v) {
-      o["default"] = v;
-    };
-    var ownKeys = function(o) {
-      ownKeys = Object.getOwnPropertyNames || function(o2) {
-        var ar = [];
-        for (var k2 in o2)
-          if (Object.prototype.hasOwnProperty.call(o2, k2))
-            ar[ar.length] = k2;
-        return ar;
-      };
-      return ownKeys(o);
-    };
-    __importStar = function(mod) {
-      if (mod && mod.__esModule)
-        return mod;
-      var result = {};
-      if (mod != null) {
-        for (var k2 = ownKeys(mod), i = 0;i < k2.length; i++)
-          if (k2[i] !== "default")
-            __createBinding(result, mod, k2[i]);
-      }
-      __setModuleDefault(result, mod);
-      return result;
-    };
-    __importDefault = function(mod) {
-      return mod && mod.__esModule ? mod : { default: mod };
-    };
-    __classPrivateFieldGet2 = function(receiver, state, kind, f) {
-      if (kind === "a" && !f)
-        throw new TypeError("Private accessor was defined without a getter");
-      if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
-        throw new TypeError("Cannot read private member from an object whose class did not declare it");
-      return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
-    };
-    __classPrivateFieldSet2 = function(receiver, state, value, kind, f) {
-      if (kind === "m")
-        throw new TypeError("Private method is not writable");
-      if (kind === "a" && !f)
-        throw new TypeError("Private accessor was defined without a setter");
-      if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
-        throw new TypeError("Cannot write private member to an object whose class did not declare it");
-      return kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value), value;
-    };
-    __classPrivateFieldIn = function(state, receiver) {
-      if (receiver === null || typeof receiver !== "object" && typeof receiver !== "function")
-        throw new TypeError("Cannot use 'in' operator on non-object");
-      return typeof state === "function" ? receiver === state : state.has(receiver);
-    };
-    __addDisposableResource = function(env3, value, async) {
-      if (value !== null && value !== undefined) {
-        if (typeof value !== "object" && typeof value !== "function")
-          throw new TypeError("Object expected.");
-        var dispose, inner;
-        if (async) {
-          if (!Symbol.asyncDispose)
-            throw new TypeError("Symbol.asyncDispose is not defined.");
-          dispose = value[Symbol.asyncDispose];
-        }
-        if (dispose === undefined) {
-          if (!Symbol.dispose)
-            throw new TypeError("Symbol.dispose is not defined.");
-          dispose = value[Symbol.dispose];
-          if (async)
-            inner = dispose;
-        }
-        if (typeof dispose !== "function")
-          throw new TypeError("Object not disposable.");
-        if (inner)
-          dispose = function() {
-            try {
-              inner.call(this);
-            } catch (e) {
-              return Promise.reject(e);
-            }
-          };
-        env3.stack.push({ value, dispose, async });
-      } else if (async) {
-        env3.stack.push({ async: true });
-      }
-      return value;
-    };
-    var _SuppressedError = typeof SuppressedError === "function" ? SuppressedError : function(error, suppressed, message) {
-      var e = new Error(message);
-      return e.name = "SuppressedError", e.error = error, e.suppressed = suppressed, e;
-    };
-    __disposeResources = function(env3) {
-      function fail(e) {
-        env3.error = env3.hasError ? new _SuppressedError(e, env3.error, "An error was suppressed during disposal.") : e;
-        env3.hasError = true;
-      }
-      var r, s = 0;
-      function next() {
-        while (r = env3.stack.pop()) {
-          try {
-            if (!r.async && s === 1)
-              return s = 0, env3.stack.push(r), Promise.resolve().then(next);
-            if (r.dispose) {
-              var result = r.dispose.call(r.value);
-              if (r.async)
-                return s |= 2, Promise.resolve(result).then(next, function(e) {
-                  fail(e);
-                  return next();
-                });
-            } else
-              s |= 1;
-          } catch (e) {
-            fail(e);
-          }
-        }
-        if (s === 1)
-          return env3.hasError ? Promise.reject(env3.error) : Promise.resolve();
-        if (env3.hasError)
-          throw env3.error;
-      }
-      return next();
-    };
-    __rewriteRelativeImportExtension = function(path, preserveJsx) {
-      if (typeof path === "string" && /^\.\.?\//.test(path)) {
-        return path.replace(/\.(tsx)$|((?:\.d)?)((?:\.[^./]+?)?)\.([cm]?)ts$/i, function(m, tsx, d, ext, cm) {
-          return tsx ? preserveJsx ? ".jsx" : ".js" : d && (!ext || !cm) ? m : d + ext + "." + cm.toLowerCase() + "js";
-        });
-      }
-      return path;
-    };
-    exporter("__extends", __extends);
-    exporter("__assign", __assign);
-    exporter("__rest", __rest);
-    exporter("__decorate", __decorate);
-    exporter("__param", __param);
-    exporter("__esDecorate", __esDecorate);
-    exporter("__runInitializers", __runInitializers);
-    exporter("__propKey", __propKey);
-    exporter("__setFunctionName", __setFunctionName);
-    exporter("__metadata", __metadata);
-    exporter("__awaiter", __awaiter);
-    exporter("__generator", __generator);
-    exporter("__exportStar", __exportStar);
-    exporter("__createBinding", __createBinding);
-    exporter("__values", __values);
-    exporter("__read", __read);
-    exporter("__spread", __spread);
-    exporter("__spreadArrays", __spreadArrays);
-    exporter("__spreadArray", __spreadArray);
-    exporter("__await", __await);
-    exporter("__asyncGenerator", __asyncGenerator);
-    exporter("__asyncDelegator", __asyncDelegator);
-    exporter("__asyncValues", __asyncValues);
-    exporter("__makeTemplateObject", __makeTemplateObject);
-    exporter("__importStar", __importStar);
-    exporter("__importDefault", __importDefault);
-    exporter("__classPrivateFieldGet", __classPrivateFieldGet2);
-    exporter("__classPrivateFieldSet", __classPrivateFieldSet2);
-    exporter("__classPrivateFieldIn", __classPrivateFieldIn);
-    exporter("__addDisposableResource", __addDisposableResource);
-    exporter("__disposeResources", __disposeResources);
-    exporter("__rewriteRelativeImportExtension", __rewriteRelativeImportExtension);
-  });
-});
-
 // node_modules/@smithy/signature-v4/dist-cjs/index.js
 var require_dist_cjs6 = __commonJS((exports) => {
-  var { fromUtf8: fromUtf84, fromHex, toHex, toUint8Array: toUint8Array3, isArrayBuffer: isArrayBuffer3 } = require_serde();
+  var { fromUtf8, fromHex, toHex, toUint8Array: toUint8Array2, isArrayBuffer: isArrayBuffer2 } = require_serde();
   var { normalizeProvider: normalizeProvider2 } = require_client2();
   var { escapeUri, HttpRequest: HttpRequest3 } = require_protocols();
 
@@ -105930,7 +105720,7 @@ var require_dist_cjs6 = __commonJS((exports) => {
     format(headers) {
       const chunks = [];
       for (const headerName of Object.keys(headers)) {
-        const bytes2 = fromUtf84(headerName);
+        const bytes2 = fromUtf8(headerName);
         chunks.push(Uint8Array.from([bytes2.byteLength]), bytes2, this.formatHeaderValue(headers[headerName]));
       }
       const out = new Uint8Array(chunks.reduce((carry, bytes2) => carry + bytes2.byteLength, 0));
@@ -105970,7 +105760,7 @@ var require_dist_cjs6 = __commonJS((exports) => {
           binBytes.set(header.value, 3);
           return binBytes;
         case "string":
-          const utf8Bytes = fromUtf84(header.value);
+          const utf8Bytes = fromUtf8(header.value);
           const strView = new DataView(new ArrayBuffer(3 + utf8Bytes.byteLength));
           strView.setUint8(0, 7);
           strView.setUint16(1, utf8Bytes.byteLength, false);
@@ -106154,7 +105944,7 @@ ${payloadHash}`;
     }
     async createStringToSign(longDate, credentialScope, canonicalRequest, algorithmIdentifier) {
       const hash2 = new this.sha256;
-      hash2.update(toUint8Array3(canonicalRequest));
+      hash2.update(toUint8Array2(canonicalRequest));
       const hashedRequest = await hash2.digest();
       return `${algorithmIdentifier}
 ${longDate}
@@ -106224,7 +106014,7 @@ ${toHex(hashedRequest)}`;
   };
   var hmac = (ctor, secret, data) => {
     const hash2 = new ctor(secret);
-    hash2.update(toUint8Array3(data));
+    hash2.update(toUint8Array2(data));
     return hash2.digest();
   };
   var getCanonicalHeaders = ({ headers }, unsignableHeaders, signableHeaders) => {
@@ -106251,9 +106041,9 @@ ${toHex(hashedRequest)}`;
     }
     if (body == undefined) {
       return "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-    } else if (typeof body === "string" || ArrayBuffer.isView(body) || isArrayBuffer3(body)) {
+    } else if (typeof body === "string" || ArrayBuffer.isView(body) || isArrayBuffer2(body)) {
       const hashCtor = new hashConstructor;
-      hashCtor.update(toUint8Array3(body));
+      hashCtor.update(toUint8Array2(body));
       return toHex(await hashCtor.digest());
     }
     return UNSIGNED_PAYLOAD;
@@ -106383,7 +106173,7 @@ ${toHex(hashedRequest)}`;
       const region = signingRegion ?? await this.regionProvider();
       const { shortDate } = this.formatDate(signingDate);
       const hash2 = new this.sha256(await this.getSigningKey(credentials, region, shortDate, signingService));
-      hash2.update(toUint8Array3(stringToSign));
+      hash2.update(toUint8Array2(stringToSign));
       return toHex(await hash2.digest());
     }
     async signRequest(requestToSign, { signingDate = new Date, signableHeaders, unsignableHeaders, signingRegion, signingService } = {}) {
@@ -106409,7 +106199,7 @@ ${toHex(hashedRequest)}`;
     async getSignature(longDate, credentialScope, keyPromise, canonicalRequest) {
       const stringToSign = await this.createStringToSign(longDate, credentialScope, canonicalRequest, ALGORITHM_IDENTIFIER);
       const hash2 = new this.sha256(await keyPromise);
-      hash2.update(toUint8Array3(stringToSign));
+      hash2.update(toUint8Array2(stringToSign));
       return toHex(await hash2.digest());
     }
     getSigningKey(credentials, region, shortDate, service) {
@@ -107316,7 +107106,7 @@ var require_cbor = __commonJS((exports) => {
     encodeCacheEpoch = encodeCacheEpoch + 1 & 65535;
     encodeCacheSaturated = false;
   }
-  function toUint8Array3() {
+  function toUint8Array2() {
     const out = alloc(cursor);
     out.set(data.subarray(0, cursor), 0);
     cursor = 0;
@@ -107433,9 +107223,9 @@ var require_cbor = __commonJS((exports) => {
       advanceEncodingEpoch();
       try {
         encode3(input);
-        return toUint8Array3();
+        return toUint8Array2();
       } catch (e) {
-        toUint8Array3();
+        toUint8Array2();
         throw e;
       }
     },
@@ -108209,7 +107999,7 @@ var require_protocols2 = __commonJS((exports) => {
   var { TypeRegistry, NormalizedSchema, deref } = require_schema3();
   var { decorateServiceException, getValueFromTextNode } = require_client2();
   var { collectBody, determineTimestampFormat, RpcProtocol, HttpBindingProtocol, HttpInterceptingShapeSerializer, HttpInterceptingShapeDeserializer, FromStringShapeDeserializer, extendedEncodeURIComponent } = require_protocols();
-  var { NumericValue, toUtf8: toUtf82, fromBase64, LazyJsonString, parseEpochTimestamp, parseRfc7231DateTime, parseRfc3339DateTimeWithOffset, toBase64, dateToUtcString, generateIdempotencyToken, expectUnion } = require_serde();
+  var { NumericValue, toUtf8, fromBase64, LazyJsonString, parseEpochTimestamp, parseRfc7231DateTime, parseRfc3339DateTimeWithOffset, toBase64, dateToUtcString, generateIdempotencyToken, expectUnion } = require_serde();
   var { parseXML, XmlNode, XmlText } = require_dist_cjs8();
 
   class ProtocolLib {
@@ -108491,7 +108281,7 @@ var require_protocols2 = __commonJS((exports) => {
     }
     return value;
   }
-  var collectBodyString = (streamBody, context) => collectBody(streamBody, context).then((body) => (context?.utf8Encoder ?? toUtf82)(body));
+  var collectBodyString = (streamBody, context) => collectBody(streamBody, context).then((body) => (context?.utf8Encoder ?? toUtf8)(body));
   var parseJsonBody = (streamBody, context) => collectBodyString(streamBody, context).then((encoded) => {
     if (encoded.length) {
       try {
@@ -109171,7 +108961,7 @@ var require_protocols2 = __commonJS((exports) => {
         }
         return output;
       }
-      const xmlString = (this.serdeContext?.utf8Encoder ?? toUtf82)(bytes2);
+      const xmlString = (this.serdeContext?.utf8Encoder ?? toUtf8)(bytes2);
       const parsedObject = this.parseXml(xmlString);
       return this.readSchema(schema4, key ? parsedObject[key] : parsedObject);
     }
@@ -111829,7 +111619,7 @@ var require_sso_oidc = __commonJS((exports) => {
   var { DEFAULT_RETRY_MODE, NODE_RETRY_MODE_CONFIG_OPTIONS, NODE_MAX_ATTEMPT_CONFIG_OPTIONS, resolveRetryConfig, getRetryPlugin } = require_retry();
   var { TypeRegistry: TypeRegistry2, getSchemaSerdePlugin } = require_schema3();
   var { resolveAwsSdkSigV4Config: resolveAwsSdkSigV4Config2, AwsSdkSigV4Signer, NODE_AUTH_SCHEME_PREFERENCE_OPTIONS } = require_httpAuthSchemes();
-  var { toUtf8: toUtf82, fromUtf8: fromUtf84, toBase64, fromBase64, Hash: Hash2, calculateBodyLength } = require_serde();
+  var { toUtf8, fromUtf8, toBase64, fromBase64, Hash: Hash2, calculateBodyLength } = require_serde();
   var { streamCollector, NodeHttpHandler: NodeHttpHandler2 } = require_dist_cjs9();
   var { AwsRestJsonProtocol } = require_protocols2();
   var defaultSSOOIDCHttpAuthSchemeParametersProvider = async (config3, context, input) => {
@@ -112399,8 +112189,8 @@ var require_sso_oidc = __commonJS((exports) => {
       },
       serviceId: config3?.serviceId ?? "SSO OIDC",
       urlParser: config3?.urlParser ?? parseUrl2,
-      utf8Decoder: config3?.utf8Decoder ?? fromUtf84,
-      utf8Encoder: config3?.utf8Encoder ?? toUtf82
+      utf8Decoder: config3?.utf8Decoder ?? fromUtf8,
+      utf8Encoder: config3?.utf8Encoder ?? toUtf8
     };
   };
   var getRuntimeConfig = (config3) => {
@@ -112741,7 +112531,7 @@ function createSmithyApiNoAuthHttpAuthOption(authParameters) {
     schemeId: "smithy.api#noAuth"
   };
 }
-var awsEndpointFunctions2, emitWarningIfUnsupportedVersion$1, createDefaultUserAgentProvider, NODE_APP_ID_CONFIG_OPTIONS, getAwsRegionExtensionConfiguration, resolveAwsRegionExtensionConfiguration, resolveUserAgentConfig, resolveHostHeaderConfig, getUserAgentPlugin, getHostHeaderPlugin, getLoggerPlugin, getRecursionDetectionPlugin, NoAuthSigner, getHttpAuthSchemeEndpointRuleSetPlugin, DefaultIdentityProviderConfig, getHttpSigningPlugin, normalizeProvider3, getSmithyContext3, ServiceException, NoOpLogger2, emitWarningIfUnsupportedVersion, loadConfigsForDefaultMode, getDefaultExtensionConfiguration, resolveDefaultRuntimeConfig, Client, Command, createAggregatedClient, resolveDefaultsModeConfig, loadConfig3, NODE_USE_FIPS_ENDPOINT_CONFIG_OPTIONS, NODE_USE_DUALSTACK_ENDPOINT_CONFIG_OPTIONS, NODE_REGION_CONFIG_OPTIONS, NODE_REGION_CONFIG_FILE_OPTIONS, resolveRegionConfig, BinaryDecisionDiagram2, EndpointCache2, decideEndpoint2, customEndpointFunctions2, resolveEndpointConfig, getEndpointPlugin2, parseUrl2, getHttpHandlerExtensionConfiguration, resolveHttpHandlerRuntimeConfig, getContentLengthPlugin, DEFAULT_RETRY_MODE, NODE_RETRY_MODE_CONFIG_OPTIONS, NODE_MAX_ATTEMPT_CONFIG_OPTIONS, resolveRetryConfig, getRetryPlugin, TypeRegistry2, getSchemaSerdePlugin, resolveAwsSdkSigV4Config2, AwsSdkSigV4Signer, NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, toUtf82, fromUtf84, toBase64, fromBase64, Hash2, calculateBodyLength, streamCollector, NodeHttpHandler2, AwsRestJsonProtocol, defaultSSOHttpAuthSchemeParametersProvider = async (config3, context, input) => {
+var awsEndpointFunctions2, emitWarningIfUnsupportedVersion$1, createDefaultUserAgentProvider, NODE_APP_ID_CONFIG_OPTIONS, getAwsRegionExtensionConfiguration, resolveAwsRegionExtensionConfiguration, resolveUserAgentConfig, resolveHostHeaderConfig, getUserAgentPlugin, getHostHeaderPlugin, getLoggerPlugin, getRecursionDetectionPlugin, NoAuthSigner, getHttpAuthSchemeEndpointRuleSetPlugin, DefaultIdentityProviderConfig, getHttpSigningPlugin, normalizeProvider3, getSmithyContext3, ServiceException, NoOpLogger2, emitWarningIfUnsupportedVersion, loadConfigsForDefaultMode, getDefaultExtensionConfiguration, resolveDefaultRuntimeConfig, Client, Command, createAggregatedClient, resolveDefaultsModeConfig, loadConfig3, NODE_USE_FIPS_ENDPOINT_CONFIG_OPTIONS, NODE_USE_DUALSTACK_ENDPOINT_CONFIG_OPTIONS, NODE_REGION_CONFIG_OPTIONS, NODE_REGION_CONFIG_FILE_OPTIONS, resolveRegionConfig, BinaryDecisionDiagram2, EndpointCache2, decideEndpoint2, customEndpointFunctions2, resolveEndpointConfig, getEndpointPlugin2, parseUrl2, getHttpHandlerExtensionConfiguration, resolveHttpHandlerRuntimeConfig, getContentLengthPlugin, DEFAULT_RETRY_MODE, NODE_RETRY_MODE_CONFIG_OPTIONS, NODE_MAX_ATTEMPT_CONFIG_OPTIONS, resolveRetryConfig, getRetryPlugin, TypeRegistry2, getSchemaSerdePlugin, resolveAwsSdkSigV4Config2, AwsSdkSigV4Signer, NODE_AUTH_SCHEME_PREFERENCE_OPTIONS, toUtf8, fromUtf8, toBase64, fromBase64, Hash2, calculateBodyLength, streamCollector, NodeHttpHandler2, AwsRestJsonProtocol, defaultSSOHttpAuthSchemeParametersProvider = async (config3, context, input) => {
   return {
     operation: getSmithyContext3(context).operation,
     region: await normalizeProvider3(config3.region)() || (() => {
@@ -112807,8 +112597,8 @@ var awsEndpointFunctions2, emitWarningIfUnsupportedVersion$1, createDefaultUserA
     },
     serviceId: config3?.serviceId ?? "SSO",
     urlParser: config3?.urlParser ?? parseUrl2,
-    utf8Decoder: config3?.utf8Decoder ?? fromUtf84,
-    utf8Encoder: config3?.utf8Encoder ?? toUtf82
+    utf8Decoder: config3?.utf8Decoder ?? fromUtf8,
+    utf8Encoder: config3?.utf8Encoder ?? toUtf8
   };
 }, getRuntimeConfig = (config3) => {
   emitWarningIfUnsupportedVersion(process.version);
@@ -112891,7 +112681,7 @@ var init_sso = __esm(() => {
   ({ DEFAULT_RETRY_MODE, NODE_RETRY_MODE_CONFIG_OPTIONS, NODE_MAX_ATTEMPT_CONFIG_OPTIONS, resolveRetryConfig, getRetryPlugin } = require_retry());
   ({ TypeRegistry: TypeRegistry2, getSchemaSerdePlugin } = require_schema3());
   ({ resolveAwsSdkSigV4Config: resolveAwsSdkSigV4Config2, AwsSdkSigV4Signer, NODE_AUTH_SCHEME_PREFERENCE_OPTIONS } = require_httpAuthSchemes());
-  ({ toUtf8: toUtf82, fromUtf8: fromUtf84, toBase64, fromBase64, Hash: Hash2, calculateBodyLength } = require_serde());
+  ({ toUtf8, fromUtf8, toBase64, fromBase64, Hash: Hash2, calculateBodyLength } = require_serde());
   ({ streamCollector, NodeHttpHandler: NodeHttpHandler2 } = require_dist_cjs9());
   ({ AwsRestJsonProtocol } = require_protocols2());
   commonParams2 = {
@@ -113421,7 +113211,7 @@ var require_sts = __commonJS((exports) => {
   var { TypeRegistry: TypeRegistry3, getSchemaSerdePlugin: getSchemaSerdePlugin2 } = require_schema3();
   var { resolveAwsSdkSigV4Config: resolveAwsSdkSigV4Config3, resolveAwsSdkSigV4AConfig: resolveAwsSdkSigV4AConfig2, AwsSdkSigV4Signer: AwsSdkSigV4Signer2, AwsSdkSigV4ASigner, NODE_SIGV4A_CONFIG_OPTIONS, NODE_AUTH_SCHEME_PREFERENCE_OPTIONS: NODE_AUTH_SCHEME_PREFERENCE_OPTIONS2 } = require_httpAuthSchemes();
   var { SignatureV4MultiRegion: SignatureV4MultiRegion2 } = require_dist_cjs7();
-  var { toUtf8: toUtf83, fromUtf8: fromUtf85, toBase64: toBase642, fromBase64: fromBase642, Hash: Hash3, calculateBodyLength: calculateBodyLength2 } = require_serde();
+  var { toUtf8: toUtf82, fromUtf8: fromUtf82, toBase64: toBase642, fromBase64: fromBase642, Hash: Hash3, calculateBodyLength: calculateBodyLength2 } = require_serde();
   var { streamCollector: streamCollector2, NodeHttpHandler: NodeHttpHandler3 } = require_dist_cjs9();
   var { AwsQueryProtocol } = require_protocols2();
   var q2 = "ref";
@@ -114123,8 +113913,8 @@ var require_sts = __commonJS((exports) => {
       serviceId: config3?.serviceId ?? "STS",
       signerConstructor: config3?.signerConstructor ?? SignatureV4MultiRegion2,
       urlParser: config3?.urlParser ?? parseUrl3,
-      utf8Decoder: config3?.utf8Decoder ?? fromUtf85,
-      utf8Encoder: config3?.utf8Encoder ?? toUtf83
+      utf8Decoder: config3?.utf8Decoder ?? fromUtf82,
+      utf8Encoder: config3?.utf8Encoder ?? toUtf82
     };
   };
   var getRuntimeConfig2 = (config3) => {
@@ -114509,7 +114299,7 @@ var require_signin = __commonJS((exports) => {
   var { DEFAULT_RETRY_MODE: DEFAULT_RETRY_MODE2, NODE_RETRY_MODE_CONFIG_OPTIONS: NODE_RETRY_MODE_CONFIG_OPTIONS2, NODE_MAX_ATTEMPT_CONFIG_OPTIONS: NODE_MAX_ATTEMPT_CONFIG_OPTIONS2, resolveRetryConfig: resolveRetryConfig2, getRetryPlugin: getRetryPlugin2 } = require_retry();
   var { TypeRegistry: TypeRegistry3, getSchemaSerdePlugin: getSchemaSerdePlugin2 } = require_schema3();
   var { resolveAwsSdkSigV4Config: resolveAwsSdkSigV4Config3, AwsSdkSigV4Signer: AwsSdkSigV4Signer2, NODE_AUTH_SCHEME_PREFERENCE_OPTIONS: NODE_AUTH_SCHEME_PREFERENCE_OPTIONS2 } = require_httpAuthSchemes();
-  var { toUtf8: toUtf83, fromUtf8: fromUtf85, toBase64: toBase642, fromBase64: fromBase642, Hash: Hash3, calculateBodyLength: calculateBodyLength2 } = require_serde();
+  var { toUtf8: toUtf82, fromUtf8: fromUtf82, toBase64: toBase642, fromBase64: fromBase642, Hash: Hash3, calculateBodyLength: calculateBodyLength2 } = require_serde();
   var { streamCollector: streamCollector2, NodeHttpHandler: NodeHttpHandler3 } = require_dist_cjs9();
   var { AwsRestJsonProtocol: AwsRestJsonProtocol2 } = require_protocols2();
   var defaultSigninHttpAuthSchemeParametersProvider = async (config3, context, input) => {
@@ -114991,8 +114781,8 @@ var require_signin = __commonJS((exports) => {
       },
       serviceId: config3?.serviceId ?? "Signin",
       urlParser: config3?.urlParser ?? parseUrl3,
-      utf8Decoder: config3?.utf8Decoder ?? fromUtf85,
-      utf8Encoder: config3?.utf8Encoder ?? toUtf83
+      utf8Decoder: config3?.utf8Decoder ?? fromUtf82,
+      utf8Encoder: config3?.utf8Encoder ?? toUtf82
     };
   };
   var getRuntimeConfig2 = (config3) => {
@@ -115741,7 +115531,7 @@ var init_dist_es9 = __esm(() => {
   init_fromIni();
 });
 
-// node_modules/elysia/node_modules/memoirist/dist/bun/index.js
+// node_modules/memoirist/dist/bun/index.js
 var Y = (v, b) => {
   let A = b?.length ? {} : null;
   if (A)
@@ -125625,7 +125415,7 @@ var createTracer = (traceListener) => (context) => {
   };
 };
 
-// node_modules/elysia/node_modules/exact-mirror/dist/index.mjs
+// node_modules/exact-mirror/dist/index.mjs
 var Kind2 = Symbol.for("TypeBox.Kind");
 var Hint2 = Symbol.for("TypeBox.Hint");
 var isSpecialProperty = (name) => /(\ |-|\t|\n|\.|\[|\]|\{|\})/.test(name) || !isNaN(+name[0]);
@@ -136340,7 +136130,8 @@ var SWAGGER_TAGS = {
     SUGGESTIONS: "Mobile - Suggestions",
     ADS: "Mobile - Ads",
     ABOUT_US: "Mobile - About Us",
-    NOTIFICATIONS: "Mobile - Notifications"
+    NOTIFICATIONS: "Mobile - Notifications",
+    MEDICATIONS: "Mobile - Medications"
   }
 };
 var SWAGGER_TAG_DEFINITIONS = [
@@ -136385,7 +136176,8 @@ var SWAGGER_TAG_DEFINITIONS = [
   { name: SWAGGER_TAGS.MOBILE.SUGGESTIONS, "x-displayName": "Suggestions", description: "\u0627\u0642\u062A\u0631\u0627\u062D\u0627\u062A \u0627\u0644\u0645\u0631\u064A\u0636" },
   { name: SWAGGER_TAGS.MOBILE.ADS, "x-displayName": "Ads", description: "\u0639\u0631\u0636 \u0627\u0644\u0625\u0639\u0644\u0627\u0646\u0627\u062A \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" },
   { name: SWAGGER_TAGS.MOBILE.ABOUT_US, "x-displayName": "About Us", description: "\u0639\u0631\u0636 \u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u0646\u062D\u0646 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" },
-  { name: SWAGGER_TAGS.MOBILE.NOTIFICATIONS, "x-displayName": "Notifications", description: "\u0635\u0646\u062F\u0648\u0642 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u0639\u0627\u0645 \u0648\u0627\u0644\u0645\u0648\u062C\u0651\u0647" }
+  { name: SWAGGER_TAGS.MOBILE.NOTIFICATIONS, "x-displayName": "Notifications", description: "\u0635\u0646\u062F\u0648\u0642 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u0639\u0627\u0645 \u0648\u0627\u0644\u0645\u0648\u062C\u0651\u0647" },
+  { name: SWAGGER_TAGS.MOBILE.MEDICATIONS, "x-displayName": "Medications", description: "\u0623\u062F\u0648\u064A\u0629 \u0627\u0644\u0645\u0631\u064A\u0636 \u0648\u0627\u0644\u062C\u0631\u0639\u0627\u062A \u0648\u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u0645\u062D\u0644\u064A\u0629\u061B \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u062F\u0627\u062E\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0641\u0642\u0637" }
 ];
 var SWAGGER_TAG_GROUPS = [
   { name: "Dashboard", tags: [SWAGGER_TAGS.DASHBOARD.AUTH, SWAGGER_TAGS.DASHBOARD.SHARED] },
@@ -136445,7 +136237,8 @@ var SWAGGER_TAG_GROUPS = [
       SWAGGER_TAGS.MOBILE.SUGGESTIONS,
       SWAGGER_TAGS.MOBILE.ADS,
       SWAGGER_TAGS.MOBILE.ABOUT_US,
-      SWAGGER_TAGS.MOBILE.NOTIFICATIONS
+      SWAGGER_TAGS.MOBILE.NOTIFICATIONS,
+      SWAGGER_TAGS.MOBILE.MEDICATIONS
     ]
   }
 ];
@@ -138686,8 +138479,8 @@ var hasHeaderWithPrefix = (headerPrefix, headers) => {
 var import_serde = __toESM(require_serde(), 1);
 var isStreaming = (body) => body !== undefined && typeof body !== "string" && !ArrayBuffer.isView(body) && !import_serde.isArrayBuffer(body);
 
-// node_modules/@aws-sdk/checksums/node_modules/tslib/modules/index.js
-var import_tslib = __toESM(require_tslib2(), 1);
+// node_modules/tslib/modules/index.js
+var import_tslib = __toESM(require_tslib(), 1);
 var {
   __extends,
   __assign,
@@ -138723,78 +138516,24 @@ var {
   __rewriteRelativeImportExtension
 } = import_tslib.default;
 
-// node_modules/@aws-sdk/checksums/node_modules/@smithy/util-buffer-from/dist-es/index.js
-import { Buffer as Buffer2 } from "buffer";
-var fromString = (input, encoding) => {
-  if (typeof input !== "string") {
-    throw new TypeError(`The "input" argument must be of type string. Received type ${typeof input} (${input})`);
-  }
-  return encoding ? Buffer2.from(input, encoding) : Buffer2.from(input);
-};
+// node_modules/@aws-crypto/crc32c/build/module/index.js
+var import_util2 = __toESM(require_main(), 1);
 
-// node_modules/@aws-sdk/checksums/node_modules/@smithy/util-utf8/dist-es/fromUtf8.js
-var fromUtf8 = (input) => {
-  const buf = fromString(input, "utf8");
-  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength / Uint8Array.BYTES_PER_ELEMENT);
-};
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/util/build/module/convertToBuffer.js
-var fromUtf83 = typeof Buffer !== "undefined" && Buffer.from ? function(input) {
-  return Buffer.from(input, "utf8");
-} : fromUtf8;
-function convertToBuffer(data) {
-  if (data instanceof Uint8Array)
-    return data;
-  if (typeof data === "string") {
-    return fromUtf83(data);
-  }
-  if (ArrayBuffer.isView(data)) {
-    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength / Uint8Array.BYTES_PER_ELEMENT);
-  }
-  return new Uint8Array(data);
-}
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/util/build/module/isEmptyData.js
-function isEmptyData(data) {
-  if (typeof data === "string") {
-    return data.length === 0;
-  }
-  return data.byteLength === 0;
-}
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/util/build/module/numToUint8.js
-function numToUint8(num) {
-  return new Uint8Array([
-    (num & 4278190080) >> 24,
-    (num & 16711680) >> 16,
-    (num & 65280) >> 8,
-    num & 255
-  ]);
-}
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/util/build/module/uint32ArrayFrom.js
-function uint32ArrayFrom(a_lookUpTable) {
-  if (!Uint32Array.from) {
-    var return_array = new Uint32Array(a_lookUpTable.length);
-    var a_index = 0;
-    while (a_index < a_lookUpTable.length) {
-      return_array[a_index] = a_lookUpTable[a_index];
-      a_index += 1;
-    }
-    return return_array;
-  }
-  return Uint32Array.from(a_lookUpTable);
-}
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/crc32c/build/module/aws_crc32c.js
+// node_modules/@aws-crypto/crc32c/build/module/aws_crc32c.js
+var import_util = __toESM(require_main(), 1);
 var AwsCrc32c = function() {
   function AwsCrc32c2() {
     this.crc32c = new Crc32c;
   }
   AwsCrc32c2.prototype.update = function(toHash) {
-    if (isEmptyData(toHash))
+    if (import_util.isEmptyData(toHash))
       return;
-    this.crc32c.update(convertToBuffer(toHash));
+    this.crc32c.update(import_util.convertToBuffer(toHash));
   };
   AwsCrc32c2.prototype.digest = function() {
     return __awaiter(this, undefined, undefined, function() {
       return __generator(this, function(_a3) {
-        return [2, numToUint8(this.crc32c.digest())];
+        return [2, import_util.numToUint8(this.crc32c.digest())];
       });
     });
   };
@@ -138803,7 +138542,7 @@ var AwsCrc32c = function() {
   };
   return AwsCrc32c2;
 }();
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/crc32c/build/module/index.js
+// node_modules/@aws-crypto/crc32c/build/module/index.js
 var Crc32c = function() {
   function Crc32c2() {
     this.checksum = 4294967295;
@@ -139091,7 +138830,7 @@ var a_lookupTable = [
   1595330642,
   2910671697
 ];
-var lookupTable = uint32ArrayFrom(a_lookupTable);
+var lookupTable = import_util2.uint32ArrayFrom(a_lookupTable);
 
 // node_modules/@aws-sdk/checksums/dist-es/crc64-nvme/crc64-nvme-crt-container.js
 var crc64NvmeCrtContainer = {
@@ -139190,319 +138929,9 @@ class Crc64Nvme {
   }
 }
 
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/crc32/build/module/aws_crc32.js
-var AwsCrc32 = function() {
-  function AwsCrc322() {
-    this.crc32 = new Crc32;
-  }
-  AwsCrc322.prototype.update = function(toHash) {
-    if (isEmptyData(toHash))
-      return;
-    this.crc32.update(convertToBuffer(toHash));
-  };
-  AwsCrc322.prototype.digest = function() {
-    return __awaiter(this, undefined, undefined, function() {
-      return __generator(this, function(_a3) {
-        return [2, numToUint8(this.crc32.digest())];
-      });
-    });
-  };
-  AwsCrc322.prototype.reset = function() {
-    this.crc32 = new Crc32;
-  };
-  return AwsCrc322;
-}();
-// node_modules/@aws-sdk/checksums/node_modules/@aws-crypto/crc32/build/module/index.js
-var Crc32 = function() {
-  function Crc322() {
-    this.checksum = 4294967295;
-  }
-  Crc322.prototype.update = function(data) {
-    var e_1, _a3;
-    try {
-      for (var data_1 = __values(data), data_1_1 = data_1.next();!data_1_1.done; data_1_1 = data_1.next()) {
-        var byte2 = data_1_1.value;
-        this.checksum = this.checksum >>> 8 ^ lookupTable2[(this.checksum ^ byte2) & 255];
-      }
-    } catch (e_1_1) {
-      e_1 = { error: e_1_1 };
-    } finally {
-      try {
-        if (data_1_1 && !data_1_1.done && (_a3 = data_1.return))
-          _a3.call(data_1);
-      } finally {
-        if (e_1)
-          throw e_1.error;
-      }
-    }
-    return this;
-  };
-  Crc322.prototype.digest = function() {
-    return (this.checksum ^ 4294967295) >>> 0;
-  };
-  return Crc322;
-}();
-var a_lookUpTable = [
-  0,
-  1996959894,
-  3993919788,
-  2567524794,
-  124634137,
-  1886057615,
-  3915621685,
-  2657392035,
-  249268274,
-  2044508324,
-  3772115230,
-  2547177864,
-  162941995,
-  2125561021,
-  3887607047,
-  2428444049,
-  498536548,
-  1789927666,
-  4089016648,
-  2227061214,
-  450548861,
-  1843258603,
-  4107580753,
-  2211677639,
-  325883990,
-  1684777152,
-  4251122042,
-  2321926636,
-  335633487,
-  1661365465,
-  4195302755,
-  2366115317,
-  997073096,
-  1281953886,
-  3579855332,
-  2724688242,
-  1006888145,
-  1258607687,
-  3524101629,
-  2768942443,
-  901097722,
-  1119000684,
-  3686517206,
-  2898065728,
-  853044451,
-  1172266101,
-  3705015759,
-  2882616665,
-  651767980,
-  1373503546,
-  3369554304,
-  3218104598,
-  565507253,
-  1454621731,
-  3485111705,
-  3099436303,
-  671266974,
-  1594198024,
-  3322730930,
-  2970347812,
-  795835527,
-  1483230225,
-  3244367275,
-  3060149565,
-  1994146192,
-  31158534,
-  2563907772,
-  4023717930,
-  1907459465,
-  112637215,
-  2680153253,
-  3904427059,
-  2013776290,
-  251722036,
-  2517215374,
-  3775830040,
-  2137656763,
-  141376813,
-  2439277719,
-  3865271297,
-  1802195444,
-  476864866,
-  2238001368,
-  4066508878,
-  1812370925,
-  453092731,
-  2181625025,
-  4111451223,
-  1706088902,
-  314042704,
-  2344532202,
-  4240017532,
-  1658658271,
-  366619977,
-  2362670323,
-  4224994405,
-  1303535960,
-  984961486,
-  2747007092,
-  3569037538,
-  1256170817,
-  1037604311,
-  2765210733,
-  3554079995,
-  1131014506,
-  879679996,
-  2909243462,
-  3663771856,
-  1141124467,
-  855842277,
-  2852801631,
-  3708648649,
-  1342533948,
-  654459306,
-  3188396048,
-  3373015174,
-  1466479909,
-  544179635,
-  3110523913,
-  3462522015,
-  1591671054,
-  702138776,
-  2966460450,
-  3352799412,
-  1504918807,
-  783551873,
-  3082640443,
-  3233442989,
-  3988292384,
-  2596254646,
-  62317068,
-  1957810842,
-  3939845945,
-  2647816111,
-  81470997,
-  1943803523,
-  3814918930,
-  2489596804,
-  225274430,
-  2053790376,
-  3826175755,
-  2466906013,
-  167816743,
-  2097651377,
-  4027552580,
-  2265490386,
-  503444072,
-  1762050814,
-  4150417245,
-  2154129355,
-  426522225,
-  1852507879,
-  4275313526,
-  2312317920,
-  282753626,
-  1742555852,
-  4189708143,
-  2394877945,
-  397917763,
-  1622183637,
-  3604390888,
-  2714866558,
-  953729732,
-  1340076626,
-  3518719985,
-  2797360999,
-  1068828381,
-  1219638859,
-  3624741850,
-  2936675148,
-  906185462,
-  1090812512,
-  3747672003,
-  2825379669,
-  829329135,
-  1181335161,
-  3412177804,
-  3160834842,
-  628085408,
-  1382605366,
-  3423369109,
-  3138078467,
-  570562233,
-  1426400815,
-  3317316542,
-  2998733608,
-  733239954,
-  1555261956,
-  3268935591,
-  3050360625,
-  752459403,
-  1541320221,
-  2607071920,
-  3965973030,
-  1969922972,
-  40735498,
-  2617837225,
-  3943577151,
-  1913087877,
-  83908371,
-  2512341634,
-  3803740692,
-  2075208622,
-  213261112,
-  2463272603,
-  3855990285,
-  2094854071,
-  198958881,
-  2262029012,
-  4057260610,
-  1759359992,
-  534414190,
-  2176718541,
-  4139329115,
-  1873836001,
-  414664567,
-  2282248934,
-  4279200368,
-  1711684554,
-  285281116,
-  2405801727,
-  4167216745,
-  1634467795,
-  376229701,
-  2685067896,
-  3608007406,
-  1308918612,
-  956543938,
-  2808555105,
-  3495958263,
-  1231636301,
-  1047427035,
-  2932959818,
-  3654703836,
-  1088359270,
-  936918000,
-  2847714899,
-  3736837829,
-  1202900863,
-  817233897,
-  3183342108,
-  3401237130,
-  1404277552,
-  615818150,
-  3134207493,
-  3453421203,
-  1423857449,
-  601450431,
-  3009837614,
-  3294710456,
-  1567103746,
-  711928724,
-  3020668471,
-  3272380065,
-  1510334235,
-  755167117
-];
-var lookupTable2 = uint32ArrayFrom(a_lookUpTable);
-
 // node_modules/@aws-sdk/checksums/dist-es/flexible-checksums/getCrc32ChecksumAlgorithmFunction.js
+var import_crc32 = __toESM(require_main2(), 1);
+var import_util3 = __toESM(require_main(), 1);
 import * as zlib from "zlib";
 
 class NodeCrc32 {
@@ -139511,7 +138940,7 @@ class NodeCrc32 {
     this.checksum = zlib.crc32(data, this.checksum);
   }
   async digest() {
-    return numToUint8(this.checksum);
+    return import_util3.numToUint8(this.checksum);
   }
   reset() {
     this.checksum = 0;
@@ -139519,7 +138948,7 @@ class NodeCrc32 {
 }
 var getCrc32ChecksumAlgorithmFunction = () => {
   if (typeof zlib.crc32 === "undefined") {
-    return AwsCrc32;
+    return import_crc32.AwsCrc32;
   }
   return NodeCrc32;
 };
@@ -148603,7 +148032,7 @@ var credentialsTreatedAsExpired = (credentials) => credentials?.expiration !== u
 // node_modules/@smithy/core/dist-cjs/submodules/checksum/index.js
 var { createReadStream: createReadStream2 } = __require("fs");
 var { Writable } = __require("stream");
-var { toUint8Array: toUint8Array3, fromUtf8: fromUtf85 } = require_serde();
+var { toUint8Array: toUint8Array2, fromUtf8: fromUtf82 } = require_serde();
 class HashCalculator extends Writable {
   hash;
   constructor(hash2, options) {
@@ -148612,7 +148041,7 @@ class HashCalculator extends Writable {
   }
   _write(chunk, encoding, callback) {
     try {
-      this.hash.update(toUint8Array3(chunk));
+      this.hash.update(toUint8Array2(chunk));
     } catch (err) {
       return callback(err);
     }
@@ -148928,7 +148357,7 @@ class PutObjectCommand extends import_client32.Command.classBuilder().ep({
 }
 
 // node_modules/@aws-sdk/s3-request-presigner/dist-es/getSignedUrl.js
-var import_util6 = __toESM(require_util(), 1);
+var import_util4 = __toESM(require_util(), 1);
 var import_endpoints11 = __toESM(require_endpoints(), 1);
 var import_protocols9 = __toESM(require_protocols(), 1);
 
@@ -149052,7 +148481,7 @@ var getSignedUrl = async (client, command, options = {}) => {
   const handler = command.resolveMiddleware(clientStack, client.config, {});
   const { output } = await handler({ input: command.input });
   const { presigned } = output;
-  return import_util6.formatUrl(presigned);
+  return import_util4.formatUrl(presigned);
 };
 
 // src/lib/r2.client.ts
@@ -151820,7 +151249,8 @@ var INotificationTypeEnum = {
   PHARMACY_DELIVERED: "pharmacy_delivered",
   PHARMACY_CANCELLED: "pharmacy_cancelled",
   PHARMACY_REJECTED: "pharmacy_rejected",
-  PHARMACY_REOPENED: "pharmacy_reopened"
+  PHARMACY_REOPENED: "pharmacy_reopened",
+  MEDICATION_REMINDER: "medication_reminder"
 };
 var INotificationStatusEnum = {
   PENDING: "pending",
@@ -151852,8 +151282,8 @@ var notificationSchema = new import_mongoose43.Schema({
   audience: { type: String, enum: Object.values(INotificationAudienceEnum), default: INotificationAudienceEnum.TARGETED, index: true },
   category: { type: String, enum: Object.values(INotificationCategoryEnum), default: INotificationCategoryEnum.SYSTEM, index: true },
   privacy: { type: String, enum: Object.values(INotificationPrivacyEnum), default: INotificationPrivacyEnum.NORMAL },
-  source: { type: new import_mongoose43.Schema({ domain: { type: String, enum: ["appointment", "home_care_request", "pharmacy_treatment_request"] }, id: { type: import_mongoose43.Schema.Types.ObjectId } }, { _id: false }), default: null },
-  target: { type: new import_mongoose43.Schema({ type: { type: String, enum: ["appointment", "home_care_request", "pharmacy_treatment_request"] }, id: { type: import_mongoose43.Schema.Types.ObjectId } }, { _id: false }), default: null },
+  source: { type: new import_mongoose43.Schema({ domain: { type: String, enum: ["appointment", "home_care_request", "pharmacy_treatment_request", "patient_medication"] }, id: { type: import_mongoose43.Schema.Types.ObjectId } }, { _id: false }), default: null },
+  target: { type: new import_mongoose43.Schema({ type: { type: String, enum: ["appointment", "home_care_request", "pharmacy_treatment_request", "medication_dose"] }, id: { type: import_mongoose43.Schema.Types.ObjectId } }, { _id: false }), default: null },
   visible_at: { type: Date, default: Date.now, index: true },
   expires_at: { type: Date, default: () => new Date(Date.now() + 7776000000) },
   dedupe_key: { type: String, trim: true, default: null },
@@ -151991,21 +151421,38 @@ var notification_delivery_service_default = new NotificationDeliveryService;
 
 // src/services/domain-notification.service.ts
 class DomainNotificationService {
-  async targeted({ userIds, dedupeKey, session, payload }) {
+  async createTargeted({ userIds, dedupeKey, session, payload }, enqueuePush) {
     const ids = [...new Set(userIds.map(String))].map((id2) => new import_mongoose46.default.Types.ObjectId(id2));
     if (!ids.length)
       return null;
     try {
-      const created = await notifications_model_default.create([{ ...payload, audience: INotificationAudienceEnum.TARGETED, recipient_ids: [], recipient_model: INotificationRecipientModelEnum.USER, dedupe_key: dedupeKey, status: INotificationStatusEnum.PENDING, is_read: false, visible_at: payload.visible_at ?? new Date, expires_at: payload.expires_at ?? new Date(Date.now() + 7776000000) }], session ? { session } : undefined);
+      const created = await notifications_model_default.create([{
+        ...payload,
+        audience: INotificationAudienceEnum.TARGETED,
+        recipient_ids: [],
+        recipient_model: INotificationRecipientModelEnum.USER,
+        dedupe_key: dedupeKey,
+        status: INotificationStatusEnum.PENDING,
+        is_read: false,
+        visible_at: payload.visible_at ?? new Date,
+        expires_at: payload.expires_at ?? new Date(Date.now() + 7776000000)
+      }], session ? { session } : undefined);
       const notification = created[0];
       await notification_recipient_model_default.insertMany(ids.map((user_id) => ({ notification_id: notification._id, user_id, expires_at: notification.expires_at })), session ? { session, ordered: true } : { ordered: true });
-      await notification_delivery_service_default.enqueueForNotification(notification, session);
+      if (enqueuePush)
+        await notification_delivery_service_default.enqueueForNotification(notification, session);
       return notification;
     } catch (error) {
       if (error?.code !== 11000)
         throw error;
       return notifications_model_default.findOne({ dedupe_key: dedupeKey }).session(session ?? null).exec();
     }
+  }
+  async inAppOnly(input) {
+    return this.createTargeted(input, false);
+  }
+  async targeted(input) {
+    return this.createTargeted(input, true);
   }
   async homeCare(request, event, profileIds, session, recipientMode = "patient_and_nurses") {
     const [patient2, ...nurses] = await Promise.all([patients_model_default.findById(request.patient_id).select("user_id").session(session).lean().exec(), ...profileIds.filter(Boolean).map((id2) => nurse_model_default.findById(id2).select("user_id").session(session).lean().exec())]);
@@ -160792,9 +160239,524 @@ var mobileNotificationsController = new Elysia({ prefix: "/notifications", detai
   return { error: false, message: "\u062A\u0645 \u062A\u0639\u0644\u064A\u0645 \u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u0643\u0645\u0642\u0631\u0648\u0621", data: { unread_count: await notification_service_default.unreadCount(value) } };
 }, { detail: { summary: "Mark one notification read", description: "Idempotent. Invisible or another user\u2019s targeted ID returns 404." }, params: t.Object({ id: t.String() }), response: { 200: t.Any(), 400: t.Any(), 401: t.Any(), 403: t.Any(), 404: t.Any(), 429: t.Any(), 500: t.Any() } });
 
+// src/services/patient-medication.service.ts
+var import_mongoose100 = __toESM(require_mongoose2(), 1);
+
+// src/models/patient-medication.model.ts
+var import_mongoose98 = __toESM(require_mongoose2(), 1);
+
+// src/interfaces/patient-medication.interface.ts
+var PATIENT_MEDICATION_DEFAULT_TIMEZONE = "Asia/Baghdad";
+var PATIENT_MEDICATION_MAX_TIMES_PER_DAY = 8;
+var PATIENT_MEDICATION_MAX_ACTIVE = 50;
+var PatientMedicationStatusEnum = {
+  ACTIVE: "active",
+  ARCHIVED: "archived"
+};
+
+// src/models/patient-medication.model.ts
+var scheduleSchema = new import_mongoose98.Schema({
+  timezone: { type: String, required: true, trim: true, maxlength: 100, default: PATIENT_MEDICATION_DEFAULT_TIMEZONE },
+  weekdays: { type: [Number], required: true, validate: [(v2) => v2.length >= 1 && v2.length <= 7 && new Set(v2).size === v2.length && v2.every((n2) => Number.isInteger(n2) && n2 >= 0 && n2 <= 6), "\u0623\u064A\u0627\u0645 \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629"] },
+  times: { type: [String], required: true, validate: [(v2) => v2.length >= 1 && v2.length <= PATIENT_MEDICATION_MAX_TIMES_PER_DAY && new Set(v2).size === v2.length && v2.every((x2) => /^([01]\d|2[0-3]):[0-5]\d$/.test(x2)), "\u0623\u0648\u0642\u0627\u062A \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629"] },
+  start_date: { type: String, required: true, match: /^\d{4}-\d{2}-\d{2}$/ },
+  end_date: { type: String, default: null, validate: [(v2) => v2 === null || /^\d{4}-\d{2}-\d{2}$/.test(v2), "\u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0646\u0647\u0627\u064A\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D"] }
+}, { _id: false });
+var schema16 = new import_mongoose98.Schema({
+  patient_id: { type: import_mongoose98.Schema.Types.ObjectId, ref: "Patient", required: true, immutable: true },
+  name: { type: String, required: true, trim: true, minlength: 1, maxlength: 120 },
+  strength_text: { type: String, trim: true, maxlength: 120, default: null },
+  dose_instructions: { type: String, trim: true, maxlength: 500, default: null },
+  notes: { type: String, trim: true, maxlength: 2000, default: null },
+  schedule: { type: scheduleSchema, required: true },
+  reminders_enabled: { type: Boolean, default: true },
+  schedule_version: { type: Number, required: true, min: 1, default: 1 },
+  status: { type: String, enum: Object.values(PatientMedicationStatusEnum), default: PatientMedicationStatusEnum.ACTIVE }
+}, { timestamps: true, versionKey: false });
+schema16.index({ patient_id: 1, status: 1 });
+schema16.index({ patient_id: 1, reminders_enabled: 1 });
+schema16.index({ status: 1, reminders_enabled: 1, "schedule.end_date": 1 });
+var PatientMedication = import_mongoose98.models.PatientMedication || import_mongoose98.model("PatientMedication", schema16);
+var patient_medication_model_default = PatientMedication;
+
+// src/models/medication-dose.model.ts
+var import_mongoose99 = __toESM(require_mongoose2(), 1);
+
+// src/interfaces/medication-dose.interface.ts
+var MedicationDoseStatusEnum = {
+  PENDING: "PENDING",
+  TAKEN: "TAKEN",
+  NOT_TAKEN: "NOT_TAKEN",
+  CANCELLED: "CANCELLED"
+};
+
+// src/models/medication-dose.model.ts
+var snapshotSchema = new import_mongoose99.Schema({
+  name: { type: String, required: true, maxlength: 120 },
+  strength_text: { type: String, default: null, maxlength: 120 },
+  dose_instructions: { type: String, default: null, maxlength: 500 }
+}, { _id: false });
+var schema17 = new import_mongoose99.Schema({
+  medication_id: { type: import_mongoose99.Schema.Types.ObjectId, ref: "PatientMedication", required: true, immutable: true },
+  patient_id: { type: import_mongoose99.Schema.Types.ObjectId, ref: "Patient", required: true, immutable: true },
+  schedule_version: { type: Number, required: true, min: 1, immutable: true },
+  scheduled_at: { type: Date, required: true, immutable: true },
+  medication_snapshot: { type: snapshotSchema, required: true },
+  status: { type: String, enum: Object.values(MedicationDoseStatusEnum), default: MedicationDoseStatusEnum.PENDING },
+  taken_at: { type: Date, default: null },
+  recorded_at: { type: Date, default: null }
+}, { timestamps: true, versionKey: false });
+schema17.index({ medication_id: 1, schedule_version: 1, scheduled_at: 1 }, { unique: true });
+schema17.index({ patient_id: 1, scheduled_at: 1 });
+schema17.index({ status: 1, scheduled_at: 1 });
+var MedicationDose = import_mongoose99.models.MedicationDose || import_mongoose99.model("MedicationDose", schema17);
+var medication_dose_model_default = MedicationDose;
+
+// src/services/patient-medication.service.ts
+init_domain_error();
+
+// src/services/medication-schedule.service.ts
+init_domain_error();
+var DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+var TIME3 = /^([01]\d|2[0-3]):[0-5]\d$/;
+function validDateOnly(value) {
+  if (!DATE_ONLY.test(value))
+    return false;
+  const date4 = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date4.getTime()) && date4.toISOString().slice(0, 10) === value;
+}
+function validTimezone(value) {
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+    return true;
+  } catch {
+    return false;
+  }
+}
+function normalizeSchedule(input, current) {
+  const timezone = input.timezone ?? current?.timezone ?? PATIENT_MEDICATION_DEFAULT_TIMEZONE;
+  const weekdays = [...new Set(input.weekdays ?? current?.weekdays ?? [0, 1, 2, 3, 4, 5, 6])].sort((a3, b3) => a3 - b3);
+  const rawTimes = input.times ?? current?.times ?? [];
+  if (new Set(rawTimes).size !== rawTimes.length)
+    throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u0643\u0631\u0627\u0631 \u0648\u0642\u062A \u0627\u0644\u062A\u0630\u0643\u064A\u0631", 400, "DUPLICATE_REMINDER_TIME");
+  const times = [...rawTimes].sort();
+  const start_date = input.start_date ?? current?.start_date ?? "";
+  const end_date = input.end_date === undefined ? current?.end_date ?? null : input.end_date;
+  if (!validTimezone(timezone))
+    throw new DomainError("\u0627\u0644\u0645\u0646\u0637\u0642\u0629 \u0627\u0644\u0632\u0645\u0646\u064A\u0629 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 400, "INVALID_TIMEZONE");
+  if (!weekdays.length || weekdays.length > 7 || weekdays.some((day) => !Number.isInteger(day) || day < 0 || day > 6))
+    throw new DomainError("\u0623\u064A\u0627\u0645 \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 400, "INVALID_WEEKDAYS");
+  if (!times.length || times.length > PATIENT_MEDICATION_MAX_TIMES_PER_DAY || times.some((time3) => !TIME3.test(time3)))
+    throw new DomainError("\u0623\u0648\u0642\u0627\u062A \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D\u0629", 400, "INVALID_REMINDER_TIMES");
+  if (!validDateOnly(start_date) || end_date !== null && !validDateOnly(end_date))
+    throw new DomainError("\u0646\u0637\u0627\u0642 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u063A\u064A\u0631 \u0635\u0627\u0644\u062D", 400, "INVALID_SCHEDULE_DATE");
+  if (end_date && end_date < start_date)
+    throw new DomainError("\u064A\u062C\u0628 \u0623\u0644\u0627 \u064A\u0633\u0628\u0642 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0646\u0647\u0627\u064A\u0629 \u062A\u0627\u0631\u064A\u062E \u0627\u0644\u0628\u062F\u0627\u064A\u0629", 400, "INVALID_SCHEDULE_RANGE");
+  return { timezone, weekdays, times, start_date, end_date };
+}
+function scheduleChanged(a3, b3) {
+  return a3.timezone !== b3.timezone || a3.start_date !== b3.start_date || a3.end_date !== b3.end_date || a3.weekdays.join(",") !== b3.weekdays.join(",") || a3.times.join(",") !== b3.times.join(",");
+}
+function partsAt(date4, timezone) {
+  const values = {};
+  for (const part of new Intl.DateTimeFormat("en-US", { timeZone: timezone, hour12: false, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date4)) {
+    if (part.type !== "literal")
+      values[part.type] = Number(part.value);
+  }
+  return values;
+}
+function zonedLocalToUtc(dateOnly, time3, timezone) {
+  const [year, month, day] = dateOnly.split("-").map(Number);
+  const [hour, minute] = time3.split(":").map(Number);
+  const wanted = Date.UTC(year, month - 1, day, hour, minute, 0);
+  let guess = wanted;
+  for (let i3 = 0;i3 < 3; i3++) {
+    const p2 = partsAt(new Date(guess), timezone);
+    const represented = Date.UTC(p2.year, p2.month - 1, p2.day, p2.hour, p2.minute, p2.second);
+    guess += wanted - represented;
+  }
+  return new Date(guess);
+}
+function dateOnlyInTimezone(date4, timezone) {
+  const p2 = partsAt(date4, timezone);
+  return `${p2.year}-${String(p2.month).padStart(2, "0")}-${String(p2.day).padStart(2, "0")}`;
+}
+function addLocalDays(dateOnly, days) {
+  const date4 = new Date(`${dateOnly}T00:00:00.000Z`);
+  date4.setUTCDate(date4.getUTCDate() + days);
+  return date4.toISOString().slice(0, 10);
+}
+function weekdayForDateOnly(dateOnly) {
+  return new Date(`${dateOnly}T00:00:00.000Z`).getUTCDay();
+}
+function scheduledInstants(schedule, from, until) {
+  const results = [];
+  let localDate = dateOnlyInTimezone(from, schedule.timezone);
+  const lastLocalDate = dateOnlyInTimezone(until, schedule.timezone);
+  while (localDate <= lastLocalDate) {
+    if (localDate >= schedule.start_date && (!schedule.end_date || localDate <= schedule.end_date) && schedule.weekdays.includes(weekdayForDateOnly(localDate))) {
+      for (const time3 of schedule.times) {
+        const instant = zonedLocalToUtc(localDate, time3, schedule.timezone);
+        if (instant > from && instant <= until)
+          results.push(instant);
+      }
+    }
+    localDate = addLocalDays(localDate, 1);
+  }
+  return results.sort((a3, b3) => a3.getTime() - b3.getTime());
+}
+
+// src/services/medication-reminder.service.ts
+var MEDICATION_GENERATION_WINDOW_DAYS = 7;
+var MEDICATION_REMINDER_TITLE = "\u062A\u0630\u0643\u064A\u0631 \u0628\u0645\u0648\u0639\u062F \u0627\u0644\u062F\u0648\u0627\u0621";
+var MEDICATION_REMINDER_BODY = "\u0644\u062F\u064A\u0643 \u0645\u0648\u0639\u062F \u062F\u0648\u0627\u0621 \u0645\u0633\u062C\u0644";
+function medicationReminderDedupeKey(medicationId, scheduleVersion, doseId, patientUserId) {
+  return `medication:${medicationId}:${scheduleVersion}:dose:${doseId}:${patientUserId}`;
+}
+
+class MedicationReminderService {
+  async generateForMedication(medication, now = new Date, session) {
+    if (medication.status !== PatientMedicationStatusEnum.ACTIVE || !medication.reminders_enabled)
+      return [];
+    const until = new Date(now.getTime() + MEDICATION_GENERATION_WINDOW_DAYS * 86400000);
+    const instants = scheduledInstants(medication.schedule, now, until);
+    if (instants.length) {
+      try {
+        await medication_dose_model_default.bulkWrite(instants.map((scheduled_at) => ({ updateOne: {
+          filter: { medication_id: medication._id, schedule_version: medication.schedule_version, scheduled_at },
+          update: { $setOnInsert: {
+            medication_id: medication._id,
+            patient_id: medication.patient_id,
+            schedule_version: medication.schedule_version,
+            scheduled_at,
+            medication_snapshot: { name: medication.name, strength_text: medication.strength_text ?? null, dose_instructions: medication.dose_instructions ?? null },
+            status: MedicationDoseStatusEnum.PENDING
+          } },
+          upsert: true
+        } })), { ordered: false, session });
+      } catch (error) {
+        if (error?.code !== 11000 && !error?.writeErrors?.every((item) => item?.code === 11000))
+          throw error;
+      }
+    }
+    const doses = await medication_dose_model_default.find({
+      medication_id: medication._id,
+      schedule_version: medication.schedule_version,
+      status: MedicationDoseStatusEnum.PENDING,
+      scheduled_at: { $gt: now, $lte: until }
+    }).sort({ scheduled_at: 1 }).session(session ?? null).exec();
+    if (!doses.length)
+      return doses;
+    const patient3 = await patients_model_default.findById(medication.patient_id).select("user_id").session(session ?? null).lean().exec();
+    if (!patient3?.user_id)
+      throw new Error("MEDICATION_REMINDER_IDENTITY_MISSING");
+    for (const dose of doses) {
+      await domain_notification_service_default.inAppOnly({
+        userIds: [patient3.user_id],
+        session,
+        dedupeKey: medicationReminderDedupeKey(medication._id, medication.schedule_version, dose._id, patient3.user_id),
+        payload: {
+          category: INotificationCategoryEnum.MEDICATIONS,
+          type: INotificationTypeEnum.MEDICATION_REMINDER,
+          privacy: INotificationPrivacyEnum.SENSITIVE,
+          title: MEDICATION_REMINDER_TITLE,
+          body: MEDICATION_REMINDER_BODY,
+          source: { domain: "patient_medication", id: medication._id },
+          target: { type: "medication_dose", id: dose._id },
+          visible_at: dose.scheduled_at
+        }
+      });
+    }
+    const current = await patient_medication_model_default.findById(medication._id).select("status reminders_enabled schedule_version").lean().exec();
+    if (!current || current.status !== PatientMedicationStatusEnum.ACTIVE || !current.reminders_enabled || current.schedule_version !== medication.schedule_version) {
+      await this.invalidateFuture(medication._id, now, current?.status === PatientMedicationStatusEnum.ACTIVE && current.reminders_enabled ? current.schedule_version : undefined);
+      return [];
+    }
+    return doses;
+  }
+  async generateForPatient(patientId, now = new Date) {
+    const medications = await patient_medication_model_default.find({ patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE, reminders_enabled: true }).exec();
+    for (const medication of medications)
+      await this.generateForMedication(medication, now);
+  }
+  async invalidateFuture(medicationId, now = new Date, keepScheduleVersion) {
+    const doseFilter = { medication_id: medicationId, scheduled_at: { $gt: now }, status: MedicationDoseStatusEnum.PENDING };
+    if (keepScheduleVersion !== undefined)
+      doseFilter.schedule_version = { $ne: keepScheduleVersion };
+    const doses = await medication_dose_model_default.find(doseFilter).select("_id").lean().exec();
+    if (!doses.length)
+      return 0;
+    const doseIds = doses.map((dose) => dose._id);
+    await medication_dose_model_default.updateMany({ _id: { $in: doseIds }, status: MedicationDoseStatusEnum.PENDING }, { $set: { status: MedicationDoseStatusEnum.CANCELLED, recorded_at: now } }).exec();
+    await notifications_model_default.updateMany({
+      type: INotificationTypeEnum.MEDICATION_REMINDER,
+      "target.type": "medication_dose",
+      "target.id": { $in: doseIds },
+      visible_at: { $gt: now },
+      status: { $ne: INotificationStatusEnum.CANCELLED }
+    }, { $set: { status: INotificationStatusEnum.CANCELLED } }).exec();
+    return doseIds.length;
+  }
+}
+var medication_reminder_service_default = new MedicationReminderService;
+
+// src/services/patient-medication.service.ts
+function ownedFilter(patientId, id3) {
+  return import_mongoose100.default.Types.ObjectId.isValid(id3) ? { _id: id3, patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE } : { _id: new import_mongoose100.default.Types.ObjectId, patient_id: patientId };
+}
+function formatMedication(medication, nextDoseAt) {
+  return {
+    id: String(medication._id),
+    name: medication.name,
+    strength_text: medication.strength_text ?? null,
+    dose_instructions: medication.dose_instructions ?? null,
+    notes: medication.notes ?? null,
+    schedule: medication.schedule,
+    reminders_enabled: medication.reminders_enabled,
+    schedule_version: medication.schedule_version,
+    next_dose_at: nextDoseAt ?? null,
+    status: medication.status,
+    createdAt: medication.createdAt,
+    updatedAt: medication.updatedAt
+  };
+}
+
+class PatientMedicationService {
+  async create(patientId, input, now = new Date) {
+    if (await patient_medication_model_default.countDocuments({ patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE }) >= PATIENT_MEDICATION_MAX_ACTIVE)
+      throw new DomainError("\u062A\u0645 \u0628\u0644\u0648\u063A \u0627\u0644\u062D\u062F \u0627\u0644\u0623\u0642\u0635\u0649 \u0644\u0644\u0623\u062F\u0648\u064A\u0629 \u0627\u0644\u0646\u0634\u0637\u0629", 409, "ACTIVE_MEDICATION_LIMIT");
+    const medication = await patient_medication_model_default.create({ ...input, patient_id: patientId, schedule: normalizeSchedule(input.schedule), schedule_version: 1, status: PatientMedicationStatusEnum.ACTIVE });
+    await medication_reminder_service_default.generateForMedication(medication, now);
+    return medication;
+  }
+  async list(patientId, now = new Date) {
+    await medication_reminder_service_default.generateForPatient(patientId, now);
+    const medications = await patient_medication_model_default.find({ patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE }).sort({ createdAt: -1 }).lean().exec();
+    const next = await medication_dose_model_default.aggregate([
+      { $match: { patient_id: new import_mongoose100.default.Types.ObjectId(String(patientId)), status: MedicationDoseStatusEnum.PENDING, scheduled_at: { $gt: now } } },
+      { $sort: { scheduled_at: 1 } },
+      { $group: { _id: "$medication_id", next_dose_at: { $first: "$scheduled_at" } } }
+    ]).exec();
+    const map3 = new Map(next.map((row) => [String(row._id), row.next_dose_at]));
+    return medications.map((medication) => formatMedication(medication, map3.get(String(medication._id)) ?? null));
+  }
+  async requireOwned(patientId, id3) {
+    const medication = await patient_medication_model_default.findOne(ownedFilter(patientId, id3)).exec();
+    if (!medication)
+      throw new DomainError("\u0627\u0644\u062F\u0648\u0627\u0621 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404, "MEDICATION_NOT_FOUND");
+    return medication;
+  }
+  async get(patientId, id3, now = new Date) {
+    const medication = await this.requireOwned(patientId, id3);
+    await medication_reminder_service_default.generateForMedication(medication, now);
+    const next = await medication_dose_model_default.findOne({ medication_id: medication._id, schedule_version: medication.schedule_version, status: MedicationDoseStatusEnum.PENDING, scheduled_at: { $gt: now } }).sort({ scheduled_at: 1 }).select("scheduled_at").lean().exec();
+    return formatMedication(medication, next?.scheduled_at ?? null);
+  }
+  async update(patientId, id3, input, now = new Date) {
+    const existing = await this.requireOwned(patientId, id3);
+    const schedule = input.schedule ? normalizeSchedule(input.schedule, existing.schedule) : existing.schedule;
+    const reminderChanged = input.reminders_enabled !== undefined && input.reminders_enabled !== existing.reminders_enabled;
+    const versionChanged = scheduleChanged(existing.schedule, schedule) || reminderChanged;
+    const nextVersion = existing.schedule_version + (versionChanged ? 1 : 0);
+    const medication = await patient_medication_model_default.findOneAndUpdate({ _id: existing._id, patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE, schedule_version: existing.schedule_version }, { $set: { ...input, schedule, schedule_version: nextVersion } }, { new: true, runValidators: true }).exec();
+    if (!medication)
+      throw new DomainError("\u062A\u0645 \u062A\u0639\u062F\u064A\u0644 \u062C\u062F\u0648\u0644 \u0627\u0644\u062F\u0648\u0627\u0621 \u0645\u0646 \u0637\u0644\u0628 \u0622\u062E\u0631", 409, "STALE_SCHEDULE_VERSION");
+    if (versionChanged)
+      await medication_reminder_service_default.invalidateFuture(medication._id, now, nextVersion);
+    else if (input.name !== undefined || input.strength_text !== undefined || input.dose_instructions !== undefined) {
+      await medication_dose_model_default.updateMany({ medication_id: medication._id, schedule_version: medication.schedule_version, status: MedicationDoseStatusEnum.PENDING, scheduled_at: { $gt: now } }, { $set: { medication_snapshot: { name: medication.name, strength_text: medication.strength_text ?? null, dose_instructions: medication.dose_instructions ?? null } } }).exec();
+    }
+    await medication_reminder_service_default.generateForMedication(medication, now);
+    return this.get(patientId, id3, now);
+  }
+  async archive(patientId, id3, now = new Date) {
+    const existing = await this.requireOwned(patientId, id3);
+    const medication = await patient_medication_model_default.findOneAndUpdate({ _id: existing._id, patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE }, { $set: { status: PatientMedicationStatusEnum.ARCHIVED, reminders_enabled: false }, $inc: { schedule_version: 1 } }, { new: true }).exec();
+    if (!medication)
+      throw new DomainError("\u0627\u0644\u062F\u0648\u0627\u0621 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404, "MEDICATION_NOT_FOUND");
+    await medication_reminder_service_default.invalidateFuture(medication._id, now);
+    return formatMedication(medication, null);
+  }
+}
+var patient_medication_service_default = new PatientMedicationService;
+
+// src/controller/mobile/medications.controller.ts
+init_domain_error();
+
+// src/schemas/medication-response.schema.ts
+var MedicationScheduleSchema = t.Object({
+  timezone: t.String({ examples: ["Asia/Baghdad"] }),
+  weekdays: t.Array(t.Integer({ minimum: 0, maximum: 6 }), { minItems: 1, maxItems: 7, examples: [[0, 2, 4]] }),
+  times: t.Array(t.String({ pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" }), { minItems: 1, maxItems: 8, examples: [["08:00", "20:00"]] }),
+  start_date: t.String({ format: "date" }),
+  end_date: t.Nullable(t.String({ format: "date" }))
+}, { additionalProperties: false });
+var MedicationScheduleInputSchema = t.Object({
+  timezone: t.Optional(t.String({ maxLength: 100, default: "Asia/Baghdad" })),
+  weekdays: t.Optional(t.Array(t.Integer({ minimum: 0, maximum: 6 }), { minItems: 1, maxItems: 7 })),
+  times: t.Array(t.String({ pattern: "^([01]\\d|2[0-3]):[0-5]\\d$" }), { minItems: 1, maxItems: 8 }),
+  start_date: t.String({ format: "date" }),
+  end_date: t.Optional(t.Nullable(t.String({ format: "date" })))
+}, { additionalProperties: false });
+var MedicationCreateBodySchema = t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  strength_text: t.Optional(t.Nullable(t.String({ maxLength: 120 }))),
+  dose_instructions: t.Optional(t.Nullable(t.String({ maxLength: 500 }))),
+  notes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
+  schedule: MedicationScheduleInputSchema,
+  reminders_enabled: t.Optional(t.Boolean({ default: true }))
+}, { additionalProperties: false, examples: [{ name: "\u062F\u0648\u0627\u0621 \u0645\u0648\u0635\u0648\u0641", strength_text: "500 mg", dose_instructions: "1 tablet", schedule: { timezone: "Asia/Baghdad", weekdays: [0, 1, 2, 3, 4, 5, 6], times: ["08:00", "20:00"], start_date: "2026-09-07", end_date: null }, reminders_enabled: true }] });
+var schedulePatch = t.Partial(MedicationScheduleInputSchema, { minProperties: 1 });
+var MedicationUpdateBodySchema = t.Partial(t.Object({
+  name: t.String({ minLength: 1, maxLength: 120 }),
+  strength_text: t.Nullable(t.String({ maxLength: 120 })),
+  dose_instructions: t.Nullable(t.String({ maxLength: 500 })),
+  notes: t.Nullable(t.String({ maxLength: 2000 })),
+  schedule: schedulePatch,
+  reminders_enabled: t.Boolean()
+}, { additionalProperties: false }), { minProperties: 1 });
+var MedicationSchema = t.Object({
+  id: t.String(),
+  name: t.String(),
+  strength_text: t.Nullable(t.String()),
+  dose_instructions: t.Nullable(t.String()),
+  notes: t.Nullable(t.String()),
+  schedule: MedicationScheduleSchema,
+  reminders_enabled: t.Boolean(),
+  schedule_version: t.Integer({ minimum: 1 }),
+  next_dose_at: t.Nullable(t.Date()),
+  status: t.Enum(PatientMedicationStatusEnum),
+  createdAt: t.Date(),
+  updatedAt: t.Date()
+});
+var MedicationResponseSchema = successResponse(MedicationSchema);
+var MedicationListResponseSchema = successResponse(t.Array(MedicationSchema));
+var MedicationDoseSchema = t.Object({
+  id: t.String(),
+  medication_id: t.String(),
+  medication: t.Object({ name: t.String(), strength_text: t.Nullable(t.String()), dose_instructions: t.Nullable(t.String()) }),
+  scheduled_at: t.Date(),
+  schedule_version: t.Integer(),
+  status: t.Enum(MedicationDoseStatusEnum),
+  taken_at: t.Nullable(t.Date()),
+  recorded_at: t.Nullable(t.Date())
+});
+var MedicationDoseResponseSchema = successResponse(MedicationDoseSchema);
+var MedicationDoseListResponseSchema = successResponse(t.Array(MedicationDoseSchema));
+var MedicationReminderSyncResponseSchema = successResponse(t.Object({
+  generated_at: t.Date(),
+  window_ends_at: t.Date(),
+  schedules: t.Array(t.Object({ medication_id: t.String(), schedule_version: t.Integer(), timezone: t.String() })),
+  reminders: t.Array(t.Object({ dose_id: t.String(), medication_id: t.String(), scheduled_at: t.Date(), timezone: t.String(), schedule_version: t.Integer(), title: t.String(), body: t.String() }))
+}), "\u0645\u0632\u0627\u0645\u0646\u0629 \u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u062C\u0647\u0627\u0632 \u0627\u0644\u0645\u062D\u0644\u064A\u0629\u061B \u0644\u0627 \u064A\u0631\u0633\u0644 \u0627\u0644\u062E\u0627\u062F\u0645 \u0647\u0630\u0647 \u0627\u0644\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0639\u0628\u0631 OneSignal");
+
+// src/controller/mobile/medications.controller.ts
+var errors6 = { 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...ProtectedApiErrorResponses };
+async function patientFor2(userId) {
+  const patient3 = await patient_service_default.getByUserId(userId);
+  if (!patient3)
+    throw new DomainError("\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+  return patient3;
+}
+var mobileMedicationsController = new Elysia({ prefix: "/medications", detail: { tags: [SWAGGER_TAGS.MOBILE.MEDICATIONS] } }).use(AuthPlugin(TokenAudienceEnum.MOBILE)).onError(({ error, set }) => {
+  if (error instanceof DomainError) {
+    set.status = error.status;
+    return { error: true, message: error.message, code: error.code };
+  }
+}).get("/", async ({ phrase }) => ({ error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u0623\u062F\u0648\u064A\u0629 \u0628\u0646\u062C\u0627\u062D", data: await patient_medication_service_default.list((await patientFor2(phrase._id))._id) }), { response: { 200: MedicationListResponseSchema, ...errors6 } }).post("/", async ({ phrase, body, set }) => {
+  const medication = await patient_medication_service_default.create((await patientFor2(phrase._id))._id, body);
+  set.status = 201;
+  return { error: false, message: "\u062A\u0645\u062A \u0625\u0636\u0627\u0641\u0629 \u0627\u0644\u062F\u0648\u0627\u0621 \u0628\u0646\u062C\u0627\u062D", data: await patient_medication_service_default.get(medication.patient_id, String(medication._id)) };
+}, { body: MedicationCreateBodySchema, detail: { description: "\u064A\u0646\u0634\u0626 \u062F\u0648\u0627\u0621\u064B \u0648\u062C\u062F\u0648\u0644\u0627\u064B \u064A\u062D\u062F\u062F\u0647 \u0627\u0644\u0645\u0631\u064A\u0636. \u0644\u0627 \u064A\u0633\u062A\u0646\u062A\u062C \u0627\u0644\u062E\u0627\u062F\u0645 \u0627\u0644\u062C\u0631\u0639\u0629 \u0637\u0628\u064A\u0627\u064B." }, response: { 201: MedicationResponseSchema, ...errors6 } }).get("/:id", async ({ phrase, params }) => ({ error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u0627\u0644\u062F\u0648\u0627\u0621 \u0628\u0646\u062C\u0627\u062D", data: await patient_medication_service_default.get((await patientFor2(phrase._id))._id, params.id) }), { response: { 200: MedicationResponseSchema, ...errors6 } }).patch("/:id", async ({ phrase, params, body }) => ({ error: false, message: "\u062A\u0645 \u062A\u062D\u062F\u064A\u062B \u0627\u0644\u062F\u0648\u0627\u0621 \u0628\u0646\u062C\u0627\u062D", data: await patient_medication_service_default.update((await patientFor2(phrase._id))._id, params.id, body) }), { body: MedicationUpdateBodySchema, detail: { description: "\u062A\u063A\u064A\u064A\u0631 \u0627\u0644\u062C\u062F\u0648\u0644 \u0623\u0648 \u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u064A\u0632\u064A\u062F schedule_version \u0648\u064A\u0644\u063A\u064A \u0627\u0644\u062C\u0631\u0639\u0627\u062A \u0627\u0644\u0645\u062D\u0644\u064A\u0629 \u0627\u0644\u0642\u062F\u064A\u0645\u0629." }, response: { 200: MedicationResponseSchema, ...errors6 } }).delete("/:id", async ({ phrase, params }) => ({ error: false, message: "\u062A\u0645\u062A \u0623\u0631\u0634\u0641\u0629 \u0627\u0644\u062F\u0648\u0627\u0621 \u0628\u0646\u062C\u0627\u062D", data: await patient_medication_service_default.archive((await patientFor2(phrase._id))._id, params.id) }), { detail: { description: "\u0623\u0631\u0634\u0641\u0629 \u0645\u0646\u0637\u0642\u064A\u0629 \u062A\u062D\u0641\u0638 \u0627\u0644\u0633\u062C\u0644 \u0648\u062A\u0644\u063A\u064A \u0627\u0644\u062C\u0631\u0639\u0627\u062A \u0648\u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u0645\u0633\u062A\u0642\u0628\u0644\u064A\u0629." }, response: { 200: MedicationResponseSchema, ...errors6 } });
+
+// src/services/medication-dose.service.ts
+var import_mongoose101 = __toESM(require_mongoose2(), 1);
+init_domain_error();
+function validOwnedId(patientId, id3) {
+  return import_mongoose101.default.Types.ObjectId.isValid(id3) ? { _id: id3, patient_id: patientId } : { _id: new import_mongoose101.default.Types.ObjectId, patient_id: patientId };
+}
+function formatDose(dose) {
+  return { id: String(dose._id), medication_id: String(dose.medication_id), medication: dose.medication_snapshot, scheduled_at: dose.scheduled_at, schedule_version: dose.schedule_version, status: dose.status, taken_at: dose.taken_at ?? null, recorded_at: dose.recorded_at ?? null };
+}
+
+class MedicationDoseService {
+  async today(patientId, now = new Date) {
+    await medication_reminder_service_default.generateForPatient(patientId, now);
+    const today = dateOnlyInTimezone(now, PATIENT_MEDICATION_DEFAULT_TIMEZONE);
+    const from = zonedLocalToUtc(today, "00:00", PATIENT_MEDICATION_DEFAULT_TIMEZONE);
+    const to = zonedLocalToUtc(addLocalDays(today, 1), "00:00", PATIENT_MEDICATION_DEFAULT_TIMEZONE);
+    return (await medication_dose_model_default.find({ patient_id: patientId, scheduled_at: { $gte: from, $lt: to }, status: { $ne: MedicationDoseStatusEnum.CANCELLED } }).sort({ scheduled_at: 1 }).lean().exec()).map(formatDose);
+  }
+  async record(patientId, id3, status2, now = new Date) {
+    const ownership = validOwnedId(patientId, id3);
+    const dose = await medication_dose_model_default.findOneAndUpdate({ ...ownership, status: MedicationDoseStatusEnum.PENDING }, { $set: { status: status2, recorded_at: now, taken_at: status2 === MedicationDoseStatusEnum.TAKEN ? now : null } }, { new: true }).exec();
+    if (dose)
+      return formatDose(dose);
+    const current = await medication_dose_model_default.findOne(ownership).exec();
+    if (!current || current.status === MedicationDoseStatusEnum.CANCELLED)
+      throw new DomainError("\u062C\u0631\u0639\u0629 \u0627\u0644\u062F\u0648\u0627\u0621 \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F\u0629", 404, "MEDICATION_DOSE_NOT_FOUND");
+    if (current.status === status2)
+      return formatDose(current);
+    throw new DomainError("\u0644\u0627 \u064A\u0645\u0643\u0646 \u062A\u063A\u064A\u064A\u0631 \u062D\u0627\u0644\u0629 \u062C\u0631\u0639\u0629 \u0645\u0633\u062C\u0644\u0629", 409, "MEDICATION_DOSE_FINALIZED");
+  }
+  async upcoming(patientId, now = new Date) {
+    await medication_reminder_service_default.generateForPatient(patientId, now);
+    const until = new Date(now.getTime() + MEDICATION_GENERATION_WINDOW_DAYS * 86400000);
+    const medications = await patient_medication_model_default.find({ patient_id: patientId, status: PatientMedicationStatusEnum.ACTIVE, reminders_enabled: true }).select("_id schedule.timezone schedule_version").lean().exec();
+    const medicationMap = new Map(medications.map((m2) => [String(m2._id), m2]));
+    const doses = await medication_dose_model_default.find({ patient_id: patientId, medication_id: { $in: medications.map((m2) => m2._id) }, status: MedicationDoseStatusEnum.PENDING, scheduled_at: { $gt: now, $lte: until } }).sort({ scheduled_at: 1 }).lean().exec();
+    return {
+      generated_at: now,
+      window_ends_at: until,
+      schedules: medications.map((m2) => ({ medication_id: String(m2._id), schedule_version: m2.schedule_version, timezone: m2.schedule.timezone })),
+      reminders: doses.filter((d3) => medicationMap.get(String(d3.medication_id))?.schedule_version === d3.schedule_version).map((d3) => ({
+        dose_id: String(d3._id),
+        medication_id: String(d3.medication_id),
+        scheduled_at: d3.scheduled_at,
+        timezone: medicationMap.get(String(d3.medication_id)).schedule.timezone,
+        schedule_version: d3.schedule_version,
+        title: MEDICATION_REMINDER_TITLE,
+        body: MEDICATION_REMINDER_BODY
+      }))
+    };
+  }
+}
+var medication_dose_service_default = new MedicationDoseService;
+
+// src/controller/mobile/medication-doses.controller.ts
+init_domain_error();
+var errors7 = { 400: BadRequestResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, ...ProtectedApiErrorResponses };
+async function patientFor3(userId) {
+  const patient3 = await patient_service_default.getByUserId(userId);
+  if (!patient3)
+    throw new DomainError("\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+  return patient3;
+}
+var mobileMedicationDosesController = new Elysia({ prefix: "/medication-doses", detail: { tags: [SWAGGER_TAGS.MOBILE.MEDICATIONS] } }).use(AuthPlugin(TokenAudienceEnum.MOBILE)).onError(({ error, set }) => {
+  if (error instanceof DomainError) {
+    set.status = error.status;
+    return { error: true, message: error.message, code: error.code };
+  }
+}).get("/today", async ({ phrase }) => ({ error: false, message: "\u062A\u0645 \u062C\u0644\u0628 \u062C\u0631\u0639\u0627\u062A \u0627\u0644\u064A\u0648\u0645 \u0628\u0646\u062C\u0627\u062D", data: await medication_dose_service_default.today((await patientFor3(phrase._id))._id) }), { detail: { description: "\u064A\u0633\u062A\u062E\u062F\u0645 \u062D\u062F\u0648\u062F \u0627\u0644\u064A\u0648\u0645 \u0641\u064A Asia/Baghdad\u060C \u0648\u062D\u0627\u0644\u0629 \u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u0645\u0633\u062A\u0642\u0644\u0629 \u0639\u0646 \u062D\u0627\u0644\u0629 \u0627\u0644\u062C\u0631\u0639\u0629." }, response: { 200: MedicationDoseListResponseSchema, ...errors7 } }).patch("/:id/taken", async ({ phrase, params }) => ({ error: false, message: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u062A\u0646\u0627\u0648\u0644 \u0627\u0644\u062C\u0631\u0639\u0629 \u0628\u0646\u062C\u0627\u062D", data: await medication_dose_service_default.record((await patientFor3(phrase._id))._id, params.id, MedicationDoseStatusEnum.TAKEN) }), { detail: { description: "\u0639\u0645\u0644\u064A\u0629 idempotent \u062A\u0633\u062A\u062E\u062F\u0645 \u0648\u0642\u062A \u0627\u0644\u062E\u0627\u062F\u0645. \u0627\u0644\u062D\u0627\u0644\u0627\u062A \u0627\u0644\u0646\u0647\u0627\u0626\u064A\u0629 \u0627\u0644\u0645\u062A\u0639\u0627\u0631\u0636\u0629 \u062A\u0639\u064A\u062F 409." }, response: { 200: MedicationDoseResponseSchema, ...errors7 } }).patch("/:id/not-taken", async ({ phrase, params }) => ({ error: false, message: "\u062A\u0645 \u062A\u0633\u062C\u064A\u0644 \u0639\u062F\u0645 \u062A\u0646\u0627\u0648\u0644 \u0627\u0644\u062C\u0631\u0639\u0629 \u0628\u0646\u062C\u0627\u062D", data: await medication_dose_service_default.record((await patientFor3(phrase._id))._id, params.id, MedicationDoseStatusEnum.NOT_TAKEN) }), { detail: { description: "\u0639\u0645\u0644\u064A\u0629 idempotent. \u0644\u0627 \u064A\u063A\u064A\u0651\u0631 \u062A\u062C\u0627\u0647\u0644 \u0627\u0644\u0625\u0634\u0639\u0627\u0631 \u062D\u0627\u0644\u0629 \u0627\u0644\u062C\u0631\u0639\u0629 \u062A\u0644\u0642\u0627\u0626\u064A\u0627\u064B." }, response: { 200: MedicationDoseResponseSchema, ...errors7 } });
+
+// src/controller/mobile/medication-reminders.controller.ts
+init_domain_error();
+async function patientFor4(userId) {
+  const patient3 = await patient_service_default.getByUserId(userId);
+  if (!patient3)
+    throw new DomainError("\u0627\u0644\u0645\u0644\u0641 \u0627\u0644\u0634\u062E\u0635\u064A \u063A\u064A\u0631 \u0645\u0648\u062C\u0648\u062F", 404);
+  return patient3;
+}
+var mobileMedicationRemindersController = new Elysia({ prefix: "/medication-reminders", detail: { tags: [SWAGGER_TAGS.MOBILE.MEDICATIONS] } }).use(AuthPlugin(TokenAudienceEnum.MOBILE)).onError(({ error, set }) => {
+  if (error instanceof DomainError) {
+    set.status = error.status;
+    return { error: true, message: error.message, code: error.code };
+  }
+}).get("/upcoming", async ({ phrase }) => ({ error: false, message: "\u062A\u0645\u062A \u0645\u0632\u0627\u0645\u0646\u0629 \u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u062F\u0648\u0627\u0621 \u0628\u0646\u062C\u0627\u062D", data: await medication_dose_service_default.upcoming((await patientFor4(phrase._id))._id) }), { detail: { description: "\u064A\u0639\u064A\u062F \u0646\u0627\u0641\u0630\u0629 \u0633\u0628\u0639\u0629 \u0623\u064A\u0627\u0645 \u0648\u0645\u0635\u0641\u0648\u0641\u0629 \u0625\u0635\u062F\u0627\u0631\u0627\u062A \u062D\u062A\u0645\u064A\u0629 \u0644\u062C\u062F\u0648\u0644\u0629 Local Notifications. \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u062F\u0648\u0627\u0621 \u062F\u0627\u062E\u0644 \u0627\u0644\u062E\u0627\u062F\u0645 in-app only \u0648\u0644\u0627 \u062A\u064F\u0631\u0633\u0644 \u0639\u0628\u0631 OneSignal." }, response: { 200: MedicationReminderSyncResponseSchema, 403: ForbiddenResponseSchema, 404: NotFoundResponseSchema, ...ProtectedApiErrorResponses } });
+
 // src/controller/mobile/index.ts
 var mobilePublicController = new Elysia().use(mobileAuthController).use(mobileAboutUsController).use(mobileAdsController).use(mobileChronicConditionsController).use(mobileDoctorsController).use(mobileSpecialtiesController).use(mobileHomeCareController).use(mobileNotificationsController);
-var mobileProtectedController = new Elysia().use(RoleGuardPlugin([IUserRoleEnum.PATIENT])).use(mobileProfileController).use(mobileProfileHealthController).use(mobileChildrenController).use(mobileAppointmentsController).use(mobileHomeCareRequestsController).use(mobilePharmacyRequestsController).use(mobileSuggestionsController).use(mobileDoctorFavoritesController).use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT], TokenAudienceEnum.MOBILE));
+var mobileProtectedController = new Elysia().use(RoleGuardPlugin([IUserRoleEnum.PATIENT])).use(mobileProfileController).use(mobileProfileHealthController).use(mobileChildrenController).use(mobileAppointmentsController).use(mobileHomeCareRequestsController).use(mobilePharmacyRequestsController).use(mobileSuggestionsController).use(mobileDoctorFavoritesController).use(mobileMedicationsController).use(mobileMedicationDosesController).use(mobileMedicationRemindersController).use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT], TokenAudienceEnum.MOBILE));
 var mobileController = new Elysia({
   prefix: "/mobile"
 }).use(mobilePublicController).use(mobileProtectedController);
@@ -160896,12 +160858,12 @@ var ActivityLogPlugin = new Elysia({ name: "activity-log-plugin" }).derive({ as:
 });
 
 // src/models/bootstrap-lock.model.ts
-var import_mongoose98 = __toESM(require_mongoose2(), 1);
-var bootstrapLockSchema = new import_mongoose98.Schema({
+var import_mongoose102 = __toESM(require_mongoose2(), 1);
+var bootstrapLockSchema = new import_mongoose102.Schema({
   _id: { type: String, required: true },
   created_at: { type: Date, required: true }
 }, { versionKey: false, collection: "security_bootstrap_locks" });
-var BootstrapLock = import_mongoose98.models.BootstrapLock || import_mongoose98.model("BootstrapLock", bootstrapLockSchema);
+var BootstrapLock = import_mongoose102.models.BootstrapLock || import_mongoose102.model("BootstrapLock", bootstrapLockSchema);
 var bootstrap_lock_model_default = BootstrapLock;
 
 // src/migrations/ensure-super-admin.migration.ts
@@ -161034,7 +160996,7 @@ async function seedChronicConditions() {
 }
 
 // src/migrations/seed-suggestions.migration.ts
-var import_mongoose99 = __toESM(require_mongoose2(), 1);
+var import_mongoose103 = __toESM(require_mongoose2(), 1);
 var SUGGESTIONS_SEED = [
   "\u0623\u0642\u062A\u0631\u062D \u0625\u0636\u0627\u0641\u0629 \u062A\u0630\u0643\u064A\u0631 \u0628\u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0639\u0628\u0631 \u0631\u0633\u0627\u0626\u0644 SMS \u0642\u0628\u0644 \u0627\u0644\u0645\u0648\u0639\u062F \u0628\u0640 24 \u0633\u0627\u0639\u0629.",
   "\u064A\u0641\u0636\u0644 \u062A\u0648\u0641\u064A\u0631 \u062E\u064A\u0627\u0631 \u062D\u062C\u0632 \u0627\u0644\u0645\u0648\u0627\u0639\u064A\u062F \u0641\u064A \u0639\u0637\u0644\u0629 \u0646\u0647\u0627\u064A\u0629 \u0627\u0644\u0623\u0633\u0628\u0648\u0639.",
@@ -161055,10 +161017,10 @@ var SUGGESTIONS_SEED = [
 async function resolveSeedUserId() {
   const patient3 = await users_model_default.findOne({ role: IUserRoleEnum.PATIENT }).select("_id").lean();
   if (patient3?._id)
-    return new import_mongoose99.default.Types.ObjectId(patient3._id);
+    return new import_mongoose103.default.Types.ObjectId(patient3._id);
   const superAdmin = await admins_model_default.findOne({ super_admin: true, is_active: true }).select("user_id").lean();
   if (superAdmin?.user_id)
-    return new import_mongoose99.default.Types.ObjectId(superAdmin.user_id);
+    return new import_mongoose103.default.Types.ObjectId(superAdmin.user_id);
   return null;
 }
 async function seedSuggestions() {
@@ -161421,7 +161383,7 @@ var ApiErrorPlugin = new Elysia({ name: "api-error-plugin" }).onError({ as: "glo
 });
 
 // src/migrations/backfill-health-profiles.migration.ts
-var import_mongoose100 = __toESM(require_mongoose2(), 1);
+var import_mongoose104 = __toESM(require_mongoose2(), 1);
 async function runHealthProfileBackfill(dependencies) {
   let patientProfilesCreated = 0;
   let childProfilesCreated = 0;
@@ -161453,7 +161415,7 @@ async function backfillHealthProfiles() {
       }).toArray();
     },
     async upsertPatientProfile(patient3) {
-      const chronicConditionIds = (patient3.chronic_condition_ids ?? []).filter((id3) => import_mongoose100.default.Types.ObjectId.isValid(id3)).map((id3) => new import_mongoose100.default.Types.ObjectId(id3));
+      const chronicConditionIds = (patient3.chronic_condition_ids ?? []).filter((id3) => import_mongoose104.default.Types.ObjectId.isValid(id3)).map((id3) => new import_mongoose104.default.Types.ObjectId(id3));
       const result2 = await patient_health_profile_model_default.updateOne({ patient_id: patient3._id }, {
         $setOnInsert: {
           patient_id: patient3._id,
@@ -161469,7 +161431,7 @@ async function backfillHealthProfiles() {
     },
     async listChildIds() {
       const children = await patient_child_model_default.find({}).select({ _id: 1 }).lean().exec();
-      return children.map((child) => new import_mongoose100.default.Types.ObjectId(child._id.toString()));
+      return children.map((child) => new import_mongoose104.default.Types.ObjectId(child._id.toString()));
     },
     async upsertChildProfile(childId) {
       const result2 = await child_health_profile_model_default.updateOne({ child_id: childId }, { $setOnInsert: { child_id: childId } }, { upsert: true }).exec();
@@ -161689,6 +161651,85 @@ class NotificationDeliveryWorker {
 }
 var notification_delivery_worker_service_default = new NotificationDeliveryWorker;
 
+// src/services/medication-reminder-worker.service.ts
+function medicationReminderWorkerConfig(env3 = process.env) {
+  const interval = Number(env3.MEDICATION_REMINDER_POLL_INTERVAL_MS ?? 900000);
+  const batch = Number(env3.MEDICATION_REMINDER_BATCH_SIZE ?? 100);
+  if (!Number.isSafeInteger(interval) || interval < 60000)
+    throw new Error("Invalid MEDICATION_REMINDER_POLL_INTERVAL_MS");
+  if (!Number.isSafeInteger(batch) || batch < 1 || batch > 500)
+    throw new Error("Invalid MEDICATION_REMINDER_BATCH_SIZE");
+  return { enabled: env3.MEDICATION_REMINDER_WORKER_ENABLED !== "false", pollIntervalMs: interval, batchSize: batch };
+}
+
+class MedicationReminderWorker {
+  config;
+  timer = null;
+  running = false;
+  started = false;
+  constructor(config3 = medicationReminderWorkerConfig()) {
+    this.config = config3;
+  }
+  async runOnce(now = new Date) {
+    if (this.running)
+      return 0;
+    this.running = true;
+    let processed = 0;
+    try {
+      let afterId = null;
+      while (true) {
+        const rows = await patient_medication_model_default.find({
+          ...afterId ? { _id: { $gt: afterId } } : {},
+          status: PatientMedicationStatusEnum.ACTIVE,
+          reminders_enabled: true
+        }).sort({ _id: 1 }).limit(this.config.batchSize).exec();
+        if (!rows.length)
+          break;
+        for (const medication of rows) {
+          await medication_reminder_service_default.generateForMedication(medication, now);
+          processed++;
+        }
+        afterId = rows[rows.length - 1]._id;
+        if (rows.length < this.config.batchSize)
+          break;
+      }
+      return processed;
+    } finally {
+      this.running = false;
+    }
+  }
+  schedule() {
+    if (!this.started)
+      return;
+    this.timer = setTimeout(async () => {
+      await this.runOnce().catch(() => {
+        return;
+      });
+      this.schedule();
+    }, this.config.pollIntervalMs);
+    this.timer.unref?.();
+  }
+  start() {
+    if (this.started || !this.config.enabled)
+      return;
+    this.started = true;
+    this.runOnce().catch(() => {
+      return;
+    });
+    this.schedule();
+  }
+  async stop() {
+    this.started = false;
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+    while (this.running)
+      await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+}
+var medication_reminder_worker_service_default = new MedicationReminderWorker;
+
 // src/index.ts
 var HEALTH_TIMEOUT_MS = 2000;
 async function withTimeout(operation3, timeoutMs = HEALTH_TIMEOUT_MS) {
@@ -161751,6 +161792,7 @@ async function bootstrap() {
   }).use(dashboardController).use(mobileController).listen({ port: Number(process.env.PORT || 3001), hostname: process.env.HOST || "0.0.0.0" });
   console.log(JSON.stringify({ level: "info", event: "server_started", port: app.server?.port }));
   notification_delivery_worker_service_default.start();
+  medication_reminder_worker_service_default.start();
   let shuttingDown = false;
   const shutdown = async (signal) => {
     if (shuttingDown)
@@ -161762,6 +161804,7 @@ async function bootstrap() {
     try {
       await Promise.race([app.stop(), new Promise((_2, reject) => setTimeout(() => reject(new Error("drain timeout")), 1e4))]);
       await notification_delivery_worker_service_default.stop();
+      await medication_reminder_worker_service_default.stop();
       await Promise.allSettled([redis_default.getInstance().disconnect(), db.disconnect()]);
       clearTimeout(force);
       process.exit(0);

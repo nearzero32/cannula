@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b065cb49-1c26-4ceb-a2cc-9202b202622d",
     "name": "Cannula Mobile API",
-    "description": "Current 66-route Patient/Mobile API. Collection bearer auth uses {{accessToken}}; public and guest requests override it. Demo values are non-production.",
+    "description": "Current 75-route Patient/Mobile API. Collection bearer auth uses {{accessToken}}; public and guest requests override it. Demo values are non-production.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
@@ -114,6 +114,20 @@
         {"name":"Unread Count","request":{"auth":{"type":"noauth"},"method":"GET","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications/unread-count"}},
         {"name":"Mark All Read","request":{"auth":{"type":"noauth"},"method":"PATCH","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications/read-all"}},
         {"name":"Mark One Read","request":{"auth":{"type":"noauth"},"method":"PATCH","header":[{"key":"X-Installation-Id","value":"{{installationId}}"}],"url":"{{baseUrl}}/mobile/notifications/{{notificationId}}/read"}}
+      ]
+    },
+    {
+      "name":"My Medications",
+      "item":[
+        {"name":"List Medications","request":{"method":"GET","url":"{{baseUrl}}/mobile/medications"}},
+        {"name":"Create Medication","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"name\": \"دواء موصوف\",\n  \"strength_text\": \"500 mg\",\n  \"dose_instructions\": \"1 tablet\",\n  \"schedule\": {\"timezone\": \"Asia/Baghdad\", \"weekdays\": [0,1,2,3,4,5,6], \"times\": [\"08:00\",\"20:00\"], \"start_date\": \"2026-09-07\", \"end_date\": null},\n  \"reminders_enabled\": true\n}"},"url":"{{baseUrl}}/mobile/medications"}},
+        {"name":"Medication Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/medications/{{medicationId}}"}},
+        {"name":"Update Medication","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"schedule\": {\"times\": [\"09:00\"]}\n}"},"url":"{{baseUrl}}/mobile/medications/{{medicationId}}"}},
+        {"name":"Archive Medication","request":{"method":"DELETE","url":"{{baseUrl}}/mobile/medications/{{medicationId}}"}},
+        {"name":"Today Doses","request":{"method":"GET","url":"{{baseUrl}}/mobile/medication-doses/today"}},
+        {"name":"Mark Dose Taken","request":{"method":"PATCH","url":"{{baseUrl}}/mobile/medication-doses/{{doseId}}/taken"}},
+        {"name":"Mark Dose Not Taken","request":{"method":"PATCH","url":"{{baseUrl}}/mobile/medication-doses/{{doseId}}/not-taken"}},
+        {"name":"Sync Local Reminders","request":{"method":"GET","url":"{{baseUrl}}/mobile/medication-reminders/upcoming"}}
       ]
     },
     {

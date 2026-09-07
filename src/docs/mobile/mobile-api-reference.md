@@ -4,7 +4,7 @@ Base: `{{baseUrl}}/mobile`, where local `baseUrl` is `http://localhost:3001/api`
 
 Standard page query fields are strings parsed to positive integers; controllers clamp limits. Common failures are `400`, `401`, `403`, `404`, `409`, `422`, `429`, `500`, and dependency `503` as declared per route. Consult the domain chapter and [error guide](15-errors-and-status-codes.md).
 
-## Inventory (66 routes)
+## Inventory (75 routes)
 
 | Method and path | Auth | Input / success / notable behavior |
 |---|---|---|
@@ -50,6 +50,15 @@ Standard page query fields are strings parsed to positive integers; controllers 
 | `GET /mobile/home-care/requests` | Patient | `page,limit,status`; `200` page |
 | `GET /mobile/home-care/requests/:id` | Patient | owned ID; `200` |
 | `PATCH /mobile/home-care/requests/:id/cancel` | Patient | `{reason?}`; `200`; `409` state |
+| `GET /mobile/medications` | Patient | own active medications with `next_dose_at`; generates rolling window |
+| `POST /mobile/medications` | Patient | medication + patient-defined schedule; `201`; body cannot set ownership |
+| `GET /mobile/medications/:id` | Patient | owned active medication; cross-patient IDs return `404` |
+| `PATCH /mobile/medications/:id` | Patient | partial fields/schedule; schedule changes increment version |
+| `DELETE /mobile/medications/:id` | Patient | archives and cancels future doses/inbox reminders; history remains |
+| `GET /mobile/medication-doses/today` | Patient | Baghdad-day dose occurrences and independent dose states |
+| `PATCH /mobile/medication-doses/:id/taken` | Patient | idempotent PENDING→TAKEN using server time; conflicting final state `409` |
+| `PATCH /mobile/medication-doses/:id/not-taken` | Patient | idempotent PENDING→NOT_TAKEN; conflicting final state `409` |
+| `GET /mobile/medication-reminders/upcoming` | Patient | seven-day Local Notification sync contract and schedule versions |
 | `GET /mobile/home-care/categories` | Public | `200` ordered array; 300s cache |
 | `GET /mobile/home-care/services` | Public | `categoryId?`; `200` ordered array; 300s cache |
 | `GET /mobile/home-care/services/:id` | Public | `200`; `400/404` |
@@ -77,4 +86,4 @@ Standard page query fields are strings parsed to positive integers; controllers 
 
 ## Global side effects and retry notes
 
-Auth creates/revokes Redis sessions. Appointment, Home Care, and Pharmacy writes create history and relevant targeted notification work. Upload completion validates/promotes storage objects. Notification reads create viewer-specific receipts. Favorite/suggestion/profile/child writes are activity-audited. No create/booking endpoint exposes an idempotency key; resolve uncertain writes by refetching before retry.
+Auth creates/revokes Redis sessions. Appointment, Home Care, and Pharmacy writes create history and relevant targeted push work. Medication reminder generation creates inbox-only notifications and never creates OneSignal delivery work. Upload completion validates/promotes storage objects. Notification reads create viewer-specific receipts. Favorite/suggestion/profile/child writes are activity-audited. No create/booking endpoint exposes an idempotency key; resolve uncertain writes by refetching before retry.

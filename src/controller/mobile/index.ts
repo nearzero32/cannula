@@ -20,6 +20,9 @@ import { mobileNotificationsController } from './notifications.controller';
 import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
 import { TokenAudienceEnum } from '../../constants/jwt';
+import { mobileMedicationsController } from './medications.controller';
+import { mobileMedicationDosesController } from './medication-doses.controller';
+import { mobileMedicationRemindersController } from './medication-reminders.controller';
 
 /** Public mobile routes — no authentication required */
 const mobilePublicController = new Elysia()
@@ -43,6 +46,9 @@ const mobileProtectedController = new Elysia()
     .use(mobilePharmacyRequestsController)
     .use(mobileSuggestionsController)
     .use(mobileDoctorFavoritesController)
+    .use(mobileMedicationsController)
+    .use(mobileMedicationDosesController)
+    .use(mobileMedicationRemindersController)
     .use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT], TokenAudienceEnum.MOBILE));
 
 export const mobileController = new Elysia({

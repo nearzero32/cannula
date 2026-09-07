@@ -92,6 +92,16 @@ Use initial skeletons, a separate bottom pagination indicator, and pull-to-refre
 - [ ] Semantic deep links and sensitive push redaction
 - [ ] Baghdad Today/Yesterday/Previous grouping
 
+### MY MEDICATIONS
+
+- [ ] CRUD and archive with patient ownership
+- [ ] Daily/specific-weekday schedule editor (Sunday=0)
+- [ ] Persist and compare `schedule_version`
+- [ ] Replace stale Local Notifications from reminder sync
+- [ ] Today doses and TAKEN/NOT_TAKEN final-state handling
+- [ ] Open `medication_dose` notification targets
+- [ ] Keep notification read state separate from dose state
+
 ### PROFILE
 
 - [ ] Profile identity and public image upload
@@ -107,4 +117,3 @@ Use initial skeletons, a separate bottom pagination indicator, and pull-to-refre
 - [ ] No secrets/demo PIN in production config
 - [ ] Postman smoke test against target environment
 - [ ] Empty/loading/offline/accessibility/localized states reviewed
-

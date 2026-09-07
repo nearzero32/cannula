@@ -25,6 +25,7 @@ Seeded development credentials: phone `07700000000`, PIN `123456` (**DEMO ONLY**
 - [Appointments](07-appointments.md)
 - [Home Care](08-home-care.md)
 - [Pharmacy treatment requests](09-pharmacy-treatment-requests.md)
+- [My Medications and Local Notification reminders](19-medications-and-reminders.md)
 - [Favorites](12-favorites.md)
 - [Suggestions and reference data](13-suggestions-and-reference-data.md)
 - [Ads and About Us](14-ads-and-about-us.md)
@@ -67,4 +68,3 @@ Appointment, Home Care, Pharmacy, authentication, upload, notification, and favo
 | Local | `http://localhost:3001/api` | `http://localhost:3001/api/mobile` |
 
 Define one client `baseUrl`; examples use `{{baseUrl}}/mobile/...`.
-
