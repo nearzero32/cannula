@@ -27,7 +27,8 @@ const requestBodySchema = t.Object({
     service_id: t.String(),
     child_id: t.Optional(t.Nullable(t.String())),
     requested_date: t.String({ format: 'date' }),
-    preferred_time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
+    availability_slot_id: t.String(),
+    preferred_time: t.Optional(t.Never({ description: 'غير مقبول؛ يشتق الخادم الوقت من availability_slot_id' })),
     address: t.Object({
         address_text: t.String({ minLength: 5, maxLength: 500 }),
         lat: t.Number({ minimum: -90, maximum: 90 }),
@@ -36,7 +37,7 @@ const requestBodySchema = t.Object({
     notes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
 }, {
     additionalProperties: false,
-    examples: [{ service_id: '507f1f77bcf86cd799439011', child_id: null, requested_date: '2099-01-02', preferred_time: '10:30', address: { address_text: 'بغداد - المنصور', lat: 33.3128, lng: 44.3615 }, notes: 'يرجى الاتصال قبل الوصول' }],
+    examples: [{ service_id: '507f1f77bcf86cd799439011', availability_slot_id: '507f1f77bcf86cd799439012', child_id: null, requested_date: '2099-01-02', address: { address_text: 'بغداد - المنصور', lat: 33.3128, lng: 44.3615 }, notes: 'يرجى الاتصال قبل الوصول' }],
 });
 
 const cancellationBodySchema = t.Object({
@@ -92,7 +93,7 @@ export const mobileHomeCareRequestsController = new Elysia({
                 service_id: body.service_id,
                 child_id: body.child_id,
                 requested_date: body.requested_date,
-                preferred_time: body.preferred_time,
+                availability_slot_id: body.availability_slot_id,
                 address: {
                     address_text: body.address.address_text,
                     lat: body.address.lat,
@@ -110,6 +111,7 @@ export const mobileHomeCareRequestsController = new Elysia({
         };
     }, {
         body: requestBodySchema,
+        detail: { description: 'preferred_time مشتق حصراً من availability_slot_id الفعال ولا يمكن للمريض إرساله.' },
         response: {
             201: MobileHomeCareRequestResponseSchema,
             400: BadRequestResponseSchema,

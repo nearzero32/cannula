@@ -67,6 +67,7 @@ export function formatHomeCareRequestForMobile(request: HomeCareRequestDocument)
         },
         beneficiary: formatBeneficiary(request),
         requested_date: isoString(request.requested_date),
+        availability_slot_id: request.availability_slot_id ? String(request.availability_slot_id) : null,
         preferred_time: request.preferred_time,
         address: {
             address_text: request.address.address_text,

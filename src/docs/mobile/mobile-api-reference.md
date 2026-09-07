@@ -4,7 +4,7 @@ Base: `{{baseUrl}}/mobile`, where local `baseUrl` is `http://localhost:3001/api`
 
 Standard page query fields are strings parsed to positive integers; controllers clamp limits. Common failures are `400`, `401`, `403`, `404`, `409`, `422`, `429`, `500`, and dependency `503` as declared per route. Consult the domain chapter and [error guide](15-errors-and-status-codes.md).
 
-## Inventory (75 routes)
+## Inventory (76 routes)
 
 | Method and path | Auth | Input / success / notable behavior |
 |---|---|---|
@@ -46,7 +46,7 @@ Standard page query fields are strings parsed to positive integers; controllers 
 | `GET /mobile/doctors` | Public | filters/page; `200` page |
 | `GET /mobile/doctors/available` | Public | filters/page; `200` real bookability; 30s cache |
 | `GET /mobile/doctors/:id` | Public | `200` detail/clinics; `400/404` |
-| `POST /mobile/home-care/requests` | Patient | request JSON; `201`; snapshots service |
+| `POST /mobile/home-care/requests` | Patient | `availability_slot_id`; backend snapshots its time; `201` |
 | `GET /mobile/home-care/requests` | Patient | `page,limit,status`; `200` page |
 | `GET /mobile/home-care/requests/:id` | Patient | owned ID; `200` |
 | `PATCH /mobile/home-care/requests/:id/cancel` | Patient | `{reason?}`; `200`; `409` state |
@@ -62,6 +62,7 @@ Standard page query fields are strings parsed to positive integers; controllers 
 | `GET /mobile/home-care/categories` | Public | `200` ordered array; 300s cache |
 | `GET /mobile/home-care/services` | Public | `categoryId?`; `200` ordered array; 300s cache |
 | `GET /mobile/home-care/services/:id` | Public | `200`; `400/404` |
+| `GET /mobile/home-care/services/:id/availability` | Public | `date`; active slots respecting Baghdad 30-minute lead time |
 | `GET /mobile/notifications` | Optional | `page,limit,category`; `200` page + unread count |
 | `GET /mobile/notifications/unread-count` | Optional | `200` without message |
 | `PATCH /mobile/notifications/read-all` | Optional | `200` counts; guest write rate limit |

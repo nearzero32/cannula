@@ -26,6 +26,7 @@ import {
 const userId = '507f1f77bcf86cd799439011';
 const patientId = new mongoose.Types.ObjectId('507f191e810c19729de860e1');
 const requestId = new mongoose.Types.ObjectId('507f191e810c19729de860e2');
+const slotId = new mongoose.Types.ObjectId('507f191e810c19729de860e5');
 const query = <T>(value: T) => ({ select() { return this; }, lean() { return this; }, exec: async () => value });
 
 function requestDocument(overrides: Record<string, unknown> = {}) {
@@ -42,6 +43,7 @@ function requestDocument(overrides: Record<string, unknown> = {}) {
         child_id: null,
         category_id: new mongoose.Types.ObjectId('507f191e810c19729de860e3'),
         service_id: new mongoose.Types.ObjectId('507f191e810c19729de860e4'),
+        availability_slot_id: slotId,
         service_name: 'تمريض منزلي',
         service_price: 15000,
         service_duration_min: 30,
@@ -92,9 +94,9 @@ describe('Mobile Home Care request response contracts', () => {
                 method: 'POST',
                 body: JSON.stringify({
                     service_id: '507f191e810c19729de860e4',
+                    availability_slot_id: slotId.toString(),
                     child_id: null,
                     requested_date: '2026-09-02',
-                    preferred_time: '09:00',
                     address: { address_text: 'بغداد - المنصور', lat: 33.3152, lng: 44.3661 },
                     notes: null,
                 }),
@@ -118,8 +120,8 @@ describe('Mobile Home Care request response contracts', () => {
                 method: 'POST',
                 body: JSON.stringify({
                     service_id: '507f191e810c19729de860e4',
+                    availability_slot_id: slotId.toString(),
                     requested_date: '2026-09-02',
-                    preferred_time: '09:00',
                     address: { address_text: 'بغداد - المنصور', lat: 33.3, lng: 44.3 },
                     patient_id: patientId.toString(),
                     price: 1,
@@ -134,6 +136,28 @@ describe('Mobile Home Care request response contracts', () => {
         expect(trustedInput.price).toBeUndefined();
         expect(trustedInput.status).toBeUndefined();
         expect(trustedInput.internal_notes).toBeUndefined();
+        expect(trustedInput.availability_slot_id).toBe(slotId.toString());
+    });
+
+    test('raw preferred_time is rejected instead of being accepted from mobile clients', async () => {
+        spyOn(patientService, 'getByUserId').mockResolvedValue({ _id: patientId } as never);
+        const create = spyOn(homeCareRequestService, 'createForPatient').mockResolvedValue(requestDocument());
+        const response = await mobileHomeCareRequestsController.handle(authorizedRequest(
+            '/home-care/requests/',
+            IUserRoleEnum.PATIENT,
+            {
+                method: 'POST',
+                body: JSON.stringify({
+                    service_id: '507f191e810c19729de860e4',
+                    availability_slot_id: slotId.toString(),
+                    requested_date: '2026-09-02',
+                    preferred_time: '09:00',
+                    address: { address_text: 'بغداد - المنصور', lat: 33.3, lng: 44.3 },
+                }),
+            }
+        ));
+        expect(response.status).toBe(422);
+        expect(create).not.toHaveBeenCalled();
     });
 
     test('list returns the required pagination shape and only service-scoped data', async () => {

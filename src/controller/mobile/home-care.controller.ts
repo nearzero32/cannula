@@ -3,6 +3,8 @@ import mongoose from 'mongoose';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import homeCareCategoryService, { MOBILE_HOME_CARE_CATEGORIES_CACHE_KEY, MOBILE_HOME_CARE_CACHE_TTL_SECONDS } from '../../services/home-care-category.service';
 import homeCareServiceService, { mobileHomeCareServicesCacheKey } from '../../services/home-care-service.service';
+import homeCareAvailabilityService from '../../services/home-care-availability.service';
+import { DomainError } from '../../services/domain-error';
 import RedisClient from '../../databases/redis';
 import type { HomeCareCategoryDocument } from '../../models/home-care-category.model';
 import type { HomeCareServiceDocument } from '../../models/home-care-service.model';
@@ -11,11 +13,13 @@ import {
     InternalServerErrorResponseSchema,
     NotFoundResponseSchema,
     RateLimitResponseSchema,
+    UnprocessableEntityResponseSchema,
 } from '../../schemas/api-response.schema';
 import {
     MobileHomeCareCategoryListResponseSchema,
     MobileHomeCareServiceListResponseSchema,
     MobileHomeCareServiceResponseSchema,
+    MobileHomeCareAvailabilityResponseSchema,
 } from '../../schemas/home-care-response.schema';
 
 const ObjectId = mongoose.Types.ObjectId;
@@ -48,11 +52,20 @@ export const mobileHomeCareController = new Elysia({
     prefix: '/home-care',
     detail: { tags: [SWAGGER_TAGS.MOBILE.HOME_CARE] },
 })
-    .onError(({ code, set }) => {
+    .onError(({ code, error, set }) => {
+        if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message, code: error.code }; }
         if (code === 'UNKNOWN' || code === 'INTERNAL_SERVER_ERROR') {
             set.status = 500;
             return { error: true, message: 'حدث خطأ في الخادم' };
         }
+    })
+    .get('/services/:id/availability', async ({ params, query }) => {
+        const slots = await homeCareAvailabilityService.listForMobile(params.id, query.date);
+        return { error: false, message: 'تم جلب أوقات التوفر بنجاح', data: { service_id: params.id, date: query.date, timezone: 'Asia/Baghdad' as const, slots: slots.map(slot => ({ _id: String(slot._id), time: slot.time })) } };
+    }, {
+        params: t.Object({ id: t.String() }), query: t.Object({ date: t.String({ format: 'date' }) }, { additionalProperties: false }),
+        detail: { description: 'قائمة غير مخزنة في Redis لأنها تعتمد على الوقت الحالي وقاعدة مهلة 30 دقيقة.' },
+        response: { 200: MobileHomeCareAvailabilityResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: UnprocessableEntityResponseSchema, 429: RateLimitResponseSchema, 500: InternalServerErrorResponseSchema },
     })
     .get('/categories', async () => {
         try { const raw = await RedisClient.getInstance().get(MOBILE_HOME_CARE_CATEGORIES_CACHE_KEY); if (raw) { try { return JSON.parse(raw); } catch { try { await RedisClient.getInstance().del(MOBILE_HOME_CARE_CATEGORIES_CACHE_KEY); } catch {} } } } catch { console.warn('Unable to read mobile home-care categories cache'); }

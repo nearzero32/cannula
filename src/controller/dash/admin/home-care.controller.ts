@@ -4,6 +4,7 @@ import { AuthPlugin } from '../../../middleware/auth.middleware';
 import homeCarePolicyService from '../../../services/home-care-policy.service';
 import homeCareCategoryService from '../../../services/home-care-category.service';
 import homeCareServiceService from '../../../services/home-care-service.service';
+import homeCareAvailabilityService, { formatHomeCareAvailabilitySlot } from '../../../services/home-care-availability.service';
 import { HomeCareValidationError } from '../../../services/home-care.validation';
 import { IHomeCareStatusEnum } from '../../../interfaces/home-care.interface';
 import type { HomeCareCategoryDocument } from '../../../models/home-care-category.model';
@@ -24,6 +25,8 @@ import {
     HomeCareCategoryResponseSchema,
     HomeCareServiceListResponseSchema,
     HomeCareServiceResponseSchema,
+    HomeCareAvailabilitySlotResponseSchema,
+    HomeCareAvailabilitySlotListResponseSchema,
 } from '../../../schemas/home-care-response.schema';
 import { homeCareRequestsAdminController } from './home-care-requests.controller';
 import { SWAGGER_TAGS } from '../../../constants/swagger-tags';
@@ -84,6 +87,10 @@ async function hasAccess(userId: string, role: IUserRole, required: 'read' | 'ma
 function pagination(page: number, limit: number, total: number) {
     const pages = Math.ceil(total / limit);
     return { page, limit, total, pages, hasNext: page < pages, hasPrev: page > 1 };
+}
+
+function slotActor(phrase: { _id: string; role: string }, endpoint: string) {
+    return { user_id: phrase._id, user_name: `${phrase.role}_${phrase._id}`, user_type: phrase.role, endpoint, source: 'dashboard' };
 }
 
 export function formatHomeCareCategoryForDashboard(category: HomeCareCategoryDocument) {
@@ -304,6 +311,35 @@ const servicesController = new Elysia({
         if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'إدارة الرعاية المنزلية متاحة للمشرف الرئيسي فقط' }; }
         return { error: false, message: 'تم تحديث ترتيب خدمات الرعاية المنزلية بنجاح', data: await homeCareServiceService.reorder(body.serviceIds, { user_id: phrase._id, user_name: phrase.role + '_' + phrase._id, user_type: phrase.role, endpoint: '/dash/admin/home-care/services/order', source: 'dashboard' }) };
     }, { body: t.Object({ serviceIds: t.Array(t.String(), { minItems: 1, maxItems: 500 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
+    .get('/:id/availability', async ({ params, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'read')) { set.status = 403; return { error: true, message: 'غير مصرح لك بعرض أوقات التوفر' }; }
+        return { error: false, message: 'تم جلب أوقات التوفر بنجاح', data: (await homeCareAvailabilityService.listForDashboard(params.id)).map(formatHomeCareAvailabilitySlot) };
+    }, { params: t.Object({ id: t.String() }), response: { 200: HomeCareAvailabilitySlotListResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...protectedResponses } })
+    .post('/:id/availability', async ({ params, body, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'غير مصرح لك بإدارة أوقات التوفر' }; }
+        const slot = await homeCareAvailabilityService.create(params.id, body, slotActor(phrase, `/dash/admin/home-care/services/${params.id}/availability`));
+        set.status = 201; return { error: false, message: 'تم إنشاء وقت التوفر بنجاح', data: formatHomeCareAvailabilitySlot(slot) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }), display_order: t.Optional(t.Integer({ minimum: 0 })), status: t.Optional(t.Enum(IHomeCareStatusEnum)) }, { additionalProperties: false }), response: { 201: HomeCareAvailabilitySlotResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
+    .put('/:id/availability', async ({ params, body, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'غير مصرح لك بإدارة أوقات التوفر' }; }
+        const slots = await homeCareAvailabilityService.replace(params.id, body.times, slotActor(phrase, `/dash/admin/home-care/services/${params.id}/availability`));
+        return { error: false, message: 'تم استبدال أوقات التوفر بنجاح', data: slots.map(formatHomeCareAvailabilitySlot) };
+    }, { params: t.Object({ id: t.String() }), body: t.Object({ times: t.Array(t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }), { minItems: 1, maxItems: 24 }) }, { additionalProperties: false }), response: { 200: HomeCareAvailabilitySlotListResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
+    .patch('/:id/availability/:slotId', async ({ params, body, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'غير مصرح لك بإدارة أوقات التوفر' }; }
+        const slot = await homeCareAvailabilityService.update(params.id, params.slotId, body, slotActor(phrase, `/dash/admin/home-care/services/${params.id}/availability/${params.slotId}`));
+        return { error: false, message: 'تم تحديث وقت التوفر بنجاح', data: formatHomeCareAvailabilitySlot(slot) };
+    }, { params: t.Object({ id: t.String(), slotId: t.String() }), body: t.Partial(t.Object({ time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }), display_order: t.Integer({ minimum: 0 }) }, { additionalProperties: false }), { minProperties: 1 }), response: { 200: HomeCareAvailabilitySlotResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 409: ConflictResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
+    .patch('/:id/availability/:slotId/status', async ({ params, body, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'غير مصرح لك بإدارة أوقات التوفر' }; }
+        const slot = await homeCareAvailabilityService.updateStatus(params.id, params.slotId, body.status, slotActor(phrase, `/dash/admin/home-care/services/${params.id}/availability/${params.slotId}/status`));
+        return { error: false, message: 'تم تحديث حالة وقت التوفر بنجاح', data: formatHomeCareAvailabilitySlot(slot) };
+    }, { params: t.Object({ id: t.String(), slotId: t.String() }), body: t.Object({ status: t.Enum(IHomeCareStatusEnum) }, { additionalProperties: false }), response: { 200: HomeCareAvailabilitySlotResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, 422: ValidationErrorResponseSchema, ...protectedResponses } })
+    .delete('/:id/availability/:slotId', async ({ params, phrase, set }) => {
+        if (!await hasAccess(phrase._id, phrase.role, 'manage')) { set.status = 403; return { error: true, message: 'غير مصرح لك بإدارة أوقات التوفر' }; }
+        const slot = await homeCareAvailabilityService.archive(params.id, params.slotId, slotActor(phrase, `/dash/admin/home-care/services/${params.id}/availability/${params.slotId}`));
+        return { error: false, message: 'تم تعطيل وقت التوفر بنجاح', data: formatHomeCareAvailabilitySlot(slot) };
+    }, { params: t.Object({ id: t.String(), slotId: t.String() }), response: { 200: HomeCareAvailabilitySlotResponseSchema, 400: BadRequestResponseSchema, 404: NotFoundResponseSchema, ...protectedResponses } })
     .get('/:id', async ({ params, phrase, set }) => {
         if (!await hasAccess(phrase._id, phrase.role, 'read')) {
             set.status = 403;

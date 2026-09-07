@@ -51,7 +51,7 @@ function postmanRequests(): string[] {
 describe('Mobile documentation route coverage', () => {
   test('compact reference covers every registered Mobile and shared upload route', () => {
     const executable = controllerRoutes();
-    expect(executable).toHaveLength(75);
+    expect(executable).toHaveLength(76);
     expect(documentedRoutes()).toEqual(executable);
   });
 

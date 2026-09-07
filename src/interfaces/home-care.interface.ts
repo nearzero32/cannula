@@ -32,3 +32,10 @@ export interface IHomeCareService extends IBaseDocument, IWithCreatedBy {
     display_order: number;
 }
 
+export interface IHomeCareAvailabilitySlot extends IBaseDocument, IWithCreatedBy {
+    service_id: mongoose.Types.ObjectId;
+    time: string;
+    status: IHomeCareStatus;
+    display_order: number;
+    selection_version?: number;
+}

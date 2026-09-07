@@ -47,6 +47,7 @@ export const MobileHomeCareRequestSchema = t.Object({
     }),
     beneficiary: HomeCareRequestBeneficiarySchema,
     requested_date: t.String({ format: 'date-time' }),
+    availability_slot_id: nullableString,
     preferred_time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
     address: HomeCareRequestAddressSchema,
     notes: nullableString,

@@ -20,22 +20,21 @@ import { DomainError } from './domain-error';
 import {
     normalizeOptionalRequestText,
     validateHomeCareRequestAddress,
-    validatePreferredTime,
     validateRequestedDate,
     type HomeCareRequestAddressInput,
 } from './home-care-request.validation';
-import { localDateTimeToUtc, toBaghdadLocal } from './appointment-time.service';
-import { homeCareBaghdadDateRange } from './home-care-date.service';
+import { homeCareBaghdadDateRange, assertHomeCareSlotLeadTime, HOME_CARE_REQUEST_MIN_LEAD_MINUTES } from './home-care-date.service';
 import { runHomeCareTransaction } from './home-care-transaction.service';
 import domainNotificationService, { type HomeCareDomainNotifier } from './domain-notification.service';
+import homeCareAvailabilityService from './home-care-availability.service';
 
-export const HOME_CARE_REQUEST_MIN_LEAD_MINUTES = 30;
+export { HOME_CARE_REQUEST_MIN_LEAD_MINUTES } from './home-care-date.service';
 
 export interface HomeCareRequestCreateInput {
     service_id: string;
     child_id?: string | null;
     requested_date: string;
-    preferred_time: string;
+    availability_slot_id: string;
     address: HomeCareRequestAddressInput;
     notes?: string | null;
 }
@@ -141,6 +140,7 @@ export class HomeCareRequestService {
         }
         const service = await homeCareServiceService.getActiveById(input.service_id);
         if (!service) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 404);
+        const slot = await homeCareAvailabilityService.requireAvailableForRequest(input.service_id, input.availability_slot_id);
 
         let childId: mongoose.Types.ObjectId | null = null;
         if (input.child_id !== null && input.child_id !== undefined) {
@@ -156,10 +156,8 @@ export class HomeCareRequestService {
 
         const now = new Date();
         const requestedDate = validateRequestedDate(input.requested_date, now);
-        const preferredTime = validatePreferredTime(input.preferred_time);
-        const requestedInstant = localDateTimeToUtc(input.requested_date, preferredTime);
-        if (toBaghdadLocal(now).date === input.requested_date && requestedInstant.getTime() < now.getTime() + HOME_CARE_REQUEST_MIN_LEAD_MINUTES * 60_000)
-            throw new DomainError('وقت الطلب يجب أن يكون بعد 30 دقيقة على الأقل', 422, 'HOME_CARE_REQUEST_LEAD_TIME');
+        const preferredTime = slot.time;
+        assertHomeCareSlotLeadTime(input.requested_date, preferredTime, now);
         const address = validateHomeCareRequestAddress(input.address);
         const notes = normalizeOptionalRequestText(input.notes, 2000, 'الملاحظات طويلة جداً');
         const basePayload: Omit<Partial<IHomeCareRequest>, 'request_number'> = {
@@ -167,6 +165,7 @@ export class HomeCareRequestService {
             child_id: childId,
             category_id: new mongoose.Types.ObjectId(service.category_id.toString()),
             service_id: new mongoose.Types.ObjectId(service._id.toString()),
+            availability_slot_id: new mongoose.Types.ObjectId(slot._id.toString()),
             service_name: service.name,
             service_price: service.price,
             service_duration_min: service.duration_min ?? null,
@@ -194,6 +193,9 @@ export class HomeCareRequestService {
         for (let attempt = 0; attempt < 3; attempt += 1) {
             try {
                 request = await runHomeCareTransaction(async session => {
+                    // Recheck ACTIVE + ownership + unchanged time in the same transaction
+                    // that writes the request. A dashboard edit between GET and POST loses.
+                    await homeCareAvailabilityService.claimAvailableForRequest(input.service_id, input.availability_slot_id, preferredTime, session);
                     const [created] = await HomeCareRequest.create([{
                         ...basePayload, request_number: await nextHomeCareRequestNumber(now, session),
                     }], { session });

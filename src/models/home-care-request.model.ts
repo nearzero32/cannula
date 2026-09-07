@@ -16,6 +16,7 @@ const homeCareRequestSchema = new Schema(
         child_id: { type: Schema.Types.ObjectId, ref: 'PatientChild', default: null },
         category_id: { type: Schema.Types.ObjectId, ref: 'HomeCareCategory', required: true },
         service_id: { type: Schema.Types.ObjectId, ref: 'HomeCareService', required: true },
+        availability_slot_id: { type: Schema.Types.ObjectId, ref: 'HomeCareAvailabilitySlot', default: null },
         service_name: { type: String, required: true, trim: true, maxlength: 160 },
         service_price: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
         service_duration_min: { type: Number, min: 0, default: null },
@@ -66,6 +67,7 @@ homeCareRequestSchema.index({ patient_id: 1, createdAt: -1 });
 homeCareRequestSchema.index({ status: 1, createdAt: -1 });
 homeCareRequestSchema.index({ requested_date: 1, status: 1 });
 homeCareRequestSchema.index({ service_id: 1, createdAt: -1 });
+homeCareRequestSchema.index({ availability_slot_id: 1 });
 homeCareRequestSchema.index({ category_id: 1, createdAt: -1 });
 homeCareRequestSchema.index({ 'dispatch.status': 1, status: 1, service_id: 1, requested_date: 1 });
 homeCareRequestSchema.index({ 'dispatch.nurse_id': 1, status: 1, requested_date: -1 });

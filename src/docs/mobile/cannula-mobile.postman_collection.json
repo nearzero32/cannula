@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "b065cb49-1c26-4ceb-a2cc-9202b202622d",
     "name": "Cannula Mobile API",
-    "description": "Current 75-route Patient/Mobile API. Collection bearer auth uses {{accessToken}}; public and guest requests override it. Demo values are non-production.",
+    "description": "Current 76-route Patient/Mobile API. Collection bearer auth uses {{accessToken}}; public and guest requests override it. Demo values are non-production.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": { "type": "bearer", "bearer": [{ "key": "token", "value": "{{accessToken}}", "type": "string" }] },
@@ -61,7 +61,8 @@
         {"name":"Doctor Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/doctors/{{doctorId}}"}},
         {"name":"Home Care Categories","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/categories"}},
         {"name":"Home Care Services","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/services?categoryId={{homeCareCategoryId}}"}},
-        {"name":"Home Care Service Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/services/{{homeCareServiceId}}"}}
+        {"name":"Home Care Service Detail","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/services/{{homeCareServiceId}}"}},
+        {"name":"Home Care Availability","request":{"auth":{"type":"noauth"},"method":"GET","url":"{{baseUrl}}/mobile/home-care/services/{{homeCareServiceId}}/availability?date={{bookingDate}}"}}
       ]
     },
     {
@@ -89,7 +90,7 @@
     {
       "name":"Home Care Requests",
       "item":[
-        {"name":"Create Home Care Request","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"service_id\": \"{{homeCareServiceId}}\",\n  \"child_id\": null,\n  \"requested_date\": \"{{bookingDate}}\",\n  \"preferred_time\": \"10:30\",\n  \"address\": {\"address_text\": \"بغداد - المنصور\", \"lat\": 33.3128, \"lng\": 44.3615},\n  \"notes\": \"يرجى الاتصال قبل الوصول\"\n}"},"url":"{{baseUrl}}/mobile/home-care/requests"}},
+        {"name":"Create Home Care Request","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"service_id\": \"{{homeCareServiceId}}\",\n  \"availability_slot_id\": \"{{homeCareAvailabilitySlotId}}\",\n  \"child_id\": null,\n  \"requested_date\": \"{{bookingDate}}\",\n  \"address\": {\"address_text\": \"بغداد - المنصور\", \"lat\": 33.3128, \"lng\": 44.3615},\n  \"notes\": \"يرجى الاتصال قبل الوصول\"\n}"},"url":"{{baseUrl}}/mobile/home-care/requests"}},
         {"name":"List Home Care Requests","request":{"method":"GET","url":"{{baseUrl}}/mobile/home-care/requests?page=1&limit=10"}},
         {"name":"Home Care Request Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/home-care/requests/{{homeCareRequestId}}"}},
         {"name":"Cancel Home Care Request","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"reason\": \"لم تعد الخدمة مطلوبة\"\n}"},"url":"{{baseUrl}}/mobile/home-care/requests/{{homeCareRequestId}}/cancel"}}

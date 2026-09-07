@@ -6,6 +6,7 @@ import Nurse from '../src/models/nurse.model';
 import HomeCareCategory from '../src/models/home-care-category.model';
 import HomeCareService from '../src/models/home-care-service.model';
 import HomeCareRequest from '../src/models/home-care-request.model';
+import HomeCareAvailabilitySlot from '../src/models/home-care-availability-slot.model';
 import HomeCareRequestHistory from '../src/models/home-care-request-history.model';
 import HomeCareRequestCounter from '../src/models/home-care-request-counter.model';
 import ActivityLog from '../src/models/activity-log.model';
@@ -23,7 +24,7 @@ const dispatchService = new HomeCareDispatchService(noNotifications);
 
 describeWithMongo('Home Care Phase 7A transactions against MongoDB replica set', () => {
     const databaseName = `cannula_home_care_phase7a_${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    let patient: any, admin: any, nurseA: any, nurseB: any, category: any, service: any;
+    let patient: any, admin: any, nurseA: any, nurseB: any, category: any, service: any, slot: any;
     const patientActor = () => ({ user_id: String(patient.user_id), user_type: 'patient' as const, endpoint: '/mobile/test', source: 'mobile' as const });
     const adminActor = () => ({ user_id: String(admin._id), user_type: 'admin' as const, endpoint: '/admin/test', source: 'dashboard' as const });
     const nurseActor = (nurse: any) => ({ user_id: String(nurse.user_id), user_type: 'nurse' as const, nurse_id: String(nurse._id), endpoint: '/nurse/test' });
@@ -33,12 +34,12 @@ describeWithMongo('Home Care Phase 7A transactions against MongoDB replica set',
         await mongoose.connect(mongoUri!, { dbName: databaseName });
         const session = await mongoose.startSession();
         try { await session.withTransaction(async () => undefined); } finally { await session.endSession(); }
-        await Promise.all([User.syncIndexes(), Patient.syncIndexes(), Nurse.syncIndexes(), HomeCareCategory.syncIndexes(), HomeCareService.syncIndexes(), HomeCareRequest.syncIndexes(), HomeCareRequestHistory.syncIndexes()]);
+        await Promise.all([User.syncIndexes(), Patient.syncIndexes(), Nurse.syncIndexes(), HomeCareCategory.syncIndexes(), HomeCareService.syncIndexes(), HomeCareAvailabilitySlot.syncIndexes(), HomeCareRequest.syncIndexes(), HomeCareRequestHistory.syncIndexes()]);
     });
     afterAll(async () => { if (mongoose.connection.db) await mongoose.connection.db.dropDatabase(); await mongoose.disconnect(); });
     afterEach(() => { mock.restore(); });
     beforeEach(async () => {
-        await Promise.all([User.deleteMany({}), Patient.deleteMany({}), Nurse.deleteMany({}), HomeCareCategory.deleteMany({}), HomeCareService.deleteMany({}), HomeCareRequest.deleteMany({}), HomeCareRequestHistory.deleteMany({}), HomeCareRequestCounter.deleteMany({}), ActivityLog.deleteMany({})]);
+        await Promise.all([User.deleteMany({}), Patient.deleteMany({}), Nurse.deleteMany({}), HomeCareCategory.deleteMany({}), HomeCareService.deleteMany({}), HomeCareAvailabilitySlot.deleteMany({}), HomeCareRequest.deleteMany({}), HomeCareRequestHistory.deleteMany({}), HomeCareRequestCounter.deleteMany({}), ActivityLog.deleteMany({})]);
         const users = await User.create([
             { full_name: 'Patient Test', phone: `077${Date.now()}1`, password_hash: 'hash', role: 'patient', status: 'active', is_phone_verified: true },
             { full_name: 'Admin Test', phone: `077${Date.now()}2`, password_hash: 'hash', role: 'admin', status: 'active', is_phone_verified: true },
@@ -48,6 +49,7 @@ describeWithMongo('Home Care Phase 7A transactions against MongoDB replica set',
         patient = await Patient.create({ user_id: users[0]._id, full_name: 'Patient Test', phone: users[0].phone, status: 'active' }); admin = users[1];
         category = await HomeCareCategory.create({ name: `Category ${Date.now()}`, normalized_name: `category-${Date.now()}`, status: 'active' });
         service = await HomeCareService.create({ category_id: category._id, name: `Service ${Date.now()}`, price: 10000, status: 'active' });
+        slot = await HomeCareAvailabilitySlot.create({ service_id: service._id, time: '12:00', status: 'active', display_order: 10, created_by: admin._id });
         nurseA = await Nurse.create({ user_id: users[2]._id, full_name: 'Nurse A', status: 'active', qualified_service_ids: [service._id] });
         nurseB = await Nurse.create({ user_id: users[3]._id, full_name: 'Nurse B', status: 'active', qualified_service_ids: [service._id] });
     });
@@ -57,7 +59,7 @@ describeWithMongo('Home Care Phase 7A transactions against MongoDB replica set',
     function failCriticalHistory() { return spyOn(historyService, 'append').mockImplementation(async (_payload: any, options?: any) => { if (options?.critical) throw new Error('FORCED_HISTORY_FAILURE'); }); }
     async function assertOpen(item: any, event: string) { const final = await HomeCareRequest.findById(item._id); expect(final?.status).toBe(Status.PENDING); expect(final?.dispatch.status).toBe(Dispatch.OPEN); expect(final?.dispatch.nurse_id).toBeNull(); expect(final?.dispatch.version).toBe(item.dispatch.version); expect(await HomeCareRequestHistory.countDocuments({ request_id: item._id, event_type: event })).toBe(0); }
 
-    test('patient create rolls back when REQUEST_CREATED history fails', async () => { failCriticalHistory(); await rejected(patientService.createForPatient(patient._id, { service_id: String(service._id), requested_date: '2099-01-02', preferred_time: '12:00', address: { address_text: 'Baghdad test address', lat: 33.3, lng: 44.3 } }, patientActor())); expect(await HomeCareRequest.countDocuments()).toBe(0); expect(await HomeCareRequestHistory.countDocuments({ event_type: Event.REQUEST_CREATED })).toBe(0); });
+    test('patient create rolls back when REQUEST_CREATED history fails', async () => { failCriticalHistory(); await rejected(patientService.createForPatient(patient._id, { service_id: String(service._id), availability_slot_id: String(slot._id), requested_date: '2099-01-02', address: { address_text: 'Baghdad test address', lat: 33.3, lng: 44.3 } }, patientActor())); expect(await HomeCareRequest.countDocuments()).toBe(0); expect(await HomeCareRequestHistory.countDocuments({ event_type: Event.REQUEST_CREATED })).toBe(0); });
     test('patient cancel rolls back when history fails', async () => { const item = await request(); failCriticalHistory(); await rejected(patientService.cancelForPatient(patient._id, String(item._id), 'reason', patientActor())); await assertOpen(item, Event.REQUEST_CANCELLED); const final = await HomeCareRequest.findById(item._id); expect(final?.cancelled_at).toBeNull(); });
     test('nurse claim rolls back when history fails', async () => { const item = await request(); failCriticalHistory(); await rejected(dispatchService.claim(String(nurseA.user_id), String(item._id), nurseActor(nurseA))); await assertOpen(item, Event.CLAIMED_BY_NURSE); });
     test('admin confirm rolls back when history fails', async () => { const item = await request(); failCriticalHistory(); await rejected(patientService.updateStatus(String(item._id), Status.CONFIRMED, adminActor())); await assertOpen(item, Event.STATUS_CHANGED); });

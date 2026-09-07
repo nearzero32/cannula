@@ -71,6 +71,8 @@ Use initial skeletons, a separate bottom pagination indicator, and pull-to-refre
 ### HOME CARE
 
 - [ ] Categories/services/detail
+- [ ] Date-specific availability fetch and slot-ID selection
+- [ ] Never submit client-controlled `preferred_time`
 - [ ] SELF/CHILD creation and snapshots
 - [ ] List/detail/status matrix
 - [ ] Assigned nurse and cancellation

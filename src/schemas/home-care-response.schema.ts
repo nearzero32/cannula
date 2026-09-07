@@ -61,3 +61,15 @@ export const HomeCareServiceListResponseSchema = paginatedResponse(HomeCareServi
 export const MobileHomeCareCategoryListResponseSchema = successResponse(t.Array(MobileHomeCareCategorySchema), 'تم جلب أنواع الرعاية المنزلية بنجاح');
 export const MobileHomeCareServiceListResponseSchema = successResponse(t.Array(MobileHomeCareServiceSchema), 'تم جلب خدمات الرعاية المنزلية بنجاح');
 export const MobileHomeCareServiceResponseSchema = successResponse(MobileHomeCareServiceSchema, 'تم جلب خدمة الرعاية المنزلية بنجاح');
+
+export const HomeCareAvailabilitySlotSchema = t.Object({
+    _id: t.String(), service_id: t.String(), time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
+    status: t.Enum(IHomeCareStatusEnum), display_order: t.Integer({ minimum: 0 }), created_by: nullableString,
+    createdAt: t.String({ format: 'date-time' }), updatedAt: t.String({ format: 'date-time' }),
+});
+export const HomeCareAvailabilitySlotResponseSchema = successResponse(HomeCareAvailabilitySlotSchema);
+export const HomeCareAvailabilitySlotListResponseSchema = successResponse(t.Array(HomeCareAvailabilitySlotSchema));
+export const MobileHomeCareAvailabilityResponseSchema = successResponse(t.Object({
+    service_id: t.String(), date: t.String({ format: 'date' }), timezone: t.Literal('Asia/Baghdad'),
+    slots: t.Array(t.Object({ _id: t.String(), time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }) })),
+}));

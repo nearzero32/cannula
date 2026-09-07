@@ -57,6 +57,8 @@ export interface IHomeCareRequest extends IBaseDocument {
     child_id?: mongoose.Types.ObjectId | null;
     category_id: mongoose.Types.ObjectId;
     service_id: mongoose.Types.ObjectId;
+    /** Optional for legacy rows; mandatory for requests created by the current Mobile API. */
+    availability_slot_id?: mongoose.Types.ObjectId | null;
     service_name: string;
     service_price: number;
     service_duration_min?: number | null;

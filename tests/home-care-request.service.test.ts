@@ -6,6 +6,7 @@ import homeCareServiceService from '../src/services/home-care-service.service';
 import patientChildService from '../src/services/patient-child.service';
 import ActivityLogService from '../src/services/activity-log.service';
 import homeCareRequestHistoryService from '../src/services/home-care-request-history.service';
+import homeCareAvailabilityService from '../src/services/home-care-availability.service';
 import {
     HomeCareRequestService,
     nextHomeCareRequestNumber,
@@ -18,11 +19,14 @@ afterEach(() => mock.restore());
 beforeEach(() => {
     const session: any = { withTransaction: async (work: any) => work(), endSession: async () => {} };
     spyOn(mongoose, 'startSession').mockResolvedValue(session);
+    spyOn(homeCareAvailabilityService, 'requireAvailableForRequest').mockResolvedValue({ _id: new mongoose.Types.ObjectId('507f191e810c19729de860ee'), time: '09:00' } as never);
+    spyOn(homeCareAvailabilityService, 'claimAvailableForRequest').mockResolvedValue({ _id: new mongoose.Types.ObjectId('507f191e810c19729de860ee'), time: '09:00' } as never);
 });
 
 const patientId = new mongoose.Types.ObjectId('507f1f77bcf86cd799439011');
 const childId = new mongoose.Types.ObjectId('507f191e810c19729de860ea');
 const serviceId = new mongoose.Types.ObjectId('507f191e810c19729de860eb');
+const slotId = new mongoose.Types.ObjectId('507f191e810c19729de860ee');
 const categoryId = new mongoose.Types.ObjectId('507f191e810c19729de860ec');
 const userId = '507f191e810c19729de860ed';
 const noNotifications = { homeCare: async () => null };
@@ -35,7 +39,7 @@ const actor = {
 const input: HomeCareRequestCreateInput = {
     service_id: serviceId.toString(),
     requested_date: '2099-09-02',
-    preferred_time: '09:00',
+    availability_slot_id: slotId.toString(),
     address: { address_text: 'بغداد - المنصور', lat: 33.3152, lng: 44.3661 },
     notes: 'اتصل قبل الوصول',
 };
@@ -101,6 +105,16 @@ function mockCreateFoundation(requestService: HomeCareRequestService) {
 }
 
 describe('Home Care request creation', () => {
+    test('rejects a slot disabled or edited between initial validation and transactional creation', async () => {
+        const requestService = new HomeCareRequestService(noNotifications);
+        mockCreateFoundation(requestService);
+        const claim = homeCareAvailabilityService.claimAvailableForRequest as any;
+        claim.mockRejectedValueOnce(new (await import('../src/services/domain-error')).DomainError('وقت التوفر غير متاح لهذه الخدمة', 409, 'HOME_CARE_SLOT_NOT_AVAILABLE'));
+        const create = spyOn(HomeCareRequest, 'create');
+        await expect(requestService.createForPatient(patientId, input, actor)).rejects.toMatchObject({ status: 409, code: 'HOME_CARE_SLOT_NOT_AVAILABLE' });
+        expect(create).not.toHaveBeenCalled();
+    });
+
     test('rejects invalid and unavailable services', async () => {
         const requestService = new HomeCareRequestService(noNotifications);
         await expect(requestService.createForPatient(patientId, { ...input, service_id: 'bad' }, actor))
@@ -123,6 +137,8 @@ describe('Home Care request creation', () => {
         expect(createdPayload.patient_id).toEqual(patientId);
         expect(createdPayload.child_id).toBeNull();
         expect(createdPayload.service_name).toBe('تمريض منزلي');
+        expect(createdPayload.availability_slot_id).toEqual(slotId);
+        expect(createdPayload.preferred_time).toBe('09:00');
         expect(createdPayload.service_price).toBe(15000);
         expect(createdPayload.service_duration_min).toBe(30);
         expect(createdPayload.status).toBe(IHomeCareRequestStatusEnum.PENDING);
@@ -171,6 +187,8 @@ describe('Home Care request creation', () => {
 
         mock.restore();
         const inactiveService = new HomeCareRequestService(noNotifications);
+        spyOn(homeCareAvailabilityService, 'requireAvailableForRequest').mockResolvedValue({ _id: slotId, time: '09:00' } as never);
+        spyOn(homeCareAvailabilityService, 'claimAvailableForRequest').mockResolvedValue({ _id: slotId, time: '09:00' } as never);
         spyOn(homeCareServiceService, 'getActiveById').mockResolvedValue(serviceDocument() as never);
         spyOn(patientChildService, 'requireOwnedChild').mockResolvedValue({
             _id: childId,
