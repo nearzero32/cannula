@@ -8,18 +8,16 @@ import { mobileSpecialtiesController } from './specialties.controller';
 import { mobileProfileController } from './profile.controller';
 import { mobileSuggestionsController } from './suggestions.controller';
 import { mobileDoctorFavoritesController } from './doctor-favorites.controller';
-import { createSharedController } from '../shared/index';
+import { mobileSharedController } from '../shared/index';
 import { mobileHomeCareController } from './home-care.controller';
 import { mobileProfileHealthController } from './profile-health.controller';
 import { mobileChildrenController } from './children.controller';
 import { mobileAppointmentsController } from './appointments.controller';
 import { mobileHomeCareRequestsController } from './home-care-requests.controller';
-import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import { mobilePharmacyRequestsController } from './pharmacy-requests.controller';
 import { mobileNotificationsController } from './notifications.controller';
 import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
 import { IUserRoleEnum } from '../../interfaces/user.interface';
-import { TokenAudienceEnum } from '../../constants/jwt';
 import { mobileMedicationsController } from './medications.controller';
 import { mobileMedicationDosesController } from './medication-doses.controller';
 import { mobileMedicationRemindersController } from './medication-reminders.controller';
@@ -49,7 +47,7 @@ const mobileProtectedController = new Elysia()
     .use(mobileMedicationsController)
     .use(mobileMedicationDosesController)
     .use(mobileMedicationRemindersController)
-    .use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT], TokenAudienceEnum.MOBILE));
+    .use(mobileSharedController);
 
 export const mobileController = new Elysia({
     prefix: '/mobile',

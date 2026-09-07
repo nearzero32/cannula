@@ -136131,7 +136131,8 @@ var SWAGGER_TAGS = {
     ADS: "Mobile - Ads",
     ABOUT_US: "Mobile - About Us",
     NOTIFICATIONS: "Mobile - Notifications",
-    MEDICATIONS: "Mobile - Medications"
+    MEDICATIONS: "Mobile - Medications",
+    UPLOADS: "Mobile - Uploads"
   }
 };
 var SWAGGER_TAG_DEFINITIONS = [
@@ -136177,7 +136178,8 @@ var SWAGGER_TAG_DEFINITIONS = [
   { name: SWAGGER_TAGS.MOBILE.ADS, "x-displayName": "Ads", description: "\u0639\u0631\u0636 \u0627\u0644\u0625\u0639\u0644\u0627\u0646\u0627\u062A \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" },
   { name: SWAGGER_TAGS.MOBILE.ABOUT_US, "x-displayName": "About Us", description: "\u0639\u0631\u0636 \u0645\u062D\u062A\u0648\u0649 \u0645\u0646 \u0646\u062D\u0646 \u0641\u064A \u062A\u0637\u0628\u064A\u0642 \u0627\u0644\u0645\u0631\u064A\u0636" },
   { name: SWAGGER_TAGS.MOBILE.NOTIFICATIONS, "x-displayName": "Notifications", description: "\u0635\u0646\u062F\u0648\u0642 \u0627\u0644\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u0639\u0627\u0645 \u0648\u0627\u0644\u0645\u0648\u062C\u0651\u0647" },
-  { name: SWAGGER_TAGS.MOBILE.MEDICATIONS, "x-displayName": "Medications", description: "\u0623\u062F\u0648\u064A\u0629 \u0627\u0644\u0645\u0631\u064A\u0636 \u0648\u0627\u0644\u062C\u0631\u0639\u0627\u062A \u0648\u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u0645\u062D\u0644\u064A\u0629\u061B \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u062F\u0627\u062E\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0641\u0642\u0637" }
+  { name: SWAGGER_TAGS.MOBILE.MEDICATIONS, "x-displayName": "Medications", description: "\u0623\u062F\u0648\u064A\u0629 \u0627\u0644\u0645\u0631\u064A\u0636 \u0648\u0627\u0644\u062C\u0631\u0639\u0627\u062A \u0648\u0645\u0632\u0627\u0645\u0646\u0629 \u0627\u0644\u062A\u0630\u0643\u064A\u0631\u0627\u062A \u0627\u0644\u0645\u062D\u0644\u064A\u0629\u061B \u0625\u0634\u0639\u0627\u0631\u0627\u062A \u0627\u0644\u062A\u0630\u0643\u064A\u0631 \u062F\u0627\u062E\u0644 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0641\u0642\u0637" },
+  { name: SWAGGER_TAGS.MOBILE.UPLOADS, "x-displayName": "Uploads", description: "\u0631\u0641\u0639 \u0635\u0648\u0631 \u0627\u0644\u0645\u0631\u064A\u0636 \u0648\u0627\u0644\u0648\u0635\u0648\u0644 \u0627\u0644\u0622\u0645\u0646 \u0625\u0644\u0649 \u0627\u0644\u0645\u0644\u0641\u0627\u062A \u0627\u0644\u062E\u0627\u0635\u0629" }
 ];
 var SWAGGER_TAG_GROUPS = [
   { name: "Dashboard", tags: [SWAGGER_TAGS.DASHBOARD.AUTH, SWAGGER_TAGS.DASHBOARD.SHARED] },
@@ -136238,7 +136240,8 @@ var SWAGGER_TAG_GROUPS = [
       SWAGGER_TAGS.MOBILE.ADS,
       SWAGGER_TAGS.MOBILE.ABOUT_US,
       SWAGGER_TAGS.MOBILE.NOTIFICATIONS,
-      SWAGGER_TAGS.MOBILE.MEDICATIONS
+      SWAGGER_TAGS.MOBILE.MEDICATIONS,
+      SWAGGER_TAGS.MOBILE.UPLOADS
     ]
   }
 ];
@@ -136273,8 +136276,8 @@ var import_jsonwebtoken = __toESM(require_jsonwebtoken(), 1);
 import crypto2 from "crypto";
 
 // src/constants/session.ts
-var ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
-var SESSION_TTL_SECONDS = 7 * 24 * 60 * 60;
+var ACCESS_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+var SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 var MAX_PATIENT_SESSIONS = 5;
 var MAX_DASHBOARD_SESSIONS = 3;
 
@@ -158593,7 +158596,7 @@ var doctorController = new Elysia({ prefix: "/doctor" }).use(RoleGuardPlugin([IU
 // src/controller/shared/upload.controller.ts
 init_domain_error();
 var intentBody = t.Object({ purpose: t.Enum(UploadPurposeEnum, { description: "Business purpose; the server selects storage paths and limits." }), targetId: t.Optional(t.String({ pattern: "^[0-9a-fA-F]{24}$" })), contentType: t.Union([t.Literal("image/jpeg"), t.Literal("image/png"), t.Literal("image/webp")]) }, { additionalProperties: false });
-function createUploadController(tag, allowedRoles, audience = TokenAudienceEnum.DASHBOARD) {
+function createUploadController({ tag, allowedRoles, audience }) {
   return new Elysia({ prefix: "/upload", detail: { tags: [tag] } }).use(AuthPlugin(audience)).use(RoleGuardPlugin(allowedRoles)).onError(({ error, set }) => {
     if (error instanceof DomainError) {
       set.status = error.status;
@@ -158607,15 +158610,19 @@ function createUploadController(tag, allowedRoles, audience = TokenAudienceEnum.
 }
 
 // src/controller/shared/index.ts
-function createSharedController(tag, allowedRoles, audience = TokenAudienceEnum.DASHBOARD) {
-  return new Elysia().use(createUploadController(tag, allowedRoles, audience));
+function createSharedController(config3) {
+  return new Elysia().use(createUploadController(config3));
 }
-var sharedController = createSharedController(SWAGGER_TAGS.DASHBOARD.SHARED, [
-  IUserRoleEnum.ADMIN,
-  IUserRoleEnum.DOCTOR,
-  IUserRoleEnum.NURSE,
-  IUserRoleEnum.PHARMACY
-], TokenAudienceEnum.DASHBOARD);
+var dashboardSharedController = createSharedController({
+  tag: SWAGGER_TAGS.DASHBOARD.SHARED,
+  allowedRoles: [IUserRoleEnum.ADMIN, IUserRoleEnum.DOCTOR, IUserRoleEnum.NURSE, IUserRoleEnum.PHARMACY],
+  audience: TokenAudienceEnum.DASHBOARD
+});
+var mobileSharedController = createSharedController({
+  tag: SWAGGER_TAGS.MOBILE.UPLOADS,
+  allowedRoles: [IUserRoleEnum.PATIENT],
+  audience: TokenAudienceEnum.MOBILE
+});
 
 // src/controller/dash/nurse/profile.controller.ts
 init_domain_error();
@@ -158753,7 +158760,7 @@ var pharmacyController = new Elysia({ prefix: "/pharmacy" }).use(RoleGuardPlugin
 // src/controller/dash/index.ts
 var dashboardController = new Elysia({
   prefix: "/dash"
-}).use(authController).use(sharedController).use(adminController).use(doctorController).use(nurseController).use(pharmacyController);
+}).use(authController).use(dashboardSharedController).use(adminController).use(doctorController).use(nurseController).use(pharmacyController);
 
 // src/controller/mobile/about-us.controller.ts
 var mobileAboutUsController = new Elysia({
@@ -161198,7 +161205,7 @@ var mobileMedicationRemindersController = new Elysia({ prefix: "/medication-remi
 
 // src/controller/mobile/index.ts
 var mobilePublicController = new Elysia().use(mobileAuthController).use(mobileAboutUsController).use(mobileAdsController).use(mobileChronicConditionsController).use(mobileDoctorsController).use(mobileSpecialtiesController).use(mobileHomeCareController).use(mobileNotificationsController);
-var mobileProtectedController = new Elysia().use(RoleGuardPlugin([IUserRoleEnum.PATIENT])).use(mobileProfileController).use(mobileProfileHealthController).use(mobileChildrenController).use(mobileAppointmentsController).use(mobileHomeCareRequestsController).use(mobilePharmacyRequestsController).use(mobileSuggestionsController).use(mobileDoctorFavoritesController).use(mobileMedicationsController).use(mobileMedicationDosesController).use(mobileMedicationRemindersController).use(createSharedController(SWAGGER_TAGS.MOBILE.PROFILE, [IUserRoleEnum.PATIENT], TokenAudienceEnum.MOBILE));
+var mobileProtectedController = new Elysia().use(RoleGuardPlugin([IUserRoleEnum.PATIENT])).use(mobileProfileController).use(mobileProfileHealthController).use(mobileChildrenController).use(mobileAppointmentsController).use(mobileHomeCareRequestsController).use(mobilePharmacyRequestsController).use(mobileSuggestionsController).use(mobileDoctorFavoritesController).use(mobileMedicationsController).use(mobileMedicationDosesController).use(mobileMedicationRemindersController).use(mobileSharedController);
 var mobileController = new Elysia({
   prefix: "/mobile"
 }).use(mobilePublicController).use(mobileProtectedController);

@@ -39,7 +39,7 @@ describe('purpose ownership and opaque intent keys',()=>{
 });
 
 describe('upload endpoint audience and session isolation',()=>{
- const controller=createUploadController('Upload',[IUserRoleEnum.PATIENT],TokenAudienceEnum.MOBILE),sid='12345678-1234-4234-8234-123456789012';
+ const controller=createUploadController({tag:'Upload',allowedRoles:[IUserRoleEnum.PATIENT],audience:TokenAudienceEnum.MOBILE}),sid='12345678-1234-4234-8234-123456789012';
  const body={purpose:UploadPurposeEnum.PATIENT_PROFILE_PHOTO,targetId:patientId,contentType:'image/png'};
  const call=(authorization:string)=>controller.handle(new Request('http://localhost/upload/intents',{method:'POST',headers:{authorization,'content-type':'application/json'},body:JSON.stringify(body)}));
  test('Mobile access token reaches the upload service while Dashboard and refresh tokens are rejected',async()=>{spyOn(sessionService,'validateAccess').mockImplementation(async p=>({sid:p.sid,userId:p._id,role:p.role,audience:p.aud,restricted:false,currentRefreshDigest:'x',createdAt:'',lastSeenAt:'',lastRefreshedAt:'',expiresAt:''}));const initiate=spyOn(uploadPolicyService,'initiate').mockResolvedValue({uploadId:'id'} as never);const mobile=signAccessToken({_id:uid,role:IUserRoleEnum.PATIENT,sid,audience:TokenAudienceEnum.MOBILE});expect((await call(`Bearer ${mobile}`)).status).toBe(201);expect(initiate).toHaveBeenCalledTimes(1);const dash=signAccessToken({_id:uid,role:IUserRoleEnum.PATIENT,sid,audience:TokenAudienceEnum.DASHBOARD});expect((await call(`Bearer ${dash}`)).status).toBe(401);const refresh=signRefreshToken({_id:uid,role:IUserRoleEnum.PATIENT,sid,jti:crypto.randomUUID(),audience:TokenAudienceEnum.MOBILE,restricted:false});expect((await call(`Bearer ${refresh}`)).status).toBe(401)});

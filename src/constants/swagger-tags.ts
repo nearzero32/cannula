@@ -53,6 +53,7 @@ export const SWAGGER_TAGS = {
         ABOUT_US: 'Mobile - About Us',
         NOTIFICATIONS: 'Mobile - Notifications',
         MEDICATIONS: 'Mobile - Medications',
+        UPLOADS: 'Mobile - Uploads',
     },
 } as const;
 
@@ -100,6 +101,7 @@ export const SWAGGER_TAG_DEFINITIONS = [
     { name: SWAGGER_TAGS.MOBILE.ABOUT_US, 'x-displayName': 'About Us', description: 'عرض محتوى من نحن في تطبيق المريض' },
     { name: SWAGGER_TAGS.MOBILE.NOTIFICATIONS, 'x-displayName': 'Notifications', description: 'صندوق الإشعارات العام والموجّه' },
     { name: SWAGGER_TAGS.MOBILE.MEDICATIONS, 'x-displayName': 'Medications', description: 'أدوية المريض والجرعات ومزامنة التذكيرات المحلية؛ إشعارات التذكير داخل التطبيق فقط' },
+    { name: SWAGGER_TAGS.MOBILE.UPLOADS, 'x-displayName': 'Uploads', description: 'رفع صور المريض والوصول الآمن إلى الملفات الخاصة' },
 ];
 
 export const SWAGGER_TAG_GROUPS = [
@@ -162,6 +164,7 @@ export const SWAGGER_TAG_GROUPS = [
             SWAGGER_TAGS.MOBILE.ABOUT_US,
             SWAGGER_TAGS.MOBILE.NOTIFICATIONS,
             SWAGGER_TAGS.MOBILE.MEDICATIONS,
+            SWAGGER_TAGS.MOBILE.UPLOADS,
         ],
     },
 ];
