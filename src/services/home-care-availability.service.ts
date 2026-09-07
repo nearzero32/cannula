@@ -56,9 +56,32 @@ export class HomeCareAvailabilityService {
         if (!mongoose.Types.ObjectId.isValid(slotId)) throw new DomainError('معرف وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ID_INVALID');
         const current = await HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId }).exec();
         if (!current) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
+        const requestedTime = input.time === undefined ? current.time : validateTime(input.time);
+        if (input.display_order !== undefined && (!Number.isSafeInteger(input.display_order) || input.display_order < 0)) throw new DomainError('ترتيب وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ORDER_INVALID');
+        if (requestedTime !== current.time) {
+            const session = await mongoose.startSession();
+            let replacement: HomeCareAvailabilitySlotDocument | null = null;
+            try {
+                await session.withTransaction(async () => {
+                    const source = await HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId }).session(session).exec();
+                    if (!source) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
+                    const existing = await HomeCareAvailabilitySlot.findOne({ service_id: serviceId, time: requestedTime }).session(session).exec();
+                    if (existing?.status === IHomeCareStatusEnum.ACTIVE) throw new DomainError('وقت التوفر موجود مسبقاً لهذه الخدمة', 409, 'HOME_CARE_SLOT_DUPLICATE');
+                    await HomeCareAvailabilitySlot.updateOne({ _id: source._id }, { $set: { status: IHomeCareStatusEnum.INACTIVE } }, { session });
+                    replacement = existing
+                        ? await HomeCareAvailabilitySlot.findOneAndUpdate({ _id: existing._id }, { $set: { status: IHomeCareStatusEnum.ACTIVE, display_order: input.display_order ?? source.display_order } }, { new: true, runValidators: true, session }).exec()
+                        : (await HomeCareAvailabilitySlot.create([{ service_id: serviceId, time: requestedTime, status: IHomeCareStatusEnum.ACTIVE, display_order: input.display_order ?? source.display_order, created_by: actor.user_id }], { session }))[0];
+                }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, readPreference: 'primary' });
+            } catch (error) {
+                if (duplicate(error)) throw new DomainError('وقت التوفر موجود مسبقاً لهذه الخدمة', 409, 'HOME_CARE_SLOT_DUPLICATE');
+                throw error;
+            } finally { await session.endSession(); }
+            if (!replacement) throw new DomainError('تعذر تعديل وقت التوفر', 409, 'HOME_CARE_SLOT_UPDATE_CONFLICT');
+            await this.log('PATCH', IActivityLogActionEnum.UPDATE, replacement, current, input, actor);
+            return replacement;
+        }
         const update: Record<string, unknown> = {};
-        if (input.time !== undefined) update.time = validateTime(input.time);
-        if (input.display_order !== undefined) { if (!Number.isSafeInteger(input.display_order) || input.display_order < 0) throw new DomainError('ترتيب وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ORDER_INVALID'); update.display_order = input.display_order; }
+        if (input.display_order !== undefined) update.display_order = input.display_order;
         try {
             const slot = await HomeCareAvailabilitySlot.findOneAndUpdate({ _id: slotId, service_id: serviceId }, { $set: update }, { new: true, runValidators: true }).exec();
             if (!slot) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');

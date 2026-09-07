@@ -17,6 +17,7 @@ interface OpenApiOperation {
     responses?: Record<string, unknown>;
     tags?: string[];
     requestBody?: unknown;
+    parameters?: unknown[];
 }
 
 interface OpenApiDocument {
@@ -221,6 +222,11 @@ describe('API response documentation coverage', () => {
         expect(mobileResponse).not.toContain('internal_notes');
         expect(mobileResponse).not.toContain('assigned_by_user_id');
         expect(mobileResponse).not.toContain('"version"');
+        const mobileCreate = operation('/api/mobile/home-care/requests/', 'post');
+        const mobileHeaders = JSON.stringify(mobileCreate?.parameters);
+        expect(mobileHeaders).toContain('idempotency-key');
+        expect(mobileHeaders).toContain('UUID v4');
+        expect(Object.keys(mobileCreate?.responses ?? {})).toEqual(expect.arrayContaining(['200', '201', '409', '422']));
     });
 });
 

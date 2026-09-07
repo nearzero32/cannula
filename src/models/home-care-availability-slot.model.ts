@@ -5,7 +5,7 @@ export type HomeCareAvailabilitySlotDocument = mongoose.Document & IHomeCareAvai
 
 const schema = new Schema<HomeCareAvailabilitySlotDocument>({
     service_id: { type: Schema.Types.ObjectId, ref: 'HomeCareService', required: true, immutable: true },
-    time: { type: String, required: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
+    time: { type: String, required: true, immutable: true, match: /^([01]\d|2[0-3]):[0-5]\d$/ },
     status: { type: String, enum: Object.values(IHomeCareStatusEnum), default: IHomeCareStatusEnum.ACTIVE },
     display_order: { type: Number, min: 0, default: 1000, validate: Number.isSafeInteger },
     created_by: { type: Schema.Types.ObjectId, ref: 'User', default: null },

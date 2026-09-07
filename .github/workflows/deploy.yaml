@@ -74,6 +74,8 @@ jobs:
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_pharmacy_ci?replicaSet=rs0&directConnection=true" bun test tests/pharmacy-treatment-request.mongodb.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_appointment_ci?replicaSet=rs0&directConnection=true" bun test tests/appointment-concurrency.mongodb.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/p8c?replicaSet=rs0&directConnection=true" bun test tests/notification-phase8c.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_availability_ci?replicaSet=rs0&directConnection=true" bun test --timeout 120000 tests/home-care-availability.mongodb.test.ts
+          MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_idempotency_ci?replicaSet=rs0&directConnection=true" bun test --timeout 120000 tests/home-care-idempotency.mongodb.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_phase7a_ci?replicaSet=rs0&directConnection=true" bun test tests/home-care-phase7a.mongodb.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_phase7b1_ci?replicaSet=rs0&directConnection=true" bun test tests/home-care-phase7b1.mongodb.test.ts
           MONGODB_TEST_URI="$MONGODB_BASE/cannula_home_care_phase7b2_ci?replicaSet=rs0&directConnection=true" bun test tests/home-care-phase7b2.mongodb.test.ts

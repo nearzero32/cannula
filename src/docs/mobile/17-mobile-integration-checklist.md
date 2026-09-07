@@ -12,7 +12,7 @@
 | Doctor Detail | `GET /doctors/:id` | availability/favorite | mixed | 404 unavailable |
 | Appointments | `GET /appointments` | detail/history | Patient | empty CTA; page spinner |
 | Appointment Detail | `GET /appointments/:id` | cancel/reschedule | Patient | obey capabilities; refresh on 409 |
-| Home Care | categories/services | create request | mixed | independent catalog placeholders |
+| Home Care | categories/services | create request with persisted UUID v4 key | mixed | independent catalog placeholders |
 | Home Care Request Detail | `GET /home-care/requests/:id` | cancel | Patient | refresh after cancel |
 | Pharmacy Request | list/detail | upload/create/decision | Patient | preserve form on upload/network error |
 | Notifications | `GET /notifications` | unread/read | optional | persist installation ID; empty is success |
@@ -73,6 +73,9 @@ Use initial skeletons, a separate bottom pagination indicator, and pull-to-refre
 - [ ] Categories/services/detail
 - [ ] Date-specific availability fetch and slot-ID selection
 - [ ] Never submit client-controlled `preferred_time`
+- [ ] Generate and persist one UUID v4 `Idempotency-Key` per logical request
+- [ ] Reuse the same key and payload across timeouts/restarts; accept first `201` or replay `200`
+- [ ] Generate a new key only for a genuinely new request; surface payload mismatch `409`
 - [ ] SELF/CHILD creation and snapshots
 - [ ] List/detail/status matrix
 - [ ] Assigned nurse and cancellation
@@ -115,7 +118,7 @@ Use initial skeletons, a separate bottom pagination indicator, and pull-to-refre
 ### RELEASE
 
 - [ ] Global HTTP table implemented
-- [ ] GET retry bounded; writes not blindly replayed
+- [ ] GET retry bounded; only Home Care create is replayed with its persisted idempotency key
 - [ ] No secrets/demo PIN in production config
 - [ ] Postman smoke test against target environment
 - [ ] Empty/loading/offline/accessibility/localized states reviewed

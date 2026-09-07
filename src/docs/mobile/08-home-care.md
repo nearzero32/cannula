@@ -17,13 +17,35 @@ curl '{{baseUrl}}/mobile/home-care/services?categoryId=66f000000000000000000050'
 
 ## Request creation
 
-After choosing a service and date, fetch availability, render each canonical `time`, retain the selected slot `_id`, then submit:
+After choosing a service and date, fetch availability, render each canonical `time`, retain the selected slot `_id`, then submit with a required UUID v4 header generated once for this logical request:
+
+```http
+Idempotency-Key: 550e8400-e29b-41d4-a716-446655440000
+```
 
 ```json
 {"service_id":"66f000000000000000000051","availability_slot_id":"66f000000000000000000052","child_id":null,"requested_date":"2026-09-08","address":{"address_text":"بغداد - المنصور","lat":33.3128,"lng":44.3615},"notes":"يرجى الاتصال قبل الوصول"}
 ```
 
-Do not submit `preferred_time`. The backend resolves an ACTIVE slot belonging to the selected service and snapshots its current `time` into `preferred_time`. It rechecks the slot inside the request transaction, so disabling or editing it between availability fetch and POST rejects the request with `HOME_CARE_SLOT_NOT_AVAILABLE`.
+Do not submit `preferred_time`. The backend resolves an ACTIVE slot belonging to the selected service and snapshots its immutable time identity into `preferred_time`. It rechecks the slot plus active service/category state inside the request transaction, so disabling or editing it between availability fetch and POST rejects the stale ID with `HOME_CARE_SLOT_NOT_AVAILABLE`.
+
+Persist the key beside the pending form before sending. Reuse the exact key and semantically identical payload after a timeout, connection loss, app restart, or other uncertain response. The first successful create returns `201`; a matching replay within 24 hours returns the original request with `200` and `Idempotent-Replay: true`. Do not create a fresh key merely because the response was lost. Reusing a key with a different normalized payload returns `409`; generate a new key only for a genuinely new submission. Keys are scoped to the authenticated Patient and expire after 24 hours.
+
+Flutter example using the `uuid` package:
+
+```dart
+final key = draft.idempotencyKey ?? const Uuid().v4();
+await drafts.save(draft.copyWith(idempotencyKey: key));
+
+final response = await dio.post(
+  '/mobile/home-care/requests',
+  data: draft.toJson(),
+  options: Options(headers: {'Idempotency-Key': key}),
+);
+
+// Keep the same key while retrying an uncertain result. Clear the draft only
+// after either 201 or 200 has returned a valid request DTO.
+```
 
 Omit/null `child_id` for SELF; provide an active owned child for CHILD. The server also snapshots service name, price, and duration. Requested dates use `Asia/Baghdad` and cannot be in the past. For today, a slot is usable only when it is at least 30 minutes ahead; exactly 30 minutes is allowed. Future dates return every active recurring slot. Inactive services or categories expose no availability.
 
@@ -54,6 +76,6 @@ flowchart LR
 
 Suggested UI labels follow the meaning column. Patient cancellation is implemented only for `pending` and `confirmed`; a race returns `409`.
 
-Common failures: malformed service/slot/child/request ID `400`; missing or hidden service `404`; inactive/foreign/edited slot `409` with `HOME_CARE_SLOT_NOT_AVAILABLE`; past date or lead-time violation `422`; another Patient's child/request `404`; cancellation from current state `409`.
+Common failures: missing/malformed `Idempotency-Key` `400/422`; same key with a different payload `409`; malformed service/slot/child/request ID `400`; missing or hidden service `404`; inactive/foreign/edited slot `409` with `HOME_CARE_SLOT_NOT_AVAILABLE`; past date or lead-time violation `422`; another Patient's child/request `404`; cancellation from current state `409`.
 
 Images for categories/services and nurse photo are nullable; use neutral placeholders. Arabic: لا تعرض خطأ عند قائمة فارغة، واعرض حالة فارغة مع زر تحديث/إنشاء طلب.

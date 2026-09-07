@@ -54,7 +54,7 @@ There is no combined Home endpoint. Fetch Ads, Specialties, Available Doctors, a
 
 ## Offline and retry guidance
 
-Client recommendation: retry safe GETs with bounded backoff. Do not blindly replay POST/PATCH/DELETE. Booking and request creation have no client idempotency key contract; after uncertain network failure, list/refresh first and retry only if the record was not created. After mutations, replace the entity with the returned DTO, then refresh its list/count.
+Client recommendation: retry safe GETs with bounded backoff. Do not blindly replay POST/PATCH/DELETE. `POST /mobile/home-care/requests` is the exception: generate one UUID v4 `Idempotency-Key` for the logical submission, persist it with the pending form, and reuse that exact key and payload for every network retry for up to 24 hours. A first create returns `201`; a replay returns the same DTO with `200` and `Idempotent-Replay: true`. Other create/booking routes have no client idempotency contract; after an uncertain network failure, list/refresh first. After mutations, replace the entity with the returned DTO, then refresh its list/count.
 
 ## Date and time rules
 

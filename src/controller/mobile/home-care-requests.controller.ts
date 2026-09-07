@@ -85,9 +85,9 @@ export const mobileHomeCareRequestsController = new Elysia({
             return { error: true, message: 'حدث خطأ في الخادم' };
         }
     })
-    .post('/', async ({ body, phrase, set }) => {
+    .post('/', async ({ body, headers, phrase, set }) => {
         const patient = await requirePatient(phrase);
-        const request = await homeCareRequestService.createForPatient(
+        const result = await homeCareRequestService.createIdempotentForPatient(
             new mongoose.Types.ObjectId(patient._id.toString()),
             {
                 service_id: body.service_id,
@@ -101,18 +101,30 @@ export const mobileHomeCareRequestsController = new Elysia({
                 },
                 notes: body.notes,
             },
-            mobileActor(phrase._id, '/mobile/home-care/requests')
+            mobileActor(phrase._id, '/mobile/home-care/requests'),
+            headers['idempotency-key'],
         );
-        set.status = 201;
+        set.status = result.replayed ? 200 : 201;
+        if (result.replayed) set.headers = { 'Idempotent-Replay': 'true' };
         return {
             error: false,
             message: 'تم إرسال طلب الرعاية المنزلية بنجاح',
-            data: formatHomeCareRequestForMobile(request),
+            data: formatHomeCareRequestForMobile(result.request),
         };
     }, {
         body: requestBodySchema,
-        detail: { description: 'preferred_time مشتق حصراً من availability_slot_id الفعال ولا يمكن للمريض إرساله.' },
+        headers: t.Object({
+            'idempotency-key': t.String({
+                minLength: 36,
+                maxLength: 36,
+                pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+                description: 'UUID v4 generated once per logical create and reused for network retries',
+                examples: ['550e8400-e29b-41d4-a716-446655440000'],
+            }),
+        }, { additionalProperties: true }),
+        detail: { description: 'يتطلب Idempotency-Key من نوع UUID v4 لمدة 24 ساعة، وهو معزول حسب المريض المصادق عليه ويجب إعادة استخدامه عند المحاولة مجدداً. إعادة نفس المفتاح والحمولة تعيد الطلب نفسه؛ الحمولة المختلفة تعطي 409. preferred_time مشتق حصراً من availability_slot_id.' },
         response: {
+            200: MobileHomeCareRequestResponseSchema,
             201: MobileHomeCareRequestResponseSchema,
             400: BadRequestResponseSchema,
             403: ForbiddenResponseSchema,

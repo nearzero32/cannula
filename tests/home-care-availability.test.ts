@@ -51,7 +51,12 @@ describe('Home Care availability domain', () => {
 
     test('edits, disables, and soft-deletes only service-owned slots', async () => {
         spyOn(HomeCareService, 'findById').mockReturnValue(execQuery({ _id: serviceId }) as never);
-        spyOn(HomeCareAvailabilitySlot, 'findOne').mockReturnValue(execQuery(slot()) as never);
+        let findCalls = 0;
+        spyOn(HomeCareAvailabilitySlot, 'findOne').mockImplementation(() => execQuery(++findCalls === 3 ? null : slot()) as never);
+        const session: any = { withTransaction: async (work: any) => work(), endSession: async () => {} };
+        spyOn(mongoose, 'startSession').mockResolvedValue(session);
+        spyOn(HomeCareAvailabilitySlot, 'updateOne').mockResolvedValue({ modifiedCount: 1 } as never);
+        spyOn(HomeCareAvailabilitySlot, 'create').mockResolvedValue([slot({ _id: new mongoose.Types.ObjectId(), time: '14:00', display_order: 30 })] as never);
         const update = spyOn(HomeCareAvailabilitySlot, 'findOneAndUpdate').mockImplementation((_filter, value) => execQuery(slot({ ...(value as any).$set })) as never);
         const service = new HomeCareAvailabilityService();
         expect((await service.update(String(serviceId), String(slotId), { time: '14:00', display_order: 30 }, actor)).time).toBe('14:00');

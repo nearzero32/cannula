@@ -27,6 +27,11 @@ import { homeCareBaghdadDateRange, assertHomeCareSlotLeadTime, HOME_CARE_REQUEST
 import { runHomeCareTransaction } from './home-care-transaction.service';
 import domainNotificationService, { type HomeCareDomainNotifier } from './domain-notification.service';
 import homeCareAvailabilityService from './home-care-availability.service';
+import homeCareRequestIdempotencyService, {
+    homeCareRequestFingerprint,
+    isHomeCareIdempotencyDuplicate,
+    validateHomeCareIdempotencyKey,
+} from './home-care-request-idempotency.service';
 
 export { HOME_CARE_REQUEST_MIN_LEAD_MINUTES } from './home-care-date.service';
 
@@ -60,6 +65,16 @@ export interface HomeCareRequestActor {
     user_type: 'patient' | 'admin';
     endpoint: string;
     source: 'mobile' | 'dashboard';
+}
+
+export interface HomeCareIdempotentCreateResult {
+    request: HomeCareRequestDocument;
+    replayed: boolean;
+}
+
+interface HomeCareIdempotencyContext {
+    key: string;
+    requestHash: string;
 }
 
 export const HOME_CARE_REQUEST_TRANSITIONS: Record<
@@ -130,16 +145,48 @@ function withSafePopulation(query: any) {
 export class HomeCareRequestService {
     constructor(private readonly notifications: HomeCareDomainNotifier = domainNotificationService) {}
 
+    public async createIdempotentForPatient(
+        patientId: mongoose.Types.ObjectId,
+        input: HomeCareRequestCreateInput,
+        actor: HomeCareRequestActor,
+        rawIdempotencyKey: string,
+    ): Promise<HomeCareIdempotentCreateResult> {
+        const key = validateHomeCareIdempotencyKey(rawIdempotencyKey);
+        const requestHash = homeCareRequestFingerprint(input);
+        const now = new Date();
+        const existing = await homeCareRequestIdempotencyService.find(patientId, key);
+        if (existing && existing.expires_at.getTime() > now.getTime()) {
+            return { request: await this.resolveIdempotentRequest(patientId, existing, requestHash), replayed: true };
+        }
+        try {
+            const request = await this.createForPatient(patientId, input, actor, { key, requestHash });
+            return { request, replayed: false };
+        } catch (error) {
+            if (!isHomeCareIdempotencyDuplicate(error)) throw error;
+            const winner = await homeCareRequestIdempotencyService.find(patientId, key);
+            if (!winner) throw new DomainError('تعذر العثور على نتيجة طلب منع التكرار', 409, 'HOME_CARE_IDEMPOTENCY_REQUEST_MISSING');
+            return { request: await this.resolveIdempotentRequest(patientId, winner, requestHash), replayed: true };
+        }
+    }
+
+    private async resolveIdempotentRequest(patientId: mongoose.Types.ObjectId, record: any, requestHash: string): Promise<HomeCareRequestDocument> {
+        homeCareRequestIdempotencyService.assertCompatible(record, requestHash);
+        const request = await this.getForPatient(patientId, String(record.request_id));
+        if (!request) throw new DomainError('تعذر العثور على الطلب المرتبط بمفتاح منع التكرار', 409, 'HOME_CARE_IDEMPOTENCY_REQUEST_MISSING');
+        return request;
+    }
+
     public async createForPatient(
         patientId: mongoose.Types.ObjectId,
         input: HomeCareRequestCreateInput,
-        actor: HomeCareRequestActor
+        actor: HomeCareRequestActor,
+        idempotency?: HomeCareIdempotencyContext,
     ): Promise<HomeCareRequestDocument> {
         if (!mongoose.Types.ObjectId.isValid(input.service_id)) {
             throw new DomainError('معرف الخدمة غير صالح', 400);
         }
         const service = await homeCareServiceService.getActiveById(input.service_id);
-        if (!service) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 404);
+        if (!service) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 404, 'HOME_CARE_SERVICE_NOT_AVAILABLE');
         const slot = await homeCareAvailabilityService.requireAvailableForRequest(input.service_id, input.availability_slot_id);
 
         let childId: mongoose.Types.ObjectId | null = null;
@@ -193,6 +240,9 @@ export class HomeCareRequestService {
         for (let attempt = 0; attempt < 3; attempt += 1) {
             try {
                 request = await runHomeCareTransaction(async session => {
+                    if (idempotency) await homeCareRequestIdempotencyService.claim(patientId, idempotency.key, idempotency.requestHash, now, session);
+                    const transactionService = await homeCareServiceService.getActiveById(input.service_id, session);
+                    if (!transactionService) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 409, 'HOME_CARE_SERVICE_NOT_AVAILABLE');
                     // Recheck ACTIVE + ownership + unchanged time in the same transaction
                     // that writes the request. A dashboard edit between GET and POST loses.
                     await homeCareAvailabilityService.claimAvailableForRequest(input.service_id, input.availability_slot_id, preferredTime, session);
@@ -206,6 +256,7 @@ export class HomeCareRequestService {
                         from_status: null, to_status: IHomeCareRequestStatusEnum.PENDING, from_nurse_id: null, to_nurse_id: null,
                         dispatch_mode: IHomeCareDispatchModeEnum.OPEN_POOL, reason: null, metadata: null,
                     }, { session, critical: true });
+                    if (idempotency) await homeCareRequestIdempotencyService.complete(patientId, idempotency.key, new mongoose.Types.ObjectId(String(created._id)), session);
                     return created;
                 });
                 break;

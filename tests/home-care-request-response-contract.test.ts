@@ -27,6 +27,7 @@ const userId = '507f1f77bcf86cd799439011';
 const patientId = new mongoose.Types.ObjectId('507f191e810c19729de860e1');
 const requestId = new mongoose.Types.ObjectId('507f191e810c19729de860e2');
 const slotId = new mongoose.Types.ObjectId('507f191e810c19729de860e5');
+const idempotencyKey = '550e8400-e29b-41d4-a716-446655440000';
 const query = <T>(value: T) => ({ select() { return this; }, lean() { return this; }, exec: async () => value });
 
 function requestDocument(overrides: Record<string, unknown> = {}) {
@@ -86,12 +87,13 @@ afterEach(() => mock.restore());
 describe('Mobile Home Care request response contracts', () => {
     test('create response uses the typed contract and ignores no trusted client fields', async () => {
         spyOn(patientService, 'getByUserId').mockResolvedValue({ _id: patientId } as never);
-        const create = spyOn(homeCareRequestService, 'createForPatient').mockResolvedValue(requestDocument());
+        const create = spyOn(homeCareRequestService, 'createIdempotentForPatient').mockResolvedValue({ request: requestDocument(), replayed: false });
         const response = await mobileHomeCareRequestsController.handle(authorizedRequest(
             '/home-care/requests/',
             IUserRoleEnum.PATIENT,
             {
                 method: 'POST',
+                headers: { 'Idempotency-Key': idempotencyKey },
                 body: JSON.stringify({
                     service_id: '507f191e810c19729de860e4',
                     availability_slot_id: slotId.toString(),
@@ -106,18 +108,20 @@ describe('Mobile Home Care request response contracts', () => {
         expect(response.status).toBe(201);
         expect(Value.Check(MobileHomeCareRequestResponseSchema, json)).toBe(true);
         expect(create.mock.calls[0][0].toString()).toBe(patientId.toString());
+        expect(create.mock.calls[0][3]).toBe(idempotencyKey);
         expect((json.data as any).service.price).toBe(15000);
         expect(JSON.stringify(json)).not.toContain('internal_notes');
     });
 
     test('patient_id, price, status and internal notes cannot reach request creation', async () => {
         spyOn(patientService, 'getByUserId').mockResolvedValue({ _id: patientId } as never);
-        const create = spyOn(homeCareRequestService, 'createForPatient').mockResolvedValue(requestDocument());
+        const create = spyOn(homeCareRequestService, 'createIdempotentForPatient').mockResolvedValue({ request: requestDocument(), replayed: false });
         const response = await mobileHomeCareRequestsController.handle(authorizedRequest(
             '/home-care/requests/',
             IUserRoleEnum.PATIENT,
             {
                 method: 'POST',
+                headers: { 'Idempotency-Key': idempotencyKey },
                 body: JSON.stringify({
                     service_id: '507f191e810c19729de860e4',
                     availability_slot_id: slotId.toString(),
@@ -141,12 +145,13 @@ describe('Mobile Home Care request response contracts', () => {
 
     test('raw preferred_time is rejected instead of being accepted from mobile clients', async () => {
         spyOn(patientService, 'getByUserId').mockResolvedValue({ _id: patientId } as never);
-        const create = spyOn(homeCareRequestService, 'createForPatient').mockResolvedValue(requestDocument());
+        const create = spyOn(homeCareRequestService, 'createIdempotentForPatient').mockResolvedValue({ request: requestDocument(), replayed: false });
         const response = await mobileHomeCareRequestsController.handle(authorizedRequest(
             '/home-care/requests/',
             IUserRoleEnum.PATIENT,
             {
                 method: 'POST',
+                headers: { 'Idempotency-Key': idempotencyKey },
                 body: JSON.stringify({
                     service_id: '507f191e810c19729de860e4',
                     availability_slot_id: slotId.toString(),
@@ -158,6 +163,24 @@ describe('Mobile Home Care request response contracts', () => {
         ));
         expect(response.status).toBe(422);
         expect(create).not.toHaveBeenCalled();
+    });
+
+    test('requires a UUID v4 idempotency header and marks successful replay responses', async () => {
+        spyOn(patientService, 'getByUserId').mockResolvedValue({ _id: patientId } as never);
+        const create = spyOn(homeCareRequestService, 'createIdempotentForPatient').mockResolvedValue({ request: requestDocument(), replayed: true });
+        const payload = JSON.stringify({
+            service_id: '507f191e810c19729de860e4', availability_slot_id: slotId.toString(), requested_date: '2026-09-02',
+            address: { address_text: 'بغداد - المنصور', lat: 33.3, lng: 44.3 },
+        });
+        const missing = await mobileHomeCareRequestsController.handle(authorizedRequest('/home-care/requests/', IUserRoleEnum.PATIENT, { method: 'POST', body: payload }));
+        const malformed = await mobileHomeCareRequestsController.handle(authorizedRequest('/home-care/requests/', IUserRoleEnum.PATIENT, { method: 'POST', headers: { 'Idempotency-Key': 'not-a-uuid' }, body: payload }));
+        expect(missing.status).toBe(422);
+        expect(malformed.status).toBe(422);
+        expect(create).not.toHaveBeenCalled();
+        const replay = await mobileHomeCareRequestsController.handle(authorizedRequest('/home-care/requests/', IUserRoleEnum.PATIENT, { method: 'POST', headers: { 'Idempotency-Key': idempotencyKey }, body: payload }));
+        expect(replay.status).toBe(200);
+        expect(replay.headers.get('Idempotent-Replay')).toBe('true');
+        expect(JSON.stringify(await body(replay))).not.toContain('request_hash');
     });
 
     test('list returns the required pagination shape and only service-scoped data', async () => {

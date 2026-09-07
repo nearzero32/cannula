@@ -1,4 +1,4 @@
-import mongoose, { type FilterQuery } from 'mongoose';
+import mongoose, { type ClientSession, type FilterQuery } from 'mongoose';
 import HomeCareCategory from '../models/home-care-category.model';
 import HomeCareService, { type HomeCareServiceDocument } from '../models/home-care-service.model';
 import { IHomeCareStatusEnum, type IHomeCareService, type IHomeCareStatus } from '../interfaces/home-care.interface';
@@ -72,13 +72,17 @@ export class HomeCareServiceService {
         return HomeCareService.findById(id).exec();
     }
 
-    public async getActiveById(id: string): Promise<HomeCareServiceDocument | null> {
-        const service = await HomeCareService.findOne({ _id: id, status: IHomeCareStatusEnum.ACTIVE }).exec();
+    public async getActiveById(id: string, session?: ClientSession): Promise<HomeCareServiceDocument | null> {
+        const serviceQuery = HomeCareService.findOne({ _id: id, status: IHomeCareStatusEnum.ACTIVE });
+        if (session) serviceQuery.session(session);
+        const service = await serviceQuery.exec();
         if (!service) return null;
-        const categoryIsActive = await HomeCareCategory.exists({
+        const categoryQuery = HomeCareCategory.exists({
             _id: service.category_id,
             status: IHomeCareStatusEnum.ACTIVE,
         });
+        if (session) categoryQuery.session(session);
+        const categoryIsActive = await categoryQuery.exec();
         return categoryIsActive ? service : null;
     }
     public async invalidateMobileCache() { try { await RedisClient.getInstance().deleteByPattern('cache:mobile:home-care:*'); } catch { console.warn('Unable to invalidate mobile home-care cache'); } }
