@@ -60,7 +60,9 @@ curl -X POST '{{baseUrl}}/mobile/auth/refresh' -H 'Content-Type: application/jso
   -d '{"refreshToken":"{{refreshToken}}"}'
 ```
 
-Refresh tokens rotate. Store the newly returned access and refresh tokens atomically. Reusing a consumed refresh token returns `AUTH_REFRESH_REUSED` and revokes that session. `/logout` revokes the current session; `/logout-all` revokes all sessions. Do not implement a client-side 30-day (or inactivity-based) logout timer.
+Refresh tokens rotate. Store the newly returned access and refresh tokens atomically. Reusing a consumed refresh token returns `AUTH_REFRESH_REUSED` and revokes that session. This remains true after the bounded 30-day used-token audit marker expires: while the session exists, Redis compares the submitted digest with the session's authoritative current digest and treats a mismatch as replay. A token from an already logged-out/revoked session returns `AUTH_SESSION_REVOKED`. `/logout` revokes the current session; `/logout-all` revokes all sessions. Do not implement a client-side 30-day (or inactivity-based) logout timer.
+
+Redis persistence is part of the deployment contract: production uses append-only persistence (`appendonly yes`) and `noeviction`. If Redis loses its session dataset, the server fails closed and does not reconstruct a session from a signed refresh JWT. Mobile users whose Redis session state is lost must authenticate again. Rotating `REFRESH_TOKEN_SECRET` also invalidates all existing refresh JWTs because the service currently verifies with one active secret and has no current/previous-key overlap.
 
 ```text
 request -> attach access token

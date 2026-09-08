@@ -87,20 +87,31 @@ const ROTATE_REFRESH_SCRIPT = `
 -- ROTATE_REFRESH
 local raw = redis.call('GET', KEYS[1])
 local active = redis.call('GET', KEYS[2])
-if not raw or not active then
+if not raw then
+  if active then redis.call('DEL', KEYS[2]) end
   if redis.call('EXISTS', KEYS[3]) == 1 then
-    if raw then
-      local ok, state = pcall(cjson.decode, raw)
-      if ok and state.currentRefreshDigest then redis.call('DEL', ARGV[8] .. state.currentRefreshDigest) end
-    end
     redis.call('DEL', KEYS[1])
     redis.call('ZREM', KEYS[5], ARGV[1])
     return {2, raw or ''}
   end
-  if active then redis.call('DEL', KEYS[2]) end
   return {0, ''}
 end
 local ok, state = pcall(cjson.decode, raw)
+if not active then
+  -- A valid signed token whose digest is no longer current is provably stale
+  -- even after its bounded used-marker expires. Revoke the family atomically.
+  if ok and state.currentRefreshDigest ~= ARGV[2] then
+    if state.currentRefreshDigest then redis.call('DEL', ARGV[8] .. state.currentRefreshDigest) end
+    redis.call('DEL', KEYS[1])
+    redis.call('ZREM', KEYS[5], ARGV[1])
+    return {2, raw}
+  end
+  -- A missing mapping for the purported current token is inconsistent state.
+  if ok and state.currentRefreshDigest then redis.call('DEL', ARGV[8] .. state.currentRefreshDigest) end
+  redis.call('DEL', KEYS[1])
+  redis.call('ZREM', KEYS[5], ARGV[1])
+  return {3, raw}
+end
 if not ok or active ~= ARGV[1] or state.currentRefreshDigest ~= ARGV[2] or
    state.userId ~= ARGV[3] or state.role ~= ARGV[4] or state.audience ~= ARGV[5] or
    tostring(state.restricted) ~= ARGV[6] then

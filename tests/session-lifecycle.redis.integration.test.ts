@@ -21,6 +21,9 @@ const dashboardId = '507f1f77bcf86cd799439102';
 const secondPatientId = '507f1f77bcf86cd799439103';
 const digest = (jti: string) => crypto.createHash('sha256').update(jti).digest('hex');
 const query = <T>(value: T) => ({ select() { return this; }, lean() { return this; }, exec: async () => value });
+async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {
+    try { await promise; return null; } catch (error) { return error; }
+}
 
 function account(_id: string, role: IUserRole) {
     return { _id, role, status: IUserStatusEnum.ACTIVE, must_change_pin: false, phone: `077${_id.slice(-8)}` };
@@ -109,15 +112,45 @@ describeWithRedis('SessionService against isolated real Redis', () => {
         expect(await client.ttl(sessionKeys.currentRefresh(digest(r2.jti)))).toBe(-1);
     });
 
-    test('many mobile rotations never introduce an active-session TTL', async () => {
+    test('twenty mobile rotations never introduce an active-session or index TTL', async () => {
         let pair: Awaited<ReturnType<typeof sessionService.refresh>> = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
-        for (let index = 0; index < 12; index++) {
+        for (let index = 0; index < 20; index++) {
             pair = await sessionService.refresh(pair.refreshToken, TokenAudienceEnum.MOBILE);
             const refresh = verifyRefreshToken(pair.refreshToken, TokenAudienceEnum.MOBILE)!;
             expect(await client.ttl(sessionKeys.session(pair.sessionId))).toBe(-1);
             expect(await client.ttl(sessionKeys.currentRefresh(digest(refresh.jti)))).toBe(-1);
+            expect(await client.ttl(sessionKeys.userSessions(patientId))).toBe(-1);
+            expect(await client.ttl(sessionKeys.userSessionSequence(patientId))).toBe(-1);
             expect(refresh.exp).toBeUndefined();
         }
+    });
+
+    test('ancient and multi-generation replay revokes the family after its used marker expires', async () => {
+        const first = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
+        const r1 = verifyRefreshToken(first.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const second = await sessionService.refresh(first.refreshToken, TokenAudienceEnum.MOBILE);
+        const third = await sessionService.refresh(second.refreshToken, TokenAudienceEnum.MOBILE);
+        const r3 = verifyRefreshToken(third.refreshToken, TokenAudienceEnum.MOBILE)!;
+        await client.del(sessionKeys.usedRefresh(digest(r1.jti)));
+        expect(await client.exists(sessionKeys.usedRefresh(digest(r1.jti)))).toBe(0);
+
+        expect(await rejectionOf(sessionService.refresh(first.refreshToken, TokenAudienceEnum.MOBILE))).toMatchObject({ code: 'AUTH_REFRESH_REUSED' });
+        expect(await client.exists(sessionKeys.session(first.sessionId))).toBe(0);
+        expect(await client.exists(sessionKeys.currentRefresh(digest(r3.jti)))).toBe(0);
+        expect(await client.zScore(sessionKeys.userSessions(patientId), first.sessionId)).toBeNull();
+    });
+
+    test('missing Redis state and missing current mapping fail closed without reconstructing trust', async () => {
+        const lost = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
+        await client.flushDb();
+        expect(await rejectionOf(sessionService.refresh(lost.refreshToken, TokenAudienceEnum.MOBILE))).toMatchObject({ code: 'AUTH_SESSION_REVOKED' });
+        expect(await client.dbSize()).toBe(0);
+
+        const inconsistent = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
+        const payload = verifyRefreshToken(inconsistent.refreshToken, TokenAudienceEnum.MOBILE)!;
+        await client.del(sessionKeys.currentRefresh(digest(payload.jti)));
+        expect(await rejectionOf(sessionService.refresh(inconsistent.refreshToken, TokenAudienceEnum.MOBILE))).toMatchObject({ code: 'AUTH_REFRESH_INVALID' });
+        expect(await client.exists(sessionKeys.session(inconsistent.sessionId))).toBe(0);
     });
 
     test('parallel R1 refresh has exactly one success and leaves no second usable replacement', async () => {
@@ -218,5 +251,35 @@ describeWithRedis('SessionService against isolated real Redis', () => {
         expect(dashboardState.expiresAt).toBeString();
         expect(await client.ttl(sessionKeys.session(dashboard.sessionId))).toBeGreaterThan(0);
         expect(verifyRefreshToken(refreshed.refreshToken, TokenAudienceEnum.DASHBOARD)?.exp).toBeNumber();
+    });
+
+    test('failed and concurrent legacy refreshes never partially or multiply migrate state', async () => {
+        const failed = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
+        const failedPayload = verifyRefreshToken(failed.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const failedKey = sessionKeys.session(failed.sessionId);
+        const failedLegacy = JSON.parse((await client.get(failedKey))!) as Partial<SessionState>;
+        delete failedLegacy.persistent;
+        failedLegacy.expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+        await client.setEx(failedKey, SESSION_TTL_SECONDS, JSON.stringify(failedLegacy));
+        await client.del(sessionKeys.currentRefresh(digest(failedPayload.jti)));
+        expect(await rejectionOf(sessionService.refresh(failed.refreshToken, TokenAudienceEnum.MOBILE))).toMatchObject({ code: 'AUTH_REFRESH_INVALID' });
+        expect(await client.exists(failedKey)).toBe(0);
+
+        const concurrent = await sessionService.create(accounts[secondPatientId], TokenAudienceEnum.MOBILE);
+        const concurrentPayload = verifyRefreshToken(concurrent.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const concurrentKey = sessionKeys.session(concurrent.sessionId);
+        const concurrentLegacy = JSON.parse((await client.get(concurrentKey))!) as Partial<SessionState>;
+        delete concurrentLegacy.persistent;
+        concurrentLegacy.expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+        await client.setEx(concurrentKey, SESSION_TTL_SECONDS, JSON.stringify(concurrentLegacy));
+        await client.expire(sessionKeys.currentRefresh(digest(concurrentPayload.jti)), SESSION_TTL_SECONDS);
+        const results = await Promise.allSettled([
+            sessionService.refresh(concurrent.refreshToken, TokenAudienceEnum.MOBILE),
+            sessionService.refresh(concurrent.refreshToken, TokenAudienceEnum.MOBILE),
+        ]);
+        expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+        expect(results.filter(result => result.status === 'rejected')).toHaveLength(1);
+        expect(await client.keys('auth:refresh:current:*')).toHaveLength(0);
+        expect(await client.exists(concurrentKey)).toBe(0);
     });
 });

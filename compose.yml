@@ -16,6 +16,9 @@ services:
     env_file: .env
     ports:
       - "127.0.0.1:${PORT:-3001}:${PORT:-3001}"
+    networks:
+      - default
+      - redis_internal
     depends_on:
       mongo:
         condition: service_healthy
@@ -90,11 +93,28 @@ services:
     mem_limit: 256m
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD}
+      - --appendonly
+      - "yes"
+      - --appendfsync
+      - everysec
+      - --aof-use-rdb-preamble
+      - "yes"
+      - --save
+      - "3600 1 300 100 60 10000"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - noeviction
     volumes:
       - redis_data:/data
+    networks:
+      - redis_internal
     healthcheck:
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      test: ["CMD-SHELL", "if [ -n \"$$REDIS_PASSWORD\" ]; then redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping; else redis-cli ping; fi | grep -qx PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -103,6 +123,10 @@ services:
 volumes:
   mongo_data:
   redis_data:
+
+networks:
+  redis_internal:
+    internal: true
 
 secrets:
   mongo_keyfile:

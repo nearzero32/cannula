@@ -1,0 +1,14 @@
+[Unit]
+Description=Cannula Redis RDB backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cannula
+Environment=COMPOSE_FILE=/opt/cannula/compose.yml
+Environment=REDIS_BACKUP_DIR=/opt/cannula/backups/redis
+Environment=REDIS_BACKUP_RETENTION_COUNT=7
+ExecStart=/opt/cannula/scripts/backup-redis.sh
+NoNewPrivileges=true
+PrivateTmp=true

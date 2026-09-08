@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import RedisClient from '../src/databases/redis';
 import User from '../src/models/users.model';
 import Patient from '../src/models/patients.model';
@@ -66,15 +67,19 @@ class MemoryRedis {
         }
         if (_script.includes('-- ROTATE_REFRESH')) {
             const raw = this.values.get(keys[0]), active = this.values.get(keys[1]);
-            if (!raw || !active) {
+            if (!raw) {
+                if (active) this.values.delete(keys[1]);
                 if (this.values.has(keys[2])) {
-                    if (raw) this.values.delete(`${args[7]}${(JSON.parse(raw) as SessionState).currentRefreshDigest}`);
                     this.values.delete(keys[0]); this.sortedSets.get(keys[4])?.delete(args[0]); return [2, raw ?? ''];
                 }
-                if (active) this.values.delete(keys[1]);
                 return [0, ''];
             }
             const state = JSON.parse(raw) as SessionState;
+            if (!active) {
+                this.values.delete(`${args[7]}${state.currentRefreshDigest}`);
+                this.values.delete(keys[0]); this.sortedSets.get(keys[4])?.delete(args[0]);
+                return state.currentRefreshDigest !== args[1] ? [2, raw] : [3, raw];
+            }
             if (active !== args[0] || state.currentRefreshDigest !== args[1] || state.userId !== args[2] || state.role !== args[3] || state.audience !== args[4] || String(state.restricted) !== args[5]) {
                 this.values.delete(`${args[7]}${state.currentRefreshDigest}`); this.values.delete(keys[0]); this.values.delete(keys[1]); this.sortedSets.get(keys[4])?.delete(args[0]); return [3, raw];
             }
@@ -183,6 +188,15 @@ describe('logical session token isolation', () => {
             audience: TokenAudienceEnum.MOBILE, subject: patientId, jwtid: '12345678-1234-4234-8234-123456789012', expiresIn: 900,
         });
         expect(verifyAccessToken(untyped, TokenAudienceEnum.MOBILE)).toBeNull();
+
+        const malformedJti = jwt.sign({ _id: patientId, role: IUserRoleEnum.PATIENT, sid: pair.sessionId, tokenType: 'refresh', restricted: false }, process.env.REFRESH_TOKEN_SECRET!, {
+            audience: TokenAudienceEnum.MOBILE, subject: patientId, jwtid: 'short',
+        });
+        const missingSid = jwt.sign({ _id: patientId, role: IUserRoleEnum.PATIENT, tokenType: 'refresh', restricted: false }, process.env.REFRESH_TOKEN_SECRET!, {
+            audience: TokenAudienceEnum.MOBILE, subject: patientId, jwtid: crypto.randomUUID(),
+        });
+        expect(verifyRefreshToken(malformedJti, TokenAudienceEnum.MOBILE)).toBeNull();
+        expect(verifyRefreshToken(missingSid, TokenAudienceEnum.MOBILE)).toBeNull();
     });
 
     test('mobile and dashboard refresh audiences are strictly isolated', async () => {
@@ -253,6 +267,34 @@ describe('atomic refresh rotation and reuse handling', () => {
         expect(JSON.stringify(reuse)).not.toContain(compromised.accessToken);
         expect(JSON.stringify(reuse)).not.toContain(compromised.refreshToken);
         expect(reuse.metadata).toEqual({ sid: compromised.sessionId });
+    });
+
+    test('reuse remains family-revoking after the bounded used marker expires and several rotations', async () => {
+        const first = await sessionService.create(currentUsers[patientId], TokenAudienceEnum.MOBILE);
+        const r1 = verifyRefreshToken(first.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const second = await sessionService.refresh(first.refreshToken, TokenAudienceEnum.MOBILE);
+        const third = await sessionService.refresh(second.refreshToken, TokenAudienceEnum.MOBILE);
+        redis.values.delete(`auth:refresh:used:${crypto.createHash('sha256').update(r1.jti).digest('hex')}`);
+
+        await expect(sessionService.refresh(first.refreshToken, TokenAudienceEnum.MOBILE)).rejects.toMatchObject({ code: 'AUTH_REFRESH_REUSED' });
+        expect(await sessionService.validateAccess(verifyAccessToken(third.accessToken, TokenAudienceEnum.MOBILE)!)).toBeNull();
+        await expect(sessionService.refresh(third.refreshToken, TokenAudienceEnum.MOBILE)).rejects.toMatchObject({ code: 'AUTH_SESSION_REVOKED' });
+    });
+
+    test('current JTI mapping is mandatory and inconsistent missing or mismatched state is revoked', async () => {
+        const missingMapping = await sessionService.create(currentUsers[patientId], TokenAudienceEnum.MOBILE);
+        const missingPayload = verifyRefreshToken(missingMapping.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const missingDigest = crypto.createHash('sha256').update(missingPayload.jti).digest('hex');
+        redis.values.delete(`auth:refresh:current:${missingDigest}`);
+        await expect(sessionService.refresh(missingMapping.refreshToken, TokenAudienceEnum.MOBILE)).rejects.toMatchObject({ code: 'AUTH_REFRESH_INVALID' });
+        expect(redis.values.has(`auth:session:${missingMapping.sessionId}`)).toBe(false);
+
+        const mismatched = await sessionService.create(currentUsers[patientId], TokenAudienceEnum.MOBILE);
+        const mismatchPayload = verifyRefreshToken(mismatched.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const mismatchDigest = crypto.createHash('sha256').update(mismatchPayload.jti).digest('hex');
+        redis.values.set(`auth:refresh:current:${mismatchDigest}`, 'different-sid');
+        await expect(sessionService.refresh(mismatched.refreshToken, TokenAudienceEnum.MOBILE)).rejects.toMatchObject({ code: 'AUTH_REFRESH_INVALID' });
+        expect(redis.values.has(`auth:session:${mismatched.sessionId}`)).toBe(false);
     });
 });
 
