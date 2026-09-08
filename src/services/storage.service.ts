@@ -7,8 +7,27 @@ import { DomainError } from './domain-error';
 export interface StoredObjectInfo { contentType:string; contentLength:number }
 const PREFIX_BYTES = 64 * 1024;
 const MAX_PIXELS = 40_000_000;
+const HEIF_BRANDS = new Set(['heic','heix','hevc','hevx','heim','heis','hevm','hevs','mif1','msf1']);
+const AVIF_BRANDS = new Set(['avif','avis']);
 
 function storageError(): DomainError { return new DomainError('خدمة التخزين غير متاحة مؤقتاً',503,'STORAGE_UNAVAILABLE'); }
+
+function uint32(bytes:Uint8Array,offset:number):number{return(bytes[offset]! * 0x1000000)+(bytes[offset+1]!<<16)+(bytes[offset+2]!<<8)+bytes[offset+3]!}
+function ascii(bytes:Uint8Array,offset:number,length:number):string{return String.fromCharCode(...bytes.slice(offset,offset+length))}
+function inspectHeif(bytes:Uint8Array):{width:number;height:number}|null{
+    if(bytes.length<20)return null;
+    const ftypSize=uint32(bytes,0);if(ftypSize<16||ftypSize>bytes.length||ascii(bytes,4,4)!=='ftyp')return null;
+    const brands=[ascii(bytes,8,4)];for(let offset=16;offset+4<=ftypSize;offset+=4)brands.push(ascii(bytes,offset,4));
+    if(brands.some(brand=>AVIF_BRANDS.has(brand)))return null;
+    if(!brands.some(brand=>HEIF_BRANDS.has(brand)))return null;
+    for(let offset=ftypSize;offset+20<=bytes.length;offset++){
+        if(ascii(bytes,offset+4,4)!=='ispe')continue;
+        const size=uint32(bytes,offset);if(size<20||offset+size>bytes.length)continue;
+        const width=uint32(bytes,offset+12),height=uint32(bytes,offset+16);
+        if(width>0&&height>0&&width*height<=MAX_PIXELS)return{width,height};
+    }
+    return null;
+}
 
 export function inspectImage(bytes:Uint8Array, contentType:string):{width:number;height:number}|null {
     let width=0,height=0;
@@ -21,6 +40,8 @@ export function inspectImage(bytes:Uint8Array, contentType:string):{width:number
         else if(kind==='VP8L'&&bytes.length>=25&&bytes[20]===47){const bits=bytes[21]|bytes[22]<<8|bytes[23]<<16|bytes[24]<<24;width=(bits&0x3fff)+1;height=((bits>>>14)&0x3fff)+1}
     } else if(contentType==='image/jpeg'&&bytes.length>=4&&bytes[0]===0xff&&bytes[1]===0xd8){
         let offset=2; while(offset+8<bytes.length){if(bytes[offset]!==0xff){offset++;continue} const marker=bytes[offset+1]; if(marker===0xd9||marker===0xda)break; const length=(bytes[offset+2]<<8)|bytes[offset+3]; if(length<2)break; if([0xc0,0xc1,0xc2,0xc3,0xc5,0xc6,0xc7,0xc9,0xca,0xcb,0xcd,0xce,0xcf].includes(marker)){height=(bytes[offset+5]<<8)|bytes[offset+6];width=(bytes[offset+7]<<8)|bytes[offset+8];break} offset+=2+length }
+    } else if((contentType==='image/heic'||contentType==='image/heif')){
+        return inspectHeif(bytes);
     }
     if(width<=0||height<=0||width*height>MAX_PIXELS)return null;
     return {width,height};

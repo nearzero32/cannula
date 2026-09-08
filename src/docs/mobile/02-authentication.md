@@ -51,7 +51,7 @@ Successful login/create/reset data:
 { "accessToken": "<jwt>", "refreshToken": "<jwt>", "mustChangePin": false, "sessionId": "uuid" }
 ```
 
-Access token TTL is 15 minutes; the session/refresh lifetime is 7 days and is not extended by refresh. A Patient may have 5 sessions; creating a sixth evicts the oldest. `/auth/sessions` returns safe device/session metadata plus `current`.
+Access tokens keep their configured short lifetime (currently 24 hours). Patient sessions have no fixed time-based expiry and remain active until logout, logout-all, device-limit eviction, account/security invalidation, PIN recovery, or refresh-reuse protection revokes them. Mobile refresh JWTs therefore have no `exp`; Redis remains authoritative and refresh tokens are still rotating and single-use. A Patient may have 5 sessions; creating a sixth evicts the oldest. `/auth/sessions` returns safe device/session metadata plus `current`, `persistent: true`, and `expiresAt: null`.
 
 ## Refresh, reuse, logout
 
@@ -60,13 +60,13 @@ curl -X POST '{{baseUrl}}/mobile/auth/refresh' -H 'Content-Type: application/jso
   -d '{"refreshToken":"{{refreshToken}}"}'
 ```
 
-Refresh tokens rotate. Store the newly returned access and refresh tokens atomically. Reusing a consumed refresh token returns `AUTH_REFRESH_REUSED` and revokes that session. `/logout` revokes the current session; `/logout-all` revokes all sessions.
+Refresh tokens rotate. Store the newly returned access and refresh tokens atomically. Reusing a consumed refresh token returns `AUTH_REFRESH_REUSED` and revokes that session. `/logout` revokes the current session; `/logout-all` revokes all sessions. Do not implement a client-side 30-day (or inactivity-based) logout timer.
 
 ```text
 request -> attach access token
 401 -> if request was not refresh/retried: refresh once
 refresh success -> atomically save both tokens -> retry original once
-refresh failure -> clear credentials -> show login
+terminal refresh failure (`AUTH_SESSION_REVOKED`, `AUTH_REFRESH_INVALID`, `AUTH_REFRESH_REUSED`, or invalid account state) -> clear credentials -> show login/PIN
 ```
 
 Never refresh on `403`. Avoid simultaneous refresh races by single-flighting refresh requests.
@@ -84,4 +84,3 @@ Arabic: عند ظهور `mustChangePin` افتح شاشة تغيير الرمز 
 Fixed Redis windows: start per phone `5/10m`, per IP `30/10m`; resend per phone `6/10m`, per IP `30/10m`; verify per phone `20/10m`, per IP `60/10m`; PIN per phone `5/10m`, per IP `30/10m`. Flow-local attempt/cooldown limits still apply. A rate response can include HTTP `Retry-After` and `retryAfterSeconds`; disable the control until it expires.
 
 Common codes: `AUTH_PHONE_INVALID`, `AUTH_FLOW_INVALID`, `AUTH_FLOW_EXPIRED`, `AUTH_OTP_INVALID`, `AUTH_OTP_EXPIRED`, `AUTH_OTP_ATTEMPTS_EXCEEDED`, `AUTH_OTP_RESEND_COOLDOWN`, `AUTH_OTP_RESEND_LIMIT`, `AUTH_PIN_INVALID`, `AUTH_PIN_ATTEMPTS_EXCEEDED`, `AUTH_REFRESH_INVALID`, `AUTH_REFRESH_REUSED`, `AUTH_SESSION_REVOKED`, `AUTH_WRONG_AUDIENCE`, `OTP_PROVIDER_FAILURE`, `SESSION_STORE_UNAVAILABLE`.
-

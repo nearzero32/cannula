@@ -7,8 +7,8 @@ export const TokenAudienceEnum = { MOBILE: 'mobile', DASHBOARD: 'dashboard' } as
 export type TokenAudience = (typeof TokenAudienceEnum)[keyof typeof TokenAudienceEnum];
 
 interface TokenIdentity { _id: string; role: IUserRole; sid: string; aud: TokenAudience; sub: string; restricted: boolean }
-export interface AccessTokenPayload extends TokenIdentity { tokenType: 'access'; jti: string }
-export interface RefreshTokenPayload extends TokenIdentity { tokenType: 'refresh'; jti: string }
+export interface AccessTokenPayload extends TokenIdentity { tokenType: 'access'; jti: string; exp?: number }
+export interface RefreshTokenPayload extends TokenIdentity { tokenType: 'refresh'; jti: string; exp?: number }
 
 const roles = new Set<IUserRole>(['admin', 'doctor', 'nurse', 'pharmacy', 'patient']);
 const validIdentity = (value: any, audience: TokenAudience) => Boolean(
@@ -25,11 +25,13 @@ export function signAccessToken(data: { _id: string; role: IUserRole; sid: strin
     );
 }
 
-export function signRefreshToken(data: { _id: string; role: IUserRole; sid: string; jti: string; audience: TokenAudience; restricted?: boolean; expiresIn?: number }): string {
+export function signRefreshToken(data: { _id: string; role: IUserRole; sid: string; jti: string; audience: TokenAudience; restricted?: boolean; expiresIn?: number | null }): string {
+    const options: jwt.SignOptions = { audience: data.audience, subject: data._id, jwtid: data.jti };
+    if (data.expiresIn !== null) options.expiresIn = data.expiresIn ?? SESSION_TTL_SECONDS;
     return jwt.sign(
         { _id: data._id, role: data.role, sid: data.sid, tokenType: 'refresh', restricted: data.restricted === true },
         process.env.REFRESH_TOKEN_SECRET!,
-        { expiresIn: data.expiresIn ?? SESSION_TTL_SECONDS, audience: data.audience, subject: data._id, jwtid: data.jti }
+        options
     );
 }
 

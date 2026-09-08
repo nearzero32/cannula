@@ -19,6 +19,7 @@ import { IUserRoleEnum, IUserStatusEnum, type IUserRole } from '../src/interface
 import { mobileAuthController } from '../src/controller/mobile/auth.controller';
 import { authController as dashboardAuthController } from '../src/controller/dash/auth.controller';
 import patientAuthService from '../src/services/patient-auth.service';
+import { ACCESS_TOKEN_TTL_SECONDS } from '../src/constants/session';
 
 class MemoryRedis {
     readonly values = new Map<string, string>();
@@ -77,10 +78,13 @@ class MemoryRedis {
             if (active !== args[0] || state.currentRefreshDigest !== args[1] || state.userId !== args[2] || state.role !== args[3] || state.audience !== args[4] || String(state.restricted) !== args[5]) {
                 this.values.delete(`${args[7]}${state.currentRefreshDigest}`); this.values.delete(keys[0]); this.values.delete(keys[1]); this.sortedSets.get(keys[4])?.delete(args[0]); return [3, raw];
             }
+            const persistent = args[9] === 'true';
             state.currentRefreshDigest = args[6]; state.lastRefreshedAt = args[8]; state.lastSeenAt = args[8];
+            state.persistent = persistent;
+            if (persistent) state.expiresAt = null;
             const next = JSON.stringify(state);
             this.values.delete(keys[1]); this.values.set(keys[2], args[0]); this.values.set(keys[3], args[0]); this.values.set(keys[0], next);
-            return [1, next, 604800];
+            return [1, next, persistent ? -1 : 604800];
         }
         if (_script.includes('-- REVOKE_SESSION')) {
             const raw = this.values.get(keys[0]);
@@ -151,6 +155,20 @@ beforeEach(() => {
 afterEach(() => mock.restore());
 
 describe('logical session token isolation', () => {
+    test('mobile refresh is non-expiring while access and dashboard refresh tokens remain finite', async () => {
+        const mobile = await sessionService.create(currentUsers[patientId], TokenAudienceEnum.MOBILE);
+        const dashboard = await sessionService.create(currentUsers[dashboardId], TokenAudienceEnum.DASHBOARD);
+        const mobileAccess = jwt.decode(mobile.accessToken) as jwt.JwtPayload;
+        const mobileRefresh = jwt.decode(mobile.refreshToken) as jwt.JwtPayload;
+        const dashboardRefresh = jwt.decode(dashboard.refreshToken) as jwt.JwtPayload;
+        expect(mobileAccess.exp).toBeNumber();
+        expect(mobileAccess.exp! - mobileAccess.iat!).toBe(ACCESS_TOKEN_TTL_SECONDS);
+        expect(mobileRefresh.exp).toBeUndefined();
+        expect(dashboardRefresh.exp).toBeNumber();
+        expect(JSON.parse(redis.values.get(`auth:session:${mobile.sessionId}`)!)).toMatchObject({ persistent: true, expiresAt: null });
+        expect(JSON.parse(redis.values.get(`auth:session:${dashboard.sessionId}`)!)).toMatchObject({ persistent: false });
+    });
+
     test('access and refresh tokens are typed and cannot substitute for one another', async () => {
         const pair = await sessionService.create(currentUsers[patientId], TokenAudienceEnum.MOBILE);
         expect(verifyRefreshToken(pair.accessToken, TokenAudienceEnum.MOBILE)).toBeNull();
@@ -295,6 +313,7 @@ describe('session indexes, listing, and limits', () => {
         for (let index = 0; index < 6; index++) pairs.push(await sessionService.create(currentUsers[patientId], TokenAudienceEnum.MOBILE, { deviceId: `patient-${index}` }));
         expect(await sessionService.count(patientId)).toBe(5);
         expect(await sessionService.validateAccess(verifyAccessToken(pairs[0].accessToken, TokenAudienceEnum.MOBILE)!)).toBeNull();
+        await expect(sessionService.refresh(pairs[0].refreshToken, TokenAudienceEnum.MOBILE)).rejects.toMatchObject({ code: 'AUTH_SESSION_REVOKED' });
         expect(await sessionService.validateAccess(verifyAccessToken(pairs[5].accessToken, TokenAudienceEnum.MOBILE)!)).not.toBeNull();
         expect(events.some(event => event.type === 'SESSION_LIMIT_REVOKED' && event.metadata.sid === pairs[0].sessionId)).toBe(true);
     });

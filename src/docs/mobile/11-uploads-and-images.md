@@ -10,7 +10,7 @@ The three shared routes are mounted under `/api/mobile/upload` and require a Pat
 | `PATIENT_CHILD_PHOTO` | owned child `_id` | 5 MiB | PUBLIC | child `photo` |
 | `PRESCRIPTION_IMAGE` | Patient profile `_id` | 8 MiB | PRIVATE | Pharmacy `prescription_images[]` |
 
-The enum contains dashboard purposes too, but a Patient Mobile token receives `403 UPLOAD_PURPOSE_FORBIDDEN` for them. Allowed MIME values are exactly `image/jpeg`, `image/png`, and `image/webp`. The configured global R2 cap may lower the purpose cap. At most five pending/validating assets exist per user; intent creation is additionally limited to 10/minute/user.
+The enum contains dashboard purposes too, but a Patient Mobile token receives `403 UPLOAD_PURPOSE_FORBIDDEN` for them. Allowed MIME values are exactly `image/jpeg`, `image/png`, `image/webp`, `image/heic`, and `image/heif`. Native iPhone HEIC/HEIF photos may be uploaded without client-side JPEG conversion when the device reports the matching MIME type. The configured global R2 cap may lower the purpose cap. At most five pending/validating assets exist per user; intent creation is additionally limited to 10/minute/user.
 
 ## Four-step flow
 
@@ -71,4 +71,3 @@ Codes: `UPLOAD_PURPOSE_FORBIDDEN`, `UPLOAD_CONTENT_TYPE_UNSUPPORTED`, `UPLOAD_TA
 | Current pharmacy `logo` | no | yes | pharmacy glyph |
 
 Arabic: صور الوصفات خاصة؛ استخدم رابط الوصول المؤقت فقط ولا تسجل الرابط أو تشاركه.
-

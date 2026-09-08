@@ -1,6 +1,6 @@
 import type { IR2Config } from '../interfaces/r2Config.interface';
 
-export const ALLOWED_IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+export const ALLOWED_IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'] as const;
 
 export type AllowedImageContentType = (typeof ALLOWED_IMAGE_CONTENT_TYPES)[number];
 
@@ -8,6 +8,8 @@ const CONTENT_TYPE_EXTENSION: Record<AllowedImageContentType, string> = {
     'image/jpeg': 'jpg',
     'image/png': 'png',
     'image/webp': 'webp',
+    'image/heic': 'heic',
+    'image/heif': 'heif',
 };
 
 export const R2_PRESIGN_MIN_SECONDS = 300;

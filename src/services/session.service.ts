@@ -12,7 +12,7 @@ import { IDoctorStatusEnum } from '../interfaces/doctor.interface';
 import { INurseStatusEnum } from '../interfaces/nurse.interface';
 import { IPharmacyStatusEnum } from '../interfaces/pharmacy.interface';
 import { TokenAudienceEnum, type AccessTokenPayload, type TokenAudience, signAccessToken, signRefreshToken, verifyRefreshToken } from '../constants/jwt';
-import { MAX_DASHBOARD_SESSIONS, MAX_PATIENT_SESSIONS, SESSION_TTL_SECONDS } from '../constants/session';
+import { MAX_DASHBOARD_SESSIONS, MAX_PATIENT_SESSIONS, SESSION_TTL_SECONDS, SessionModeEnum, USED_REFRESH_MARKER_TTL_SECONDS, type SessionMode } from '../constants/session';
 import { DomainError } from './domain-error';
 import authEventService from './auth-event.service';
 import { AuthEventTypeEnum } from '../interfaces/auth-flow.interface';
@@ -28,7 +28,9 @@ export interface SessionState extends SessionDevice {
     createdAt: string;
     lastSeenAt: string;
     lastRefreshedAt: string;
-    expiresAt: string;
+    expiresAt: string | null;
+    /** Absent only on legacy stored sessions; all newly written states include it. */
+    persistent?: boolean;
 }
 interface EventContext extends SessionDevice { phone?: string; patientId?: string; ip?: string; actorType?: string; actorUserId?: string; reasonCode?: string }
 
@@ -47,12 +49,23 @@ export const sessionKeys = {
 
 const CREATE_SESSION_SCRIPT = `
 -- CREATE_SESSION
-redis.call('SETEX', KEYS[1], tonumber(ARGV[3]), ARGV[2])
-redis.call('SETEX', KEYS[2], tonumber(ARGV[3]), ARGV[1])
+local persistent = ARGV[7] == 'true'
+if persistent then
+  redis.call('SET', KEYS[1], ARGV[2])
+  redis.call('SET', KEYS[2], ARGV[1])
+else
+  redis.call('SETEX', KEYS[1], tonumber(ARGV[3]), ARGV[2])
+  redis.call('SETEX', KEYS[2], tonumber(ARGV[3]), ARGV[1])
+end
 local sequence = redis.call('INCR', KEYS[4])
 redis.call('ZADD', KEYS[3], sequence, ARGV[1])
-redis.call('EXPIRE', KEYS[3], tonumber(ARGV[3]))
-redis.call('EXPIRE', KEYS[4], tonumber(ARGV[3]))
+if persistent then
+  redis.call('PERSIST', KEYS[3])
+  redis.call('PERSIST', KEYS[4])
+else
+  redis.call('EXPIRE', KEYS[3], tonumber(ARGV[3]))
+  redis.call('EXPIRE', KEYS[4], tonumber(ARGV[3]))
+end
 local evicted = {}
 while redis.call('ZCARD', KEYS[3]) > tonumber(ARGV[4]) do
   local oldest = redis.call('ZPOPMIN', KEYS[3], 1)
@@ -97,14 +110,26 @@ if not ok or active ~= ARGV[1] or state.currentRefreshDigest ~= ARGV[2] or
   redis.call('ZREM', KEYS[5], ARGV[1])
   return {3, raw}
 end
+local persistent = ARGV[10] == 'true'
 local ttl = redis.call('TTL', KEYS[1])
-if ttl <= 0 then return {0, ''} end
+if not persistent and ttl <= 0 then return {0, ''} end
 state.currentRefreshDigest = ARGV[7]
 state.lastRefreshedAt = ARGV[9]
 state.lastSeenAt = ARGV[9]
+state.persistent = persistent
+if persistent then state.expiresAt = cjson.null end
 local nextRaw = cjson.encode(state)
 redis.call('DEL', KEYS[2])
-redis.call('SETEX', KEYS[3], ttl, ARGV[1])
+local markerTtl = tonumber(ARGV[11])
+if not persistent and ttl < markerTtl then markerTtl = ttl end
+redis.call('SETEX', KEYS[3], markerTtl, ARGV[1])
+if persistent then
+  redis.call('SET', KEYS[4], ARGV[1])
+  redis.call('SET', KEYS[1], nextRaw)
+  redis.call('PERSIST', KEYS[5])
+  redis.call('PERSIST', KEYS[6])
+  return {1, nextRaw, -1}
+end
 redis.call('SETEX', KEYS[4], ttl, ARGV[1])
 redis.call('SETEX', KEYS[1], ttl, nextRaw)
 return {1, nextRaw, ttl}
@@ -164,13 +189,21 @@ const digestJti = (jti: string) => crypto.createHash('sha256').update(jti).diges
 export function audienceForRole(role: IUserRole): TokenAudience {
     return role === 'patient' ? TokenAudienceEnum.MOBILE : TokenAudienceEnum.DASHBOARD;
 }
+export function sessionModeForAudience(audience: TokenAudience): SessionMode {
+    return audience === TokenAudienceEnum.MOBILE ? SessionModeEnum.PERSISTENT : SessionModeEnum.EXPIRING;
+}
 function parseState(raw: unknown): SessionState | null {
     if (typeof raw !== 'string' || !raw) return null;
     try {
         const state = JSON.parse(raw) as SessionState;
-        return state && typeof state.sid === 'string' && typeof state.userId === 'string' && typeof state.role === 'string' &&
+        const validExpiration = state.expiresAt === null || typeof state.expiresAt === 'string';
+        const validPersistence = typeof state.persistent === 'boolean' || typeof state.persistent === 'undefined';
+        if (!(state && typeof state.sid === 'string' && typeof state.userId === 'string' && typeof state.role === 'string' &&
             typeof state.audience === 'string' && typeof state.currentRefreshDigest === 'string' &&
-            typeof state.restricted === 'boolean' && typeof state.expiresAt === 'string' ? state : null;
+            typeof state.restricted === 'boolean' && validExpiration && validPersistence)) return null;
+        // Missing `persistent` is the legacy finite-session representation. It is
+        // upgraded atomically only after a successful mobile refresh.
+        return { ...state, persistent: state.persistent === true };
     } catch { return null; }
 }
 async function record(type: keyof typeof AuthEventTypeEnum, userId: string, sid: string, context: EventContext = {}) {
@@ -203,18 +236,19 @@ export class SessionService {
     async create(user: { _id: unknown; role: IUserRole; must_change_pin?: boolean; phone?: string }, audience: TokenAudience, device: SessionDevice = {}, ip?: string) {
         if (audienceForRole(user.role) !== audience) throw new DomainError('نوع الجلسة غير صالح', 401, 'AUTH_WRONG_AUDIENCE');
         const userId = String(user._id), sid = crypto.randomUUID(), jti = crypto.randomUUID();
-        const nowDate = new Date(), expiresAt = new Date(nowDate.getTime() + SESSION_TTL_SECONDS * 1000);
+        const mode = sessionModeForAudience(audience), persistent = mode === SessionModeEnum.PERSISTENT;
+        const nowDate = new Date(), expiresAt = persistent ? null : new Date(nowDate.getTime() + SESSION_TTL_SECONDS * 1000).toISOString();
         const now = nowDate.toISOString(), restricted = user.must_change_pin === true, currentRefreshDigest = digestJti(jti);
-        const state: SessionState = { sid, userId, role: user.role, audience, restricted, currentRefreshDigest, createdAt: now, lastSeenAt: now, lastRefreshedAt: now, expiresAt: expiresAt.toISOString(), ...device };
+        const state: SessionState = { sid, userId, role: user.role, audience, restricted, currentRefreshDigest, createdAt: now, lastSeenAt: now, lastRefreshedAt: now, expiresAt, persistent, ...device };
         const limit = user.role === 'patient' ? MAX_PATIENT_SESSIONS : MAX_DASHBOARD_SESSIONS;
         let evicted: unknown;
         try {
             evicted = await RedisClient.getInstance().eval(CREATE_SESSION_SCRIPT,
                 [sessionKeys.session(sid), sessionKeys.currentRefresh(currentRefreshDigest), sessionKeys.userSessions(userId), sessionKeys.userSessionSequence(userId)],
-                [sid, JSON.stringify(state), String(SESSION_TTL_SECONDS), String(limit), SESSION_PREFIX, CURRENT_REFRESH_PREFIX]);
+                [sid, JSON.stringify(state), String(SESSION_TTL_SECONDS), String(limit), SESSION_PREFIX, CURRENT_REFRESH_PREFIX, String(persistent)]);
         } catch { throw new DomainError('تعذر إنشاء الجلسة', 503, 'SESSION_STORE_UNAVAILABLE'); }
         const accessToken = signAccessToken({ _id: userId, role: user.role, sid, audience, restricted });
-        const refreshToken = signRefreshToken({ _id: userId, role: user.role, sid, jti, audience, restricted });
+        const refreshToken = signRefreshToken({ _id: userId, role: user.role, sid, jti, audience, restricted, expiresIn: persistent ? null : SESSION_TTL_SECONDS });
         await record('SESSION_CREATED', userId, sid, { ...device, phone: user.phone, ip });
         for (const oldSid of Array.isArray(evicted) ? evicted : []) await record('SESSION_LIMIT_REVOKED', userId, String(oldSid), { reasonCode: 'OLDEST_SESSION_EVICTED' });
         return { accessToken, refreshToken, mustChangePin: restricted, sessionId: sid };
@@ -240,11 +274,12 @@ export class SessionService {
         if (!payload) throw new DomainError('رمز التحديث غير صالح', 401, 'AUTH_REFRESH_INVALID');
         if (audienceForRole(payload.role) !== audience) throw new DomainError('رمز التحديث غير صالح لهذه الواجهة', 401, 'AUTH_WRONG_AUDIENCE');
         const oldDigest = digestJti(payload.jti), newJti = crypto.randomUUID(), newDigest = digestJti(newJti), now = new Date().toISOString();
+        const persistent = sessionModeForAudience(audience) === SessionModeEnum.PERSISTENT;
         let rawResult: unknown;
         try {
             rawResult = await RedisClient.getInstance().eval(ROTATE_REFRESH_SCRIPT,
-                [sessionKeys.session(payload.sid), sessionKeys.currentRefresh(oldDigest), sessionKeys.usedRefresh(oldDigest), sessionKeys.currentRefresh(newDigest), sessionKeys.userSessions(payload._id)],
-                [payload.sid, oldDigest, payload._id, payload.role, audience, String(payload.restricted), newDigest, CURRENT_REFRESH_PREFIX, now]);
+                [sessionKeys.session(payload.sid), sessionKeys.currentRefresh(oldDigest), sessionKeys.usedRefresh(oldDigest), sessionKeys.currentRefresh(newDigest), sessionKeys.userSessions(payload._id), sessionKeys.userSessionSequence(payload._id)],
+                [payload.sid, oldDigest, payload._id, payload.role, audience, String(payload.restricted), newDigest, CURRENT_REFRESH_PREFIX, now, String(persistent), String(USED_REFRESH_MARKER_TTL_SECONDS)]);
         } catch { throw new DomainError('تعذر تحديث الجلسة', 503, 'SESSION_STORE_UNAVAILABLE'); }
         const result = Array.isArray(rawResult) ? rawResult : [], code = Number(result[0]);
         if (code === 2) {
@@ -255,7 +290,7 @@ export class SessionService {
         if (code === 3) throw new DomainError('بيانات جلسة التحديث غير متطابقة', 401, 'AUTH_REFRESH_INVALID');
         if (code !== 1) throw new DomainError('تم إلغاء أو انتهاء جلسة التحديث', 401, 'AUTH_SESSION_REVOKED');
         const state = parseState(result[1]), ttl = Number(result[2]);
-        if (!state || !Number.isFinite(ttl) || ttl <= 0) {
+        if (!state || !Number.isFinite(ttl) || (persistent ? ttl !== -1 : ttl <= 0)) {
             await this.revoke(payload._id, payload.sid, { reasonCode: 'INVALID_SESSION_STATE' });
             throw new DomainError('تم إلغاء جلسة التحديث', 401, 'AUTH_SESSION_REVOKED');
         }
@@ -276,7 +311,7 @@ export class SessionService {
             throw new DomainError('الحساب غير موجود أو غير مفعّل', 401, 'REFRESH_ACCOUNT_INVALID');
         }
         const accessToken = signAccessToken({ _id: payload._id, role: payload.role, sid: payload.sid, audience, restricted: state.restricted });
-        const refreshToken = signRefreshToken({ _id: payload._id, role: payload.role, sid: payload.sid, jti: newJti, audience, restricted: state.restricted, expiresIn: ttl });
+        const refreshToken = signRefreshToken({ _id: payload._id, role: payload.role, sid: payload.sid, jti: newJti, audience, restricted: state.restricted, expiresIn: persistent ? null : ttl });
         await record('SESSION_REFRESHED', payload._id, payload.sid, { deviceId: state.deviceId, deviceName: state.deviceName, platform: state.platform, ip: context.ip });
         return { accessToken, refreshToken, mustChangePin: state.restricted, sessionId: payload.sid };
     }

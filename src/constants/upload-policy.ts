@@ -13,7 +13,7 @@ export type UploadPurpose = (typeof UploadPurposeEnum)[keyof typeof UploadPurpos
 export type MediaTargetType = 'PATIENT'|'PATIENT_CHILD'|'DOCTOR'|'NURSE'|'PHARMACY'|'CLINIC'|'SPECIALTY'|'AD'|'ABOUT_US'|'HOME_CARE_CATEGORY'|'HOME_CARE_SERVICE';
 export type MediaVisibility = 'PUBLIC'|'PRIVATE';
 export interface UploadPolicy { purpose:UploadPurpose; prefix:string; roles:readonly IUserRole[]; audience:TokenAudience|'EITHER'; contentTypes:readonly AllowedImageContentType[]; maxBytes:number; targetType:MediaTargetType; targetRequired:boolean; adminPermission?:IAdminPermission; visibility:MediaVisibility }
-const images = ['image/jpeg','image/png','image/webp'] as const, patient=[IUserRoleEnum.PATIENT] as const, admin=[IUserRoleEnum.ADMIN] as const, MB=1024*1024;
+const images = ['image/jpeg','image/png','image/webp','image/heic','image/heif'] as const, patient=[IUserRoleEnum.PATIENT] as const, admin=[IUserRoleEnum.ADMIN] as const, MB=1024*1024;
 export const UPLOAD_POLICIES: Record<UploadPurpose, UploadPolicy> = {
     PATIENT_PROFILE_PHOTO:{purpose:'PATIENT_PROFILE_PHOTO',prefix:'patients/profile',roles:[IUserRoleEnum.PATIENT,IUserRoleEnum.ADMIN],audience:'EITHER',contentTypes:images,maxBytes:5*MB,targetType:'PATIENT',targetRequired:true,adminPermission:IAdminPermissionEnum.MANAGE_PATIENTS,visibility:'PUBLIC'},
     PATIENT_CHILD_PHOTO:{purpose:'PATIENT_CHILD_PHOTO',prefix:'patients/children',roles:patient,audience:TokenAudienceEnum.MOBILE,contentTypes:images,maxBytes:5*MB,targetType:'PATIENT_CHILD',targetRequired:true,visibility:'PUBLIC'},

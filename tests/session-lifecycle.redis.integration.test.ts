@@ -10,7 +10,7 @@ import Pharmacy from '../src/models/pharmacy.model';
 import Admin from '../src/models/admins.model';
 import authEventService from '../src/services/auth-event.service';
 import sessionService, { sessionKeys, sessionLuaScripts, type SessionState } from '../src/services/session.service';
-import { SESSION_TTL_SECONDS } from '../src/constants/session';
+import { SESSION_TTL_SECONDS, USED_REFRESH_MARKER_TTL_SECONDS } from '../src/constants/session';
 import { TokenAudienceEnum, verifyAccessToken, verifyRefreshToken } from '../src/constants/jwt';
 import { IUserRoleEnum, IUserStatusEnum, type IUserRole } from '../src/interfaces/user.interface';
 
@@ -64,18 +64,31 @@ describeWithRedis('SessionService against isolated real Redis', () => {
         if (client?.isOpen) { await client.flushDb(); await RedisClient.getInstance().disconnect(); }
     });
 
-    test('creation writes session, sorted index, current digest, and bounded TTLs', async () => {
+    test('mobile creation writes persistent session, index, sequence, and current refresh keys', async () => {
         const pair = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE, { deviceName: 'Redis integration phone' });
         const raw = await client.get(sessionKeys.session(pair.sessionId));
         const state = JSON.parse(raw!) as SessionState;
         const refresh = verifyRefreshToken(pair.refreshToken, TokenAudienceEnum.MOBILE)!;
-        expect(state).toMatchObject({ sid: pair.sessionId, userId: patientId, deviceName: 'Redis integration phone' });
+        expect(state).toMatchObject({ sid: pair.sessionId, userId: patientId, deviceName: 'Redis integration phone', persistent: true, expiresAt: null });
         expect(await client.zRange(sessionKeys.userSessions(patientId), 0, -1)).toEqual([pair.sessionId]);
         expect(await client.get(sessionKeys.currentRefresh(digest(refresh.jti)))).toBe(pair.sessionId);
         for (const key of [sessionKeys.session(pair.sessionId), sessionKeys.currentRefresh(digest(refresh.jti)), sessionKeys.userSessions(patientId), sessionKeys.userSessionSequence(patientId)]) {
-            const ttl = await client.ttl(key);
-            expect(ttl).toBeGreaterThan(0);
-            expect(ttl).toBeLessThanOrEqual(SESSION_TTL_SECONDS);
+            expect(await client.ttl(key)).toBe(-1);
+        }
+        expect((JSON.parse(Buffer.from(pair.refreshToken.split('.')[1], 'base64url').toString()) as { exp?: number }).exp).toBeUndefined();
+        expect((JSON.parse(Buffer.from(pair.accessToken.split('.')[1], 'base64url').toString()) as { exp?: number }).exp).toBeNumber();
+    });
+
+    test('dashboard creation remains finite in Redis and in its refresh JWT', async () => {
+        const pair = await sessionService.create(accounts[dashboardId], TokenAudienceEnum.DASHBOARD);
+        const refresh = verifyRefreshToken(pair.refreshToken, TokenAudienceEnum.DASHBOARD)!;
+        const state = JSON.parse((await client.get(sessionKeys.session(pair.sessionId)))!) as SessionState;
+        expect(state.persistent).toBe(false);
+        expect(state.expiresAt).toBeString();
+        expect(refresh.exp).toBeNumber();
+        for (const key of [sessionKeys.session(pair.sessionId), sessionKeys.currentRefresh(digest(refresh.jti)), sessionKeys.userSessions(dashboardId), sessionKeys.userSessionSequence(dashboardId)]) {
+            expect(await client.ttl(key)).toBeGreaterThan(0);
+            expect(await client.ttl(key)).toBeLessThanOrEqual(SESSION_TTL_SECONDS);
         }
     });
 
@@ -91,6 +104,20 @@ describeWithRedis('SessionService against isolated real Redis', () => {
         expect(await client.get(sessionKeys.currentRefresh(digest(r2.jti)))).toBe(first.sessionId);
         expect(state.currentRefreshDigest).toBe(digest(r2.jti));
         expect(await client.ttl(sessionKeys.usedRefresh(digest(r1.jti)))).toBeGreaterThan(0);
+        expect(await client.ttl(sessionKeys.usedRefresh(digest(r1.jti)))).toBeLessThanOrEqual(USED_REFRESH_MARKER_TTL_SECONDS);
+        expect(await client.ttl(sessionKeys.session(first.sessionId))).toBe(-1);
+        expect(await client.ttl(sessionKeys.currentRefresh(digest(r2.jti)))).toBe(-1);
+    });
+
+    test('many mobile rotations never introduce an active-session TTL', async () => {
+        let pair: Awaited<ReturnType<typeof sessionService.refresh>> = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
+        for (let index = 0; index < 12; index++) {
+            pair = await sessionService.refresh(pair.refreshToken, TokenAudienceEnum.MOBILE);
+            const refresh = verifyRefreshToken(pair.refreshToken, TokenAudienceEnum.MOBILE)!;
+            expect(await client.ttl(sessionKeys.session(pair.sessionId))).toBe(-1);
+            expect(await client.ttl(sessionKeys.currentRefresh(digest(refresh.jti)))).toBe(-1);
+            expect(refresh.exp).toBeUndefined();
+        }
     });
 
     test('parallel R1 refresh has exactly one success and leaves no second usable replacement', async () => {
@@ -116,7 +143,8 @@ describeWithRedis('SessionService against isolated real Redis', () => {
         const reuseResult = await RedisClient.getInstance().eval(sessionLuaScripts.rotate, [
             sessionKeys.session(s1.sessionId), sessionKeys.currentRefresh(digest(r1.jti)), sessionKeys.usedRefresh(digest(r1.jti)),
             sessionKeys.currentRefresh(unusedDigest), sessionKeys.userSessions(patientId),
-        ], [s1.sessionId, digest(r1.jti), patientId, IUserRoleEnum.PATIENT, TokenAudienceEnum.MOBILE, 'false', unusedDigest, 'auth:refresh:current:', new Date().toISOString()]);
+            sessionKeys.userSessionSequence(patientId),
+        ], [s1.sessionId, digest(r1.jti), patientId, IUserRoleEnum.PATIENT, TokenAudienceEnum.MOBILE, 'false', unusedDigest, 'auth:refresh:current:', new Date().toISOString(), 'true', String(USED_REFRESH_MARKER_TTL_SECONDS)]);
         expect(reuseResult).toBeArray();
         expect((reuseResult as unknown[])[0]).toBe(2);
         expect(typeof (reuseResult as unknown[])[1]).toBe('string');
@@ -162,5 +190,33 @@ describeWithRedis('SessionService against isolated real Redis', () => {
         const listed = await sessionService.list(secondPatientId);
         expect(listed.map(session => session.sid)).toEqual([pair.sessionId]);
         expect(await client.zScore(sessionKeys.userSessions(secondPatientId), 'stale-sid')).toBeNull();
+    });
+
+    test('successful refresh lazily upgrades a legacy finite mobile session but not a dashboard session', async () => {
+        const mobile = await sessionService.create(accounts[patientId], TokenAudienceEnum.MOBILE);
+        const mobileRefresh = verifyRefreshToken(mobile.refreshToken, TokenAudienceEnum.MOBILE)!;
+        const mobileKey = sessionKeys.session(mobile.sessionId);
+        const legacyMobile = JSON.parse((await client.get(mobileKey))!) as Partial<SessionState>;
+        delete legacyMobile.persistent;
+        legacyMobile.expiresAt = new Date(Date.now() + SESSION_TTL_SECONDS * 1000).toISOString();
+        await client.setEx(mobileKey, SESSION_TTL_SECONDS, JSON.stringify(legacyMobile));
+        await client.expire(sessionKeys.currentRefresh(digest(mobileRefresh.jti)), SESSION_TTL_SECONDS);
+        await client.expire(sessionKeys.userSessions(patientId), SESSION_TTL_SECONDS);
+        await client.expire(sessionKeys.userSessionSequence(patientId), SESSION_TTL_SECONDS);
+
+        await sessionService.refresh(mobile.refreshToken, TokenAudienceEnum.MOBILE);
+        const upgraded = JSON.parse((await client.get(mobileKey))!) as SessionState;
+        expect(upgraded).toMatchObject({ persistent: true, expiresAt: null });
+        expect(await client.ttl(mobileKey)).toBe(-1);
+        expect(await client.ttl(sessionKeys.userSessions(patientId))).toBe(-1);
+        expect(await client.ttl(sessionKeys.userSessionSequence(patientId))).toBe(-1);
+
+        const dashboard = await sessionService.create(accounts[dashboardId], TokenAudienceEnum.DASHBOARD);
+        const refreshed = await sessionService.refresh(dashboard.refreshToken, TokenAudienceEnum.DASHBOARD);
+        const dashboardState = JSON.parse((await client.get(sessionKeys.session(dashboard.sessionId)))!) as SessionState;
+        expect(dashboardState.persistent).toBe(false);
+        expect(dashboardState.expiresAt).toBeString();
+        expect(await client.ttl(sessionKeys.session(dashboard.sessionId))).toBeGreaterThan(0);
+        expect(verifyRefreshToken(refreshed.refreshToken, TokenAudienceEnum.DASHBOARD)?.exp).toBeNumber();
     });
 });

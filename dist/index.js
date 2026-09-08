@@ -137995,11 +137995,13 @@ var import_mongoose20 = __toESM(require_mongoose2(), 1);
 import { randomUUID } from "crypto";
 
 // src/constants/r2.config.ts
-var ALLOWED_IMAGE_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp"];
+var ALLOWED_IMAGE_CONTENT_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 var CONTENT_TYPE_EXTENSION = {
   "image/jpeg": "jpg",
   "image/png": "png",
-  "image/webp": "webp"
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "image/heif": "heif"
 };
 var R2_PRESIGN_MIN_SECONDS = 300;
 var R2_PRESIGN_MAX_SECONDS = 900;
@@ -138093,7 +138095,7 @@ var UploadPurposeEnum = {
   HOME_CARE_CATEGORY_IMAGE: "HOME_CARE_CATEGORY_IMAGE",
   HOME_CARE_SERVICE_IMAGE: "HOME_CARE_SERVICE_IMAGE"
 };
-var images = ["image/jpeg", "image/png", "image/webp"];
+var images = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
 var patient = [IUserRoleEnum.PATIENT];
 var admin = [IUserRoleEnum.ADMIN];
 var MB = 1024 * 1024;
@@ -148511,8 +148513,41 @@ function getR2Client() {
 init_domain_error();
 var PREFIX_BYTES = 64 * 1024;
 var MAX_PIXELS = 40000000;
+var HEIF_BRANDS = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "hevm", "hevs", "mif1", "msf1"]);
+var AVIF_BRANDS = new Set(["avif", "avis"]);
 function storageError() {
   return new DomainError("\u062E\u062F\u0645\u0629 \u0627\u0644\u062A\u062E\u0632\u064A\u0646 \u063A\u064A\u0631 \u0645\u062A\u0627\u062D\u0629 \u0645\u0624\u0642\u062A\u0627\u064B", 503, "STORAGE_UNAVAILABLE");
+}
+function uint32(bytes2, offset) {
+  return bytes2[offset] * 16777216 + (bytes2[offset + 1] << 16) + (bytes2[offset + 2] << 8) + bytes2[offset + 3];
+}
+function ascii(bytes2, offset, length) {
+  return String.fromCharCode(...bytes2.slice(offset, offset + length));
+}
+function inspectHeif(bytes2) {
+  if (bytes2.length < 20)
+    return null;
+  const ftypSize = uint32(bytes2, 0);
+  if (ftypSize < 16 || ftypSize > bytes2.length || ascii(bytes2, 4, 4) !== "ftyp")
+    return null;
+  const brands = [ascii(bytes2, 8, 4)];
+  for (let offset = 16;offset + 4 <= ftypSize; offset += 4)
+    brands.push(ascii(bytes2, offset, 4));
+  if (brands.some((brand) => AVIF_BRANDS.has(brand)))
+    return null;
+  if (!brands.some((brand) => HEIF_BRANDS.has(brand)))
+    return null;
+  for (let offset = ftypSize;offset + 20 <= bytes2.length; offset++) {
+    if (ascii(bytes2, offset + 4, 4) !== "ispe")
+      continue;
+    const size = uint32(bytes2, offset);
+    if (size < 20 || offset + size > bytes2.length)
+      continue;
+    const width = uint32(bytes2, offset + 12), height = uint32(bytes2, offset + 16);
+    if (width > 0 && height > 0 && width * height <= MAX_PIXELS)
+      return { width, height };
+  }
+  return null;
 }
 function inspectImage(bytes2, contentType) {
   let width = 0, height = 0;
@@ -148552,6 +148587,8 @@ function inspectImage(bytes2, contentType) {
       }
       offset += 2 + length;
     }
+  } else if (contentType === "image/heic" || contentType === "image/heif") {
+    return inspectHeif(bytes2);
   }
   if (width <= 0 || height <= 0 || width * height > MAX_PIXELS)
     return null;
@@ -158595,7 +158632,7 @@ var doctorController = new Elysia({ prefix: "/doctor" }).use(RoleGuardPlugin([IU
 
 // src/controller/shared/upload.controller.ts
 init_domain_error();
-var intentBody = t.Object({ purpose: t.Enum(UploadPurposeEnum, { description: "Business purpose; the server selects storage paths and limits." }), targetId: t.Optional(t.String({ pattern: "^[0-9a-fA-F]{24}$" })), contentType: t.Union([t.Literal("image/jpeg"), t.Literal("image/png"), t.Literal("image/webp")]) }, { additionalProperties: false });
+var intentBody = t.Object({ purpose: t.Enum(UploadPurposeEnum, { description: "Business purpose; the server selects storage paths and limits." }), targetId: t.Optional(t.String({ pattern: "^[0-9a-fA-F]{24}$" })), contentType: t.Union([t.Literal("image/jpeg"), t.Literal("image/png"), t.Literal("image/webp"), t.Literal("image/heic"), t.Literal("image/heif")]) }, { additionalProperties: false });
 function createUploadController({ tag, allowedRoles, audience }) {
   return new Elysia({ prefix: "/upload", detail: { tags: [tag] } }).use(AuthPlugin(audience)).use(RoleGuardPlugin(allowedRoles)).onError(({ error, set }) => {
     if (error instanceof DomainError) {
