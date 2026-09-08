@@ -37,22 +37,94 @@ jobs:
               exit 1
             }
 
+            echo "==> Fetching production code"
             git fetch origin main
             git reset --hard origin/main
 
-            docker compose config -q
-            docker compose up -d --build --remove-orphans
+            echo "==> Validating Docker Compose"
+            docker compose --env-file .env config -q
 
-            sleep 10
-            docker compose ps
+            echo "==> Building API"
+            docker compose --env-file .env build api
 
-            for service in api mongo redis; do
-              status="$(docker compose ps --format json "$service" | grep -o '"State":"[^"]*"' | head -1 || true)"
-              echo "$service: $status"
+            echo "==> Starting MongoDB and Redis"
+            docker compose --env-file .env up -d mongo redis
 
-              echo "$status" | grep -q '"State":"running"' || {
-                echo "ERROR: $service is not running"
-                docker compose logs --tail=100 "$service" || true
-                exit 1
-              }
-            done
+            echo "==> Waiting for MongoDB and Redis health"
+
+            wait_for_health() {
+              service="$1"
+              attempts=30
+
+              for i in $(seq 1 "$attempts"); do
+                cid="$(docker compose --env-file .env ps -q "$service")"
+
+                if [ -n "$cid" ]; then
+                  state="$(docker inspect -f '{{.State.Status}}' "$cid")"
+                  health="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid")"
+
+                  echo "$service: state=$state health=$health"
+
+                  if [ "$state" = "running" ] && [ "$health" = "healthy" ]; then
+                    return 0
+                  fi
+                fi
+
+                sleep 2
+              done
+
+              echo "ERROR: $service did not become healthy"
+              docker compose --env-file .env logs --tail=150 "$service" || true
+              return 1
+            }
+
+            wait_for_health mongo
+            wait_for_health redis
+
+            echo "==> Running MongoDB initialization/migration bootstrap"
+
+            docker compose --env-file .env run \
+              --rm \
+              --no-deps \
+              mongo-init
+
+            echo "==> Starting API"
+
+            docker compose --env-file .env up \
+              -d \
+              --no-deps \
+              --remove-orphans \
+              api
+
+            echo "==> Waiting for API health"
+
+            wait_for_health api
+
+            echo "==> Final container status"
+            docker compose --env-file .env ps
+
+            echo "==> Production readiness check"
+
+            HTTP_CODE="$(
+              curl \
+                --silent \
+                --output /tmp/cannula-ready.json \
+                --write-out '%{http_code}' \
+                http://127.0.0.1:3001/api/health/ready
+            )"
+
+            cat /tmp/cannula-ready.json || true
+            echo
+            echo "Readiness HTTP: $HTTP_CODE"
+
+            test "$HTTP_CODE" = "200" || {
+              echo "ERROR: Cannula readiness endpoint failed"
+
+              docker compose --env-file .env logs --tail=150 api || true
+              docker compose --env-file .env logs --tail=100 mongo || true
+              docker compose --env-file .env logs --tail=100 redis || true
+
+              exit 1
+            }
+
+            echo "==> Deployment successful"
