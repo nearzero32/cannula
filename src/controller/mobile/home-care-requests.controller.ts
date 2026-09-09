@@ -74,7 +74,7 @@ export const mobileHomeCareRequestsController = new Elysia({
     .onError(({ code, error, set }) => {
         if (error instanceof DomainError) {
             set.status = error.status;
-            return { error: true, message: error.message };
+            return { error: true, message: error.message, code: error.code };
         }
         if (code === 'PARSE') {
             set.status = 400;

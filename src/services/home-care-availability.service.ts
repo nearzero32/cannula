@@ -2,28 +2,57 @@ import mongoose, { type ClientSession } from 'mongoose';
 import HomeCareAvailabilitySlot, { type HomeCareAvailabilitySlotDocument } from '../models/home-care-availability-slot.model';
 import HomeCareService from '../models/home-care-service.model';
 import homeCareServiceService from './home-care-service.service';
-import { IHomeCareStatusEnum, type IHomeCareStatus } from '../interfaces/home-care.interface';
+import {
+    HOME_CARE_WEEKDAYS,
+    HomeCareWeekdayEnum,
+    IHomeCareStatusEnum,
+    type HomeCareWeekday,
+} from '../interfaces/home-care.interface';
 import { DomainError } from './domain-error';
 import { validateRequestedDate } from './home-care-request.validation';
-import { homeCareSlotMeetsLeadTime } from './home-care-date.service';
+import { HOME_CARE_TIMEZONE, homeCareSlotMeetsLeadTime, homeCareWeekdayForDate } from './home-care-date.service';
 import ActivityLogService from './activity-log.service';
 import { IActivityLogActionEnum, IActivityLogSourceEnum } from '../interfaces/activity-log.interface';
 
-export const HOME_CARE_MAX_AVAILABILITY_SLOTS = 24;
+export const HOME_CARE_MAX_AVAILABILITY_SLOTS_PER_DAY = 24;
 export const HOME_CARE_SLOT_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 export const HOME_CARE_SLOT_SORT = { display_order: 1 as const, time: 1 as const, _id: 1 as const };
 export type HomeCareSlotActor = { user_id: string; user_name?: string; user_type?: string; endpoint?: string; source?: string };
+export interface HomeCareWeeklyScheduleDay { day_of_week: HomeCareWeekday; times: string[] }
+export interface HomeCareWeeklySchedule { service_id: string; timezone: typeof HOME_CARE_TIMEZONE; schedule: HomeCareWeeklyScheduleDay[] }
 
-export function formatHomeCareAvailabilitySlot(slot: any) {
-    return { _id: String(slot._id), service_id: String(slot.service_id), time: slot.time, status: slot.status, display_order: slot.display_order, created_by: slot.created_by ? String(slot.created_by) : null, createdAt: slot.createdAt instanceof Date ? slot.createdAt.toISOString() : slot.createdAt, updatedAt: slot.updatedAt instanceof Date ? slot.updatedAt.toISOString() : slot.updatedAt };
-}
-
-function validateTime(time: string) {
+function validateTime(time: string): string {
     if (!HOME_CARE_SLOT_TIME_PATTERN.test(time)) throw new DomainError('وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_TIME_INVALID');
     return time;
 }
 
-function duplicate(error: any) { return error?.code === 11000; }
+export function validateHomeCareWeeklySchedule(schedule: HomeCareWeeklyScheduleDay[]): HomeCareWeeklyScheduleDay[] {
+    if (!Array.isArray(schedule) || schedule.length !== HOME_CARE_WEEKDAYS.length) {
+        throw new DomainError('يجب إرسال جدول كامل يتضمن أيام الأسبوع السبعة', 400, 'HOME_CARE_WEEKLY_SCHEDULE_INCOMPLETE');
+    }
+    const days = new Set<HomeCareWeekday>();
+    for (const entry of schedule) {
+        if (!Object.values(HomeCareWeekdayEnum).includes(entry.day_of_week)) {
+            throw new DomainError('يوم الأسبوع غير صالح', 400, 'HOME_CARE_WEEKDAY_INVALID');
+        }
+        if (days.has(entry.day_of_week)) throw new DomainError('لا يمكن تكرار يوم الأسبوع', 400, 'HOME_CARE_WEEKDAY_DUPLICATE');
+        days.add(entry.day_of_week);
+        if (!Array.isArray(entry.times) || entry.times.length > HOME_CARE_MAX_AVAILABILITY_SLOTS_PER_DAY) {
+            throw new DomainError('قائمة أوقات التوفر اليومية غير صالحة', 400, 'HOME_CARE_SLOT_LIST_INVALID');
+        }
+        entry.times.forEach(validateTime);
+        if (new Set(entry.times).size !== entry.times.length) {
+            throw new DomainError('لا يمكن تكرار وقت التوفر في اليوم نفسه', 400, 'HOME_CARE_SLOT_DUPLICATE');
+        }
+    }
+    if (days.size !== HOME_CARE_WEEKDAYS.length) {
+        throw new DomainError('يجب إرسال كل يوم من أيام الأسبوع مرة واحدة', 400, 'HOME_CARE_WEEKLY_SCHEDULE_INCOMPLETE');
+    }
+    const byDay = new Map(schedule.map(day => [day.day_of_week, day]));
+    return HOME_CARE_WEEKDAYS.map(day => ({ day_of_week: day, times: [...byDay.get(day)!.times] }));
+}
+
+function duplicate(error: any): boolean { return error?.code === 11000; }
 
 export class HomeCareAvailabilityService {
     private async requireService(serviceId: string) {
@@ -33,102 +62,64 @@ export class HomeCareAvailabilityService {
         return service;
     }
 
-    async listForDashboard(serviceId: string) {
+    async listForDashboard(serviceId: string): Promise<HomeCareWeeklySchedule> {
         await this.requireService(serviceId);
-        return HomeCareAvailabilitySlot.find({ service_id: serviceId }).sort(HOME_CARE_SLOT_SORT).exec();
+        const slots = await HomeCareAvailabilitySlot.find({
+            service_id: serviceId,
+            day_of_week: { $in: HOME_CARE_WEEKDAYS },
+            status: IHomeCareStatusEnum.ACTIVE,
+        }).sort({ day_of_week: 1, ...HOME_CARE_SLOT_SORT }).exec();
+        return {
+            service_id: serviceId,
+            timezone: HOME_CARE_TIMEZONE,
+            schedule: HOME_CARE_WEEKDAYS.map(day => ({
+                day_of_week: day,
+                times: slots.filter(slot => slot.day_of_week === day).map(slot => slot.time),
+            })),
+        };
     }
 
-    async create(serviceId: string, input: { time: string; display_order?: number; status?: IHomeCareStatus }, actor: HomeCareSlotActor) {
+    async replaceWeekly(serviceId: string, input: { schedule: HomeCareWeeklyScheduleDay[] }, actor: HomeCareSlotActor): Promise<HomeCareWeeklySchedule> {
         await this.requireService(serviceId);
-        const time = validateTime(input.time);
-        const displayOrder = input.display_order ?? 1000;
-        if (!Number.isSafeInteger(displayOrder) || displayOrder < 0) throw new DomainError('ترتيب وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ORDER_INVALID');
-        if (await HomeCareAvailabilitySlot.countDocuments({ service_id: serviceId }) >= HOME_CARE_MAX_AVAILABILITY_SLOTS) throw new DomainError('تم بلوغ الحد الأقصى لأوقات التوفر', 409, 'HOME_CARE_SLOT_LIMIT');
-        try {
-            const slot = await HomeCareAvailabilitySlot.create({ service_id: serviceId, time, status: input.status ?? IHomeCareStatusEnum.ACTIVE, display_order: displayOrder, created_by: actor.user_id });
-            await this.log('POST', IActivityLogActionEnum.CREATE, slot, null, input, actor);
-            return slot;
-        } catch (error) { if (duplicate(error)) throw new DomainError('وقت التوفر موجود مسبقاً لهذه الخدمة', 409, 'HOME_CARE_SLOT_DUPLICATE'); throw error; }
-    }
-
-    async update(serviceId: string, slotId: string, input: { time?: string; display_order?: number }, actor: HomeCareSlotActor) {
-        await this.requireService(serviceId);
-        if (!mongoose.Types.ObjectId.isValid(slotId)) throw new DomainError('معرف وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ID_INVALID');
-        const current = await HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId }).exec();
-        if (!current) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-        const requestedTime = input.time === undefined ? current.time : validateTime(input.time);
-        if (input.display_order !== undefined && (!Number.isSafeInteger(input.display_order) || input.display_order < 0)) throw new DomainError('ترتيب وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ORDER_INVALID');
-        if (requestedTime !== current.time) {
-            const session = await mongoose.startSession();
-            let replacement: HomeCareAvailabilitySlotDocument | null = null;
-            try {
-                await session.withTransaction(async () => {
-                    const source = await HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId }).session(session).exec();
-                    if (!source) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-                    const existing = await HomeCareAvailabilitySlot.findOne({ service_id: serviceId, time: requestedTime }).session(session).exec();
-                    if (existing?.status === IHomeCareStatusEnum.ACTIVE) throw new DomainError('وقت التوفر موجود مسبقاً لهذه الخدمة', 409, 'HOME_CARE_SLOT_DUPLICATE');
-                    await HomeCareAvailabilitySlot.updateOne({ _id: source._id }, { $set: { status: IHomeCareStatusEnum.INACTIVE } }, { session });
-                    replacement = existing
-                        ? await HomeCareAvailabilitySlot.findOneAndUpdate({ _id: existing._id }, { $set: { status: IHomeCareStatusEnum.ACTIVE, display_order: input.display_order ?? source.display_order } }, { new: true, runValidators: true, session }).exec()
-                        : (await HomeCareAvailabilitySlot.create([{ service_id: serviceId, time: requestedTime, status: IHomeCareStatusEnum.ACTIVE, display_order: input.display_order ?? source.display_order, created_by: actor.user_id }], { session }))[0];
-                }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, readPreference: 'primary' });
-            } catch (error) {
-                if (duplicate(error)) throw new DomainError('وقت التوفر موجود مسبقاً لهذه الخدمة', 409, 'HOME_CARE_SLOT_DUPLICATE');
-                throw error;
-            } finally { await session.endSession(); }
-            if (!replacement) throw new DomainError('تعذر تعديل وقت التوفر', 409, 'HOME_CARE_SLOT_UPDATE_CONFLICT');
-            await this.log('PATCH', IActivityLogActionEnum.UPDATE, replacement, current, input, actor);
-            return replacement;
-        }
-        const update: Record<string, unknown> = {};
-        if (input.display_order !== undefined) update.display_order = input.display_order;
-        try {
-            const slot = await HomeCareAvailabilitySlot.findOneAndUpdate({ _id: slotId, service_id: serviceId }, { $set: update }, { new: true, runValidators: true }).exec();
-            if (!slot) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-            await this.log('PATCH', IActivityLogActionEnum.UPDATE, slot, current, input, actor);
-            return slot;
-        } catch (error) { if (duplicate(error)) throw new DomainError('وقت التوفر موجود مسبقاً لهذه الخدمة', 409, 'HOME_CARE_SLOT_DUPLICATE'); throw error; }
-    }
-
-    async updateStatus(serviceId: string, slotId: string, status: IHomeCareStatus, actor: HomeCareSlotActor) {
-        await this.requireService(serviceId);
-        if (!mongoose.Types.ObjectId.isValid(slotId)) throw new DomainError('معرف وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ID_INVALID');
-        const current = await HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId }).exec();
-        if (!current) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-        const slot = await HomeCareAvailabilitySlot.findOneAndUpdate({ _id: slotId, service_id: serviceId }, { $set: { status } }, { new: true, runValidators: true }).exec();
-        if (!slot) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-        await this.log('PATCH', IActivityLogActionEnum.UPDATE, slot, current, { status }, actor);
-        return slot;
-    }
-
-    async archive(serviceId: string, slotId: string, actor: HomeCareSlotActor) {
-        await this.requireService(serviceId);
-        if (!mongoose.Types.ObjectId.isValid(slotId)) throw new DomainError('معرف وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ID_INVALID');
-        const current = await HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId }).exec();
-        if (!current) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-        const slot = await HomeCareAvailabilitySlot.findOneAndUpdate({ _id: slotId, service_id: serviceId }, { $set: { status: IHomeCareStatusEnum.INACTIVE } }, { new: true, runValidators: true }).exec();
-        if (!slot) throw new DomainError('وقت التوفر غير موجود', 404, 'HOME_CARE_SLOT_NOT_FOUND');
-        await this.log('DELETE', IActivityLogActionEnum.DELETE, slot, current, { status: IHomeCareStatusEnum.INACTIVE }, actor);
-        return slot;
-    }
-
-    async replace(serviceId: string, times: string[], actor: HomeCareSlotActor) {
-        await this.requireService(serviceId);
-        if (!times.length || times.length > HOME_CARE_MAX_AVAILABILITY_SLOTS) throw new DomainError('قائمة أوقات التوفر غير صالحة', 400, 'HOME_CARE_SLOT_LIST_INVALID');
-        times.forEach(validateTime);
-        if (new Set(times).size !== times.length) throw new DomainError('لا يمكن تكرار وقت التوفر', 400, 'HOME_CARE_SLOT_DUPLICATE');
+        const schedule = validateHomeCareWeeklySchedule(input.schedule);
+        const serviceObjectId = new mongoose.Types.ObjectId(serviceId);
+        const actorObjectId = new mongoose.Types.ObjectId(actor.user_id);
+        const desired = schedule.flatMap(day => day.times.map((time, index) => ({
+            day_of_week: day.day_of_week,
+            time,
+            display_order: (index + 1) * 10,
+        })));
         const session = await mongoose.startSession();
-        let before: any[] = [];
+        let before: unknown[] = [];
         try {
             await session.withTransaction(async () => {
-                before = await HomeCareAvailabilitySlot.find({ service_id: serviceId }).session(session).lean().exec();
-                await HomeCareAvailabilitySlot.updateMany({ service_id: serviceId, time: { $nin: times }, status: { $ne: IHomeCareStatusEnum.INACTIVE } }, { $set: { status: IHomeCareStatusEnum.INACTIVE } }, { session });
-                await HomeCareAvailabilitySlot.bulkWrite(times.map((time, index) => ({ updateOne: { filter: { service_id: new mongoose.Types.ObjectId(serviceId), time }, update: { $set: { status: IHomeCareStatusEnum.ACTIVE, display_order: (index + 1) * 10 }, $setOnInsert: { created_by: new mongoose.Types.ObjectId(actor.user_id) } }, upsert: true } })), { ordered: true, session });
-            });
+                before = await HomeCareAvailabilitySlot.find({ service_id: serviceObjectId, day_of_week: { $in: HOME_CARE_WEEKDAYS } })
+                    .session(session).lean().exec();
+                await HomeCareAvailabilitySlot.updateMany(
+                    { service_id: serviceObjectId, day_of_week: { $in: HOME_CARE_WEEKDAYS }, status: IHomeCareStatusEnum.ACTIVE },
+                    { $set: { status: IHomeCareStatusEnum.INACTIVE } },
+                    { session },
+                );
+                if (desired.length) {
+                    await HomeCareAvailabilitySlot.bulkWrite(desired.map(slot => ({
+                        updateOne: {
+                            filter: { service_id: serviceObjectId, day_of_week: slot.day_of_week, time: slot.time },
+                            update: {
+                                $set: { status: IHomeCareStatusEnum.ACTIVE, display_order: slot.display_order },
+                                $setOnInsert: { created_by: actorObjectId },
+                            },
+                            upsert: true,
+                        },
+                    })), { ordered: true, session });
+                }
+            }, { readConcern: { level: 'snapshot' }, writeConcern: { w: 'majority' }, readPreference: 'primary' });
+        } catch (error) {
+            if (duplicate(error)) throw new DomainError('وقت التوفر موجود مسبقاً للخدمة واليوم', 409, 'HOME_CARE_SLOT_DUPLICATE');
+            throw error;
         } finally { await session.endSession(); }
-        const slots = await this.listForDashboard(serviceId);
-        await this.log('PUT', IActivityLogActionEnum.BULK_UPDATE, slots, before, { times }, actor);
-        return slots;
+        const result = await this.listForDashboard(serviceId);
+        await this.log(result, before, input, actor);
+        return result;
     }
 
     async listForMobile(serviceId: string, date: string, now = new Date()) {
@@ -136,33 +127,66 @@ export class HomeCareAvailabilityService {
         const service = await homeCareServiceService.getActiveById(serviceId);
         if (!service) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 404, 'HOME_CARE_SERVICE_NOT_AVAILABLE');
         validateRequestedDate(date, now);
-        const slots = await HomeCareAvailabilitySlot.find({ service_id: serviceId, status: IHomeCareStatusEnum.ACTIVE }).sort(HOME_CARE_SLOT_SORT).exec();
+        const slots = await HomeCareAvailabilitySlot.find({
+            service_id: serviceId,
+            day_of_week: homeCareWeekdayForDate(date),
+            status: IHomeCareStatusEnum.ACTIVE,
+        }).sort(HOME_CARE_SLOT_SORT).exec();
         return slots.filter(slot => homeCareSlotMeetsLeadTime(date, slot.time, now));
     }
 
-    async requireAvailableForRequest(serviceId: string, slotId: string, session?: ClientSession, expectedTime?: string): Promise<HomeCareAvailabilitySlotDocument> {
+    async requireAvailableForRequest(serviceId: string, slotId: string, requestedDate: string, session?: ClientSession, expectedTime?: string): Promise<HomeCareAvailabilitySlotDocument> {
         if (!mongoose.Types.ObjectId.isValid(slotId)) throw new DomainError('معرف وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ID_INVALID');
-        const query = HomeCareAvailabilitySlot.findOne({ _id: slotId, service_id: serviceId, status: IHomeCareStatusEnum.ACTIVE, ...(expectedTime ? { time: expectedTime } : {}) });
+        const query = HomeCareAvailabilitySlot.findOne({
+            _id: slotId,
+            service_id: serviceId,
+            day_of_week: homeCareWeekdayForDate(requestedDate),
+            status: IHomeCareStatusEnum.ACTIVE,
+            ...(expectedTime ? { time: expectedTime } : {}),
+        });
         if (session) query.session(session);
         const slot = await query.exec();
-        if (!slot) throw new DomainError('وقت التوفر غير متاح لهذه الخدمة', 409, 'HOME_CARE_SLOT_NOT_AVAILABLE');
+        if (!slot) throw new DomainError('وقت التوفر غير متاح للتاريخ المحدد', 409, 'HOME_CARE_SLOT_NOT_AVAILABLE_FOR_DATE');
         return slot;
     }
 
-    /** Transactional CAS touch so slot edit/deactivation and request creation serialize. */
-    async claimAvailableForRequest(serviceId: string, slotId: string, expectedTime: string, session: ClientSession): Promise<HomeCareAvailabilitySlotDocument> {
+    /** Transactional CAS touch serializes weekly replacement against request creation. */
+    async claimAvailableForRequest(serviceId: string, slotId: string, requestedDate: string, expectedTime: string, session: ClientSession): Promise<HomeCareAvailabilitySlotDocument> {
         if (!mongoose.Types.ObjectId.isValid(slotId)) throw new DomainError('معرف وقت التوفر غير صالح', 400, 'HOME_CARE_SLOT_ID_INVALID');
         const slot = await HomeCareAvailabilitySlot.findOneAndUpdate(
-            { _id: slotId, service_id: serviceId, status: IHomeCareStatusEnum.ACTIVE, time: expectedTime },
+            {
+                _id: slotId,
+                service_id: serviceId,
+                day_of_week: homeCareWeekdayForDate(requestedDate),
+                status: IHomeCareStatusEnum.ACTIVE,
+                time: expectedTime,
+            },
             { $inc: { selection_version: 1 } },
             { new: true, session },
         ).exec();
-        if (!slot) throw new DomainError('وقت التوفر غير متاح لهذه الخدمة', 409, 'HOME_CARE_SLOT_NOT_AVAILABLE');
+        if (!slot) throw new DomainError('وقت التوفر غير متاح للتاريخ المحدد', 409, 'HOME_CARE_SLOT_NOT_AVAILABLE_FOR_DATE');
         return slot;
     }
 
-    private async log(method: string, action: string, current: any, oldData: any, requestBody: unknown, actor: HomeCareSlotActor) {
-        try { await ActivityLogService.logActivity({ user_id: actor.user_id, user_name: actor.user_name ?? `admin_${actor.user_id}`, user_type: actor.user_type ?? 'admin', method, endpoint: actor.endpoint ?? '/dash/admin/home-care/services/availability', action: action as any, collection_name: 'home_care_availability_slots', document_id: Array.isArray(current) ? null : String(current._id), old_data: oldData?.toObject?.() ?? oldData, new_data: Array.isArray(current) ? current.map(formatHomeCareAvailabilitySlot) : current.toObject?.() ?? current, changed_fields: Object.keys((requestBody as object) ?? {}), request_body: requestBody, source: actor.source ?? IActivityLogSourceEnum.DASHBOARD }); } catch {}
+    private async log(current: HomeCareWeeklySchedule, oldData: unknown[], requestBody: unknown, actor: HomeCareSlotActor): Promise<void> {
+        try {
+            await ActivityLogService.logActivity({
+                user_id: actor.user_id,
+                user_name: actor.user_name ?? `admin_${actor.user_id}`,
+                user_type: actor.user_type ?? 'admin',
+                method: 'PUT',
+                endpoint: actor.endpoint ?? '/dash/admin/home-care/services/availability',
+                action: IActivityLogActionEnum.BULK_UPDATE,
+                collection_name: 'home_care_availability_slots',
+                document_id: null,
+                old_data: oldData,
+                new_data: current,
+                changed_fields: ['schedule'],
+                request_body: requestBody,
+                response_status: 200,
+                source: actor.source ?? IActivityLogSourceEnum.DASHBOARD,
+            });
+        } catch {}
     }
 }
 

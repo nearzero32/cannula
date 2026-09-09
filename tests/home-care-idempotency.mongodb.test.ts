@@ -5,6 +5,7 @@ import Patient from '../src/models/patients.model';
 import HomeCareCategory from '../src/models/home-care-category.model';
 import HomeCareService from '../src/models/home-care-service.model';
 import HomeCareAvailabilitySlot from '../src/models/home-care-availability-slot.model';
+import { homeCareWeekdayForDate } from '../src/services/home-care-date.service';
 import HomeCareRequest from '../src/models/home-care-request.model';
 import HomeCareRequestHistory from '../src/models/home-care-request-history.model';
 import HomeCareRequestCounter from '../src/models/home-care-request-counter.model';
@@ -52,7 +53,7 @@ run('Home Care request idempotency against MongoDB 8 replica set', () => {
         ]);
         category = await HomeCareCategory.create({ name: 'Category', normalized_name: 'category', status: 'active' });
         service = await HomeCareService.create({ category_id: category._id, name: 'Service', price: 10000, status: 'active' });
-        slot = await HomeCareAvailabilitySlot.create({ service_id: service._id, time: '11:00', status: 'active', display_order: 10, created_by: user._id });
+        slot = await HomeCareAvailabilitySlot.create({ service_id: service._id, day_of_week: homeCareWeekdayForDate('2099-09-07'), time: '11:00', status: 'active', display_order: 10, created_by: user._id });
     }, 30_000);
     afterEach(() => mock.restore());
     afterAll(async () => { if (mongoose.connection.db) await mongoose.connection.dropDatabase(); await mongoose.disconnect(); });

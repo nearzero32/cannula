@@ -7,6 +7,7 @@ import HomeCareCategory from '../src/models/home-care-category.model';
 import HomeCareService from '../src/models/home-care-service.model';
 import HomeCareRequest from '../src/models/home-care-request.model';
 import HomeCareAvailabilitySlot from '../src/models/home-care-availability-slot.model';
+import { homeCareWeekdayForDate } from '../src/services/home-care-date.service';
 import HomeCareRequestHistory from '../src/models/home-care-request-history.model';
 import HomeCareRequestCounter from '../src/models/home-care-request-counter.model';
 import ActivityLog from '../src/models/activity-log.model';
@@ -49,7 +50,7 @@ describeWithMongo('Home Care Phase 7A transactions against MongoDB replica set',
         patient = await Patient.create({ user_id: users[0]._id, full_name: 'Patient Test', phone: users[0].phone, status: 'active' }); admin = users[1];
         category = await HomeCareCategory.create({ name: `Category ${Date.now()}`, normalized_name: `category-${Date.now()}`, status: 'active' });
         service = await HomeCareService.create({ category_id: category._id, name: `Service ${Date.now()}`, price: 10000, status: 'active' });
-        slot = await HomeCareAvailabilitySlot.create({ service_id: service._id, time: '12:00', status: 'active', display_order: 10, created_by: admin._id });
+        slot = await HomeCareAvailabilitySlot.create({ service_id: service._id, day_of_week: homeCareWeekdayForDate('2099-01-02'), time: '12:00', status: 'active', display_order: 10, created_by: admin._id });
         nurseA = await Nurse.create({ user_id: users[2]._id, full_name: 'Nurse A', status: 'active', qualified_service_ids: [service._id] });
         nurseB = await Nurse.create({ user_id: users[3]._id, full_name: 'Nurse B', status: 'active', qualified_service_ids: [service._id] });
     });

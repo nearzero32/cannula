@@ -1,5 +1,16 @@
 import { assertLocalDate, localDateTimeToUtc, nextLocalDate, toBaghdadLocal } from './appointment-time.service';
 import { DomainError } from './domain-error';
+import { HOME_CARE_WEEKDAYS, type HomeCareWeekday } from '../interfaces/home-care.interface';
+
+export const HOME_CARE_TIMEZONE = 'Asia/Baghdad' as const;
+
+/** Resolves a validated date-only value independently of the deployment server timezone. */
+export function homeCareWeekdayForDate(localDate: string): HomeCareWeekday {
+    let date: string;
+    try { date = assertLocalDate(localDate); } catch { throw new DomainError('التاريخ المطلوب غير صالح', 400); }
+    const sundayFirstIndex = new Date(`${date}T00:00:00.000Z`).getUTCDay();
+    return HOME_CARE_WEEKDAYS[(sundayFirstIndex + 1) % 7]!;
+}
 
 /** Half-open Asia/Baghdad date range for Home Care's stored date-only field. */
 export function homeCareBaghdadDateRange(from?: string, to?: string): Record<string, Date> | undefined {

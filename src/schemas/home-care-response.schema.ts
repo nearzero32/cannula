@@ -1,5 +1,5 @@
 import { t } from 'elysia';
-import { IHomeCareStatusEnum } from '../interfaces/home-care.interface';
+import { HomeCareWeekdayEnum, IHomeCareStatusEnum } from '../interfaces/home-care.interface';
 import { paginatedResponse, successResponse } from './api-response.schema';
 
 const nullableString = t.Nullable(t.String());
@@ -63,12 +63,21 @@ export const MobileHomeCareServiceListResponseSchema = successResponse(t.Array(M
 export const MobileHomeCareServiceResponseSchema = successResponse(MobileHomeCareServiceSchema, 'تم جلب خدمة الرعاية المنزلية بنجاح');
 
 export const HomeCareAvailabilitySlotSchema = t.Object({
-    _id: t.String(), service_id: t.String(), time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
+    _id: t.String(), service_id: t.String(), day_of_week: t.Enum(HomeCareWeekdayEnum), time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }),
     status: t.Enum(IHomeCareStatusEnum), display_order: t.Integer({ minimum: 0 }), created_by: nullableString,
     createdAt: t.String({ format: 'date-time' }), updatedAt: t.String({ format: 'date-time' }),
 });
 export const HomeCareAvailabilitySlotResponseSchema = successResponse(HomeCareAvailabilitySlotSchema);
 export const HomeCareAvailabilitySlotListResponseSchema = successResponse(t.Array(HomeCareAvailabilitySlotSchema));
+export const HomeCareWeeklyAvailabilitySchema = t.Object({
+    service_id: t.String(),
+    timezone: t.Literal('Asia/Baghdad'),
+    schedule: t.Array(t.Object({
+        day_of_week: t.Enum(HomeCareWeekdayEnum),
+        times: t.Array(t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }), { maxItems: 24, uniqueItems: true }),
+    }), { minItems: 7, maxItems: 7 }),
+});
+export const HomeCareWeeklyAvailabilityResponseSchema = successResponse(HomeCareWeeklyAvailabilitySchema);
 export const MobileHomeCareAvailabilityResponseSchema = successResponse(t.Object({
     service_id: t.String(), date: t.String({ format: 'date' }), timezone: t.Literal('Asia/Baghdad'),
     slots: t.Array(t.Object({ _id: t.String(), time: t.String({ pattern: '^([01]\\d|2[0-3]):[0-5]\\d$' }) })),

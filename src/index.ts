@@ -25,6 +25,7 @@ import { normalizeDoctorBookingSettings } from "./migrations/normalize-doctor-bo
 import { backfillDoctorDisplayOrder } from "./migrations/backfill-doctor-display-order.migration";
 import { backfillAdsBanners } from "./migrations/backfill-ads-banners.migration";
 import { backfillSpecialtySortOrder } from "./migrations/backfill-specialty-sort-order.migration";
+import { migrateHomeCareWeeklyAvailability } from "./migrations/home-care-weekly-availability.migration";
 import {
   assertProductionConfiguration,
   assertSwaggerConfiguration,
@@ -63,6 +64,7 @@ async function bootstrap() {
   await seedChronicConditions();
   await seedSuggestions();
   await seedHomeCareCategories();
+  await migrateHomeCareWeeklyAvailability();
   await backfillHealthProfiles();
   await backfillPharmacyWorkflow();
   await rebuildAppointmentStorage();

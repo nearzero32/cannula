@@ -185,9 +185,13 @@ export class HomeCareRequestService {
         if (!mongoose.Types.ObjectId.isValid(input.service_id)) {
             throw new DomainError('معرف الخدمة غير صالح', 400);
         }
+        const now = new Date();
+        const requestedDate = validateRequestedDate(input.requested_date, now);
         const service = await homeCareServiceService.getActiveById(input.service_id);
         if (!service) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 404, 'HOME_CARE_SERVICE_NOT_AVAILABLE');
-        const slot = await homeCareAvailabilityService.requireAvailableForRequest(input.service_id, input.availability_slot_id);
+        const slot = await homeCareAvailabilityService.requireAvailableForRequest(
+            input.service_id, input.availability_slot_id, input.requested_date
+        );
 
         let childId: mongoose.Types.ObjectId | null = null;
         if (input.child_id !== null && input.child_id !== undefined) {
@@ -201,8 +205,6 @@ export class HomeCareRequestService {
             childId = new mongoose.Types.ObjectId(child._id.toString());
         }
 
-        const now = new Date();
-        const requestedDate = validateRequestedDate(input.requested_date, now);
         const preferredTime = slot.time;
         assertHomeCareSlotLeadTime(input.requested_date, preferredTime, now);
         const address = validateHomeCareRequestAddress(input.address);
@@ -241,11 +243,16 @@ export class HomeCareRequestService {
             try {
                 request = await runHomeCareTransaction(async session => {
                     if (idempotency) await homeCareRequestIdempotencyService.claim(patientId, idempotency.key, idempotency.requestHash, now, session);
+                    const transactionNow = new Date();
+                    validateRequestedDate(input.requested_date, transactionNow);
                     const transactionService = await homeCareServiceService.getActiveById(input.service_id, session);
                     if (!transactionService) throw new DomainError('الخدمة غير موجودة أو غير متاحة', 409, 'HOME_CARE_SERVICE_NOT_AVAILABLE');
-                    // Recheck ACTIVE + ownership + unchanged time in the same transaction
-                    // that writes the request. A dashboard edit between GET and POST loses.
-                    await homeCareAvailabilityService.claimAvailableForRequest(input.service_id, input.availability_slot_id, preferredTime, session);
+                    // Recheck ACTIVE + ownership + weekday + unchanged time in the same
+                    // transaction that writes the request. A dashboard replacement race serializes.
+                    await homeCareAvailabilityService.claimAvailableForRequest(
+                        input.service_id, input.availability_slot_id, input.requested_date, preferredTime, session
+                    );
+                    assertHomeCareSlotLeadTime(input.requested_date, preferredTime, transactionNow);
                     const [created] = await HomeCareRequest.create([{
                         ...basePayload, request_number: await nextHomeCareRequestNumber(now, session),
                     }], { session });
