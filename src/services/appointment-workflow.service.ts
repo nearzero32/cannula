@@ -119,7 +119,7 @@ export class AppointmentWorkflowService {
             status, booking_source: input.source, booked_by_user_id: input.bookedByUserId ? oid(input.bookedByUserId) : null,
             reason: clean(input.reason), notes_internal: null, payment_status: IAppointmentPaymentStatusEnum.UNPAID,
             snapshot: { doctor: { display_name: doctor.display_name, profile_photo: doctor.profile_photo ?? null }, clinic: { name: clinic.name, address: clinic.address }, specialty: specialty ? { name: specialty.name } : null, beneficiary: { type: input.beneficiary.type, display_name: child?.full_name ?? patient.full_name }, pricing: { fee: doctor.consultation_fee ?? 0, currency: doctor.currency ?? 'IQD' } },
-            rescheduled_from: rescheduledFrom ? oid(rescheduledFrom) : null, confirmed_at: status === IAppointmentStatusEnum.CONFIRMED ? now : null, workflow_version: 0,
+            cancellation: null, rescheduled_from: rescheduledFrom ? oid(rescheduledFrom) : null, confirmed_at: status === IAppointmentStatusEnum.CONFIRMED ? now : null, workflow_version: 0,
         };
         const appointment = session ? (await Appointment.create([payload], { session }))[0] : await Appointment.create(payload);
         await this.history(appointment, AppointmentHistoryEventEnum.CREATED, actor, null, status, input.reason, rescheduledFrom ? { rescheduledFrom } : null, session); await this.notifications.append(appointment,rescheduledFrom?'RESCHEDULED':'CREATED',actor.type,session); if(status===IAppointmentStatusEnum.CONFIRMED)await this.notifications.scheduleForConfirmedAppointment(appointment,session,now);
@@ -158,7 +158,7 @@ export class AppointmentWorkflowService {
                 if (!doctor || minutesUntil(current.starts_at, now) < doctor.cancellation_window_hours * 60) throw new DomainError('انتهت نافذة إلغاء الموعد', 409, 'APPOINTMENT_CANCELLATION_WINDOW_CLOSED');
             }
             const cancellation = { reason: clean(reason), actor_type: actor.type, actor_user_id: actor.userId ? oid(actor.userId) : null, at: now };
-            const updated = await inSession(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, workflow_version: current.workflow_version }, { $set: { status: IAppointmentStatusEnum.CANCELLED, cancellation }, $inc: { workflow_version: 1 } }, { returnDocument: 'after' }), session).exec();
+            const updated = await inSession(Appointment.findOneAndUpdate({ _id: current._id, status: current.status, workflow_version: current.workflow_version }, { $set: { status: IAppointmentStatusEnum.CANCELLED, cancellation }, $inc: { workflow_version: 1 } }, { returnDocument: 'after', runValidators: true }), session).exec();
             if (!updated) throw new DomainError('تم تعديل الموعد بالتزامن', 409, 'APPOINTMENT_INVALID_TRANSITION');
             await this.history(updated, AppointmentHistoryEventEnum.CANCELLED, actor, current.status, IAppointmentStatusEnum.CANCELLED, reason, null, session); await this.notifications.append(updated,'CANCELLED',actor.type,session); await this.notifications.cancelFutureForAppointment(updated._id,session); return updated;
         });

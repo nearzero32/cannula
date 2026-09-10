@@ -19,6 +19,18 @@ const safeRange = (from?: Date, to?: Date) => {
     if (from && to && (to < from || to.getTime() - from.getTime() > 93 * 86_400_000)) throw new DomainError('نطاق التقويم يجب ألا يتجاوز 93 يوماً', 400, 'APPOINTMENT_DATE_INVALID');
     return from || to ? { ...(from ? { $gte: from } : {}), ...(to ? { $lte: to } : {}) } : undefined;
 };
+const appointmentActorTypes = new Set<string>(Object.values(AppointmentActorTypeEnum));
+
+export function formatAppointmentCancellation(cancellation: any) {
+    if (!cancellation || !appointmentActorTypes.has(cancellation.actor_type) || cancellation.at == null) return null;
+    const at = cancellation.at instanceof Date ? cancellation.at : new Date(cancellation.at);
+    if (Number.isNaN(at.getTime())) return null;
+    return {
+        reason: typeof cancellation.reason === 'string' ? cancellation.reason : null,
+        actorType: cancellation.actor_type,
+        at,
+    };
+}
 export function appointmentCapabilities(appointment: AppointmentDocument, cancellationWindowHours: number, allowReschedule: boolean, now = new Date()) {
     const active = [IAppointmentStatusEnum.PENDING, IAppointmentStatusEnum.CONFIRMED].includes(appointment.status as any);
     const outsideWindow = minutesUntil(appointment.starts_at, now) >= cancellationWindowHours * 60;
@@ -38,7 +50,7 @@ export function formatAppointment(appointment: any, options: { includeInternal?:
         bookingSource: appointment.booking_source, reason: appointment.reason ?? null, doctor: appointment.snapshot.doctor,
         clinic: appointment.snapshot.clinic, specialty: appointment.snapshot.specialty ?? null, beneficiary: appointment.snapshot.beneficiary,
         pricing: appointment.snapshot.pricing, paymentStatus: appointment.payment_status, rescheduledFrom: appointment.rescheduled_from ? String(appointment.rescheduled_from) : null,
-        rescheduledTo: appointment.rescheduled_to ? String(appointment.rescheduled_to) : null, cancellation: appointment.cancellation ? { reason: appointment.cancellation.reason ?? null, actorType: appointment.cancellation.actor_type, at: appointment.cancellation.at } : null,
+        rescheduledTo: appointment.rescheduled_to ? String(appointment.rescheduled_to) : null, cancellation: formatAppointmentCancellation(appointment.cancellation),
         capabilities: options.capabilities ?? undefined, createdAt: appointment.createdAt, updatedAt: appointment.updatedAt,
     };
     if (options.dailyCapacity) data.dailyCapacity = options.dailyCapacity;

@@ -4,6 +4,12 @@ export type AppointmentDocument = mongoose.Document & IAppointment;
 export const APPOINTMENT_BLOCKING_STATUSES = [IAppointmentStatusEnum.PENDING, IAppointmentStatusEnum.CONFIRMED, IAppointmentStatusEnum.CHECKED_IN, IAppointmentStatusEnum.IN_PROGRESS] as const;
 
 const specialtySnapshotSchema = new Schema({ name: { type: String, required: true } }, { _id: false });
+const appointmentCancellationSchema = new Schema({
+    reason: { type: String, trim: true, maxlength: 1000, default: null },
+    actor_type: { type: String, enum: Object.values(AppointmentActorTypeEnum), required: true },
+    actor_user_id: { type: Schema.Types.ObjectId, ref: 'User', default: null },
+    at: { type: Date, required: true },
+}, { _id: false });
 
 const appointmentSchema = new Schema({
     appointment_number: { type: String, required: true, trim: true },
@@ -30,11 +36,7 @@ const appointmentSchema = new Schema({
         _id: false,
     },
     payment_status: { type: String, enum: Object.values(IAppointmentPaymentStatusEnum), default: IAppointmentPaymentStatusEnum.UNPAID },
-    cancellation: {
-        reason: { type: String, trim: true, maxlength: 1000, default: null },
-        actor_type: { type: String, enum: Object.values(AppointmentActorTypeEnum) },
-        actor_user_id: { type: Schema.Types.ObjectId, ref: 'User', default: null }, at: { type: Date }, _id: false,
-    },
+    cancellation: { type: appointmentCancellationSchema, default: null },
     rescheduled_from: { type: Schema.Types.ObjectId, ref: 'Appointment', default: null },
     rescheduled_to: { type: Schema.Types.ObjectId, ref: 'Appointment', default: null },
     confirmed_at: { type: Date, default: null }, checked_in_at: { type: Date, default: null },

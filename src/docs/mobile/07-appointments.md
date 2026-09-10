@@ -39,6 +39,8 @@ curl -X POST '{{baseUrl}}/mobile/appointments' -H 'Authorization: Bearer {{acces
 
 Created/detail DTO uses camelCase: `_id`, `appointmentNumber`, `patientId`, `beneficiaryType`, nullable `childId`, `doctorId`, `clinicId`, nullable `specialtyId`, `startsAt`, `endsAt`, `localDate`, `localStartsAt`, `localEndsAt`, `timezone`, `status`, `bookingSource`, nullable `reason`, snapshot `doctor`, `clinic`, nullable `specialty`, `beneficiary`, `pricing`, `paymentStatus`, reschedule links, nullable cancellation, `capabilities`, and timestamps. Snapshot names/pricing remain stable even if source records later change.
 
+`cancellation` is always present and nullable. Active and legacy appointments without complete cancellation metadata return `cancellation: null`. A cancelled appointment with complete metadata returns `{ reason, actorType, at }`; clients must not infer missing actor or time values.
+
 ## Patient state matrix
 
 | Value | English / العربية | UI | Patient action |
@@ -88,4 +90,3 @@ Meaningful codes: `APPOINTMENT_INVALID`, `APPOINTMENT_TIME_INVALID`, `APPOINTMEN
 Confirmed appointments schedule 24-hour and 2-hour reminders. A reminder whose time has already passed is not created. Cancellation, completion, no-show, and rescheduling cancel still-undelivered future reminders; the replacement schedules its own reminders if confirmed.
 
 Arabic: الخادم هو المرجع الوحيد لصحة الوقت والسعة؛ عند `409` أعد تحميل الأوقات ولا تعِد الإرسال تلقائياً.
-

@@ -131,6 +131,22 @@ describe('API response documentation coverage', () => {
         expect(responseCodes('/api/mobile/pharmacy-requests/', 'post')).not.toContain('503');
     });
 
+    test('Appointment booking OpenAPI keeps 201 and required nullable cancellation metadata', async () => {
+        const app = new Elysia({ prefix: '/api' })
+            .use(openapi(swaggerConfig))
+            .use(mobileController);
+        const document = await (await app.handle(new Request('http://localhost/api/swagger/json'))).json() as any;
+        const responses = document.paths?.['/api/mobile/appointments/']?.post?.responses;
+        const appointment = responses?.['201']?.content?.['application/json']?.schema?.properties?.data;
+        const cancellation = appointment?.properties?.cancellation;
+
+        expect(responses).toHaveProperty('201');
+        expect(appointment?.required).toContain('cancellation');
+        expect(cancellation?.nullable).toBe(true);
+        expect(cancellation?.type).toEqual(expect.arrayContaining(['object', 'null']));
+        expect(cancellation?.required).toEqual(['reason', 'actorType', 'at']);
+    });
+
     test('uses ordered role-domain tags without generic parent-tag inheritance', async () => {
         const app = new Elysia({ prefix: '/api' })
             .use(openapi(swaggerConfig))

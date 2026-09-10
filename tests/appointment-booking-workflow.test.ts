@@ -56,6 +56,7 @@ describe('Appointment booking workflow', () => {
         expect(createdPayload.blocked_starts_at.toISOString()).toBe('2026-09-10T05:50:00.000Z');
         expect(createdPayload.snapshot).toEqual({ doctor: { display_name: 'الاسم المحفوظ', profile_photo: null }, clinic: { name: 'العيادة المحفوظة', address: 'بغداد' }, specialty: null, beneficiary: { type: 'SELF', display_name: 'مريض أصلي' }, pricing: { fee: 25000, currency: 'IQD' } });
         expect(createdPayload.appointment_number).toBe('APP-2026-000001');
+        expect(createdPayload.cancellation).toBeNull();
     });
 
     test('books only an owned active CHILD and freezes the child name', async () => {
