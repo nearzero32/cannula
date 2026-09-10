@@ -3,7 +3,7 @@ import Elysia, { t } from 'elysia';
 import { openapi } from '@elysia/openapi';
 import { Value } from '@sinclair/typebox/value';
 import { dashboardController } from '../src/controller/dash/index';
-import { mobileController } from '../src/controller/mobile/index';
+import { mobileController, mobileProtectedController, mobilePublicController } from '../src/controller/mobile/index';
 import { swaggerConfig } from '../src/constants/swagger.config';
 import { ApiErrorPlugin } from '../src/middleware/api-error.middleware';
 import { SWAGGER_TAG_DEFINITIONS, SWAGGER_TAG_GROUPS, SWAGGER_TAGS } from '../src/constants/swagger-tags';
@@ -18,10 +18,12 @@ interface OpenApiOperation {
     tags?: string[];
     requestBody?: unknown;
     parameters?: unknown[];
+    security?: Array<Record<string, string[]>>;
 }
 
 interface OpenApiDocument {
     paths?: Record<string, Record<string, OpenApiOperation>>;
+    security?: Array<Record<string, string[]>>;
     tags?: Array<{ name: string; description?: string; 'x-displayName'?: string }>;
     'x-tagGroups'?: Array<{ name: string; tags: string[] }>;
 }
@@ -68,26 +70,64 @@ describe('API response documentation coverage', () => {
         }
     });
 
-    test('public routes do not falsely document authentication errors', async () => {
+    test('OpenAPI security matches public, optional-auth, and protected Mobile composition', async () => {
         const app = new Elysia({ prefix: '/api' })
             .use(openapi(swaggerConfig))
             .use(dashboardController)
             .use(mobileController);
         const response = await app.handle(new Request('http://localhost/api/swagger/json'));
         const document = await response.json() as OpenApiDocument;
-        const publicPaths = [
-            '/api/mobile/about-us/',
-            '/api/mobile/ads/',
-            '/api/mobile/doctors/',
-            '/api/mobile/home-care/categories',
-        ];
+        const operationFor = (route: { method: string; path: string }) => {
+            const openApiPath = route.path.replace(/:([^/]+)/g, '{$1}');
+            return document.paths?.[`/api/mobile${openApiPath}`]?.[route.method.toLowerCase()];
+        };
+        const bearerRequired = (operation: OpenApiOperation | undefined) =>
+            (operation?.security ?? document.security)?.some(requirement => 'bearerAuth' in requirement) === true
+            && !(operation?.security ?? document.security)?.some(requirement => Object.keys(requirement).length === 0);
 
-        for (const path of publicPaths) {
-            const codes = Object.keys(document.paths?.[path]?.get?.responses ?? {});
-            expect(codes, path).not.toContain('401');
-            expect(codes, path).not.toContain('403');
+        for (const route of mobilePublicController.routes) {
+            const operation = operationFor(route);
+            expect(operation, `${route.method} ${route.path}`).toBeDefined();
+            if (route.path.startsWith('/notifications')) {
+                expect(operation?.security, `${route.method} ${route.path}`).toEqual([{}, { bearerAuth: [] }]);
+            } else {
+                expect(operation?.security, `${route.method} ${route.path}`).toEqual([]);
+            }
+            expect(bearerRequired(operation), `${route.method} ${route.path}`).toBe(false);
         }
-        expect(Object.keys(document.paths?.['/api/mobile/profile/']?.get?.responses ?? {})).toContain('401');
+
+        for (const route of mobileProtectedController.routes) {
+            expect(bearerRequired(operationFor(route)), `${route.method} ${route.path}`).toBe(true);
+        }
+        expect(bearerRequired(document.paths?.['/api/mobile/children/']?.get)).toBe(true);
+        expect(bearerRequired(document.paths?.['/api/mobile/pharmacy-requests/']?.post)).toBe(true);
+    });
+
+    test('Notification OpenAPI responses are concrete and Pharmacy routes declare reachable errors', async () => {
+        const app = new Elysia({ prefix: '/api' }).use(openapi(swaggerConfig)).use(mobileController);
+        const document = await (await app.handle(new Request('http://localhost/api/swagger/json'))).json() as OpenApiDocument;
+        const notificationOperations: Array<[string, string]> = [
+            ['/api/mobile/notifications/', 'get'],
+            ['/api/mobile/notifications/unread-count', 'get'],
+            ['/api/mobile/notifications/read-all', 'patch'],
+            ['/api/mobile/notifications/{id}/read', 'patch'],
+        ];
+        for (const [path, method] of notificationOperations) {
+            const operation = document.paths?.[path]?.[method];
+            expect(operation).toBeDefined();
+            const serialized = JSON.stringify(operation?.responses);
+            expect(serialized).toContain('properties');
+            expect(serialized).not.toContain('"schema":{}');
+            expect(Object.keys(operation?.responses ?? {})).toEqual(expect.arrayContaining(['200', '400', '401', '403', '429', '500']));
+        }
+        expect(Object.keys(document.paths?.['/api/mobile/notifications/{id}/read']?.patch?.responses ?? {})).toContain('404');
+
+        const responseCodes = (path: string, method: string) => Object.keys(document.paths?.[path]?.[method]?.responses ?? {});
+        expect(responseCodes('/api/mobile/pharmacy-requests/', 'post')).toEqual(expect.arrayContaining(['400', '404', '409', '422']));
+        for (const suffix of ['cancel', 'accept-quote', 'reject-quote']) {
+            expect(responseCodes(`/api/mobile/pharmacy-requests/{id}/${suffix}`, 'patch')).toEqual(expect.arrayContaining(['400', '404', '409', '422']));
+        }
+        expect(responseCodes('/api/mobile/pharmacy-requests/', 'post')).not.toContain('503');
     });
 
     test('uses ordered role-domain tags without generic parent-tag inheritance', async () => {

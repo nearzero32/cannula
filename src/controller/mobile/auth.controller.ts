@@ -10,6 +10,7 @@ import { RoleGuardPlugin } from '../../middleware/authorization.middleware';
 import sessionService from '../../services/session.service';
 import { TokenAudienceEnum } from '../../constants/jwt';
 import { resolveClientIp } from '../../services/client-ip.service';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 const phoneSchema = t.String({ minLength: 7, maxLength: 30 });
 const flowSchema = t.String({ minLength: 20, maxLength: 100 });
@@ -48,7 +49,10 @@ function fail(error: unknown, set: any) {
     return { error: true as const, message: error.message, ...(error.code?{code:error.code}:{}), ...(retryAfterSeconds?{retryAfterSeconds}:{}) };
 }
 
-export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH] } })
+export const mobilePublicAuthController = new Elysia({
+    prefix: '/auth',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH], security: PUBLIC_OPENAPI_SECURITY },
+})
     .post('/start', async ({ body, request, server, set }) => {
         try { return { error: false, message: 'تم بدء المصادقة بنجاح', data: await patientAuthService.start(body.phone, { ip: resolveClientIp(request,server) }) }; }
         catch (error) { return fail(error, set); }
@@ -88,8 +92,14 @@ export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags
     .post('/refresh', async ({ body, request, server, set }) => {
         try { return { error: false, message: 'تم تحديث الجلسة بنجاح', data: await sessionService.refresh(body.refreshToken, TokenAudienceEnum.MOBILE, { ip: resolveClientIp(request,server) }) }; }
         catch (error) { return fail(error, set); }
-    }, { body: t.Object({ refreshToken: t.String({ minLength: 1 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, ...errors } })
-    .group('', (app) => app.use(AuthPlugin(TokenAudienceEnum.MOBILE)).use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))
+    }, { body: t.Object({ refreshToken: t.String({ minLength: 1 }) }, { additionalProperties: false }), response: { 200: GenericDataResponseSchema, ...errors } });
+
+export const mobileProtectedAuthController = new Elysia({
+    prefix: '/auth',
+    detail: { tags: [SWAGGER_TAGS.MOBILE.AUTH] },
+})
+    .use(AuthPlugin(TokenAudienceEnum.MOBILE))
+    .use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))
         .post('/pin/change-required', async ({ body, phrase, set }) => {
             if (phrase.role !== IUserRoleEnum.PATIENT) { set.status = 403; return { error: true, message: 'غير مصرح لك بالوصول' }; }
             try { return { error: false, message: 'تم تغيير الرمز السري بنجاح', data: await patientAuthService.changeRequiredPin(phrase._id, phrase.sid, body.pin) }; }
@@ -107,4 +117,9 @@ export const mobileAuthController = new Elysia({ prefix: '/auth', detail: { tags
             await sessionService.revokeAll(phrase._id, { reasonCode: 'USER_LOGOUT_ALL' });
             return { error: false, message: 'تم تسجيل الخروج من جميع الأجهزة بنجاح' };
         }, { response: { 200: SuccessResponseWithoutDataSchema, 503: ServiceUnavailableResponseSchema, ...ProtectedApiErrorResponses } })
-    );
+    ;
+
+/** Compatibility composition for tests and callers that mount the complete auth surface. */
+export const mobileAuthController = new Elysia()
+    .use(mobilePublicAuthController)
+    .use(mobileProtectedAuthController);

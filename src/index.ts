@@ -36,6 +36,7 @@ import {
 import { HttpSecurityPlugin } from "./middleware/http-security.middleware";
 import notificationDeliveryWorker from "./services/notification-delivery-worker.service";
 import medicationReminderWorker from "./services/medication-reminder-worker.service";
+import { CORS_ALLOWED_HEADERS } from "./constants/cors.config";
 
 const HEALTH_TIMEOUT_MS = 2_000;
 
@@ -94,7 +95,7 @@ async function bootstrap() {
           ? origins
           : ["http://localhost:3000", "http://localhost:5173"],
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"],
+        allowedHeaders: CORS_ALLOWED_HEADERS,
         credentials: true,
       }),
     )

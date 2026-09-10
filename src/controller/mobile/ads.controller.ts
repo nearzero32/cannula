@@ -4,12 +4,13 @@ import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import adsService, { MOBILE_ADS_CACHE_PREFIX, MOBILE_ADS_CACHE_TTL_SECONDS, PATIENT_AD_SORT, publicAdsMatch } from '../../services/ads.service';
 import RedisClient from '../../databases/redis';
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 const ObjectId = mongoose.Types.ObjectId;
 function mobileAd(ad: any) { return { _id: String(ad._id), title: ad.title ?? null, description: ad.description ?? null, image: ad.image, start_date: ad.start_date ?? null, end_date: ad.end_date ?? null }; }
 function key(page: number, limit: number) { return `${MOBILE_ADS_CACHE_PREFIX}:page=${page}:limit=${limit}`; }
 
-export const mobileAdsController = new Elysia({ prefix: '/ads', detail: { tags: [SWAGGER_TAGS.MOBILE.ADS] } })
+export const mobileAdsController = new Elysia({ prefix: '/ads', detail: { tags: [SWAGGER_TAGS.MOBILE.ADS], security: PUBLIC_OPENAPI_SECURITY } })
     .get('/', async ({ query }) => {
         const page = Math.max(1, Number(query.page) || 1), limit = Math.min(50, Math.max(1, Number(query.limit) || 10)), cacheKey = key(page, limit);
         try { const raw = await RedisClient.getInstance().get(cacheKey); if (raw) { try { return JSON.parse(raw); } catch { try { await RedisClient.getInstance().del(cacheKey); } catch {} } } } catch { console.warn('Unable to read mobile ads cache'); }

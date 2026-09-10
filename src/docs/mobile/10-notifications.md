@@ -11,6 +11,8 @@ All four routes use optional authentication:
 
 No `Authorization` header means guest. Any presented credential is validated; invalid/expired/revoked/wrong-audience credentials return `401`/`403` and do not silently downgrade.
 
+OpenAPI models this as optional authentication (`{}` or Mobile Bearer), not required Bearer authentication. Browser/WebView clients may send `X-Installation-Id` through CORS preflight; the server explicitly allows that header alongside `Authorization` and `Content-Type`.
+
 Guests must send a persistent UUID v4, for example `X-Installation-Id: 550e8400-e29b-41d4-a716-446655440000`. Generate once per installation and retain it. Logged-in User identity takes precedence, so installation ID is ignored. Guest write rate limit is 30/minute per installation+IP; reads are covered by the global API limit (100/minute).
 
 ```bash
@@ -24,6 +26,8 @@ curl '{{baseUrl}}/mobile/notifications?page=1&limit=20&category=all' -H 'X-Insta
 Pagination is page-based (limit max 50), ordered by `createdAt` and `_id` descending. Categories are `appointments`, `medications`, `results`, `services`, `account`, and `system`; `all` is only a query/UI concept. No current domain producer writes `results`, although admin-created content may use that category.
 
 Read state is viewer-specific and computed from read receipts; never trust legacy `Notification.is_read`. Mark-one is idempotent and returns the new unread count; invisible/other-user IDs return `404`. Mark-all returns `marked_count` and `unread_count`.
+
+`GET /unread-count` intentionally returns `{error:false,data:{unread_count}}` without `message`. Mark-one returns `{error:false,message,data:{unread_count}}`; mark-all returns `{error:false,message,data:{marked_count,unread_count}}`.
 
 ## Type catalog
 

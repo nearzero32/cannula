@@ -2,10 +2,11 @@ import Elysia from 'elysia';
 import { SWAGGER_TAGS } from '../../constants/swagger-tags';
 import aboutUsService from '../../services/about-us.service';
 import { GenericDataResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 export const mobileAboutUsController = new Elysia({
     prefix: '/about-us',
-    detail: { tags: [SWAGGER_TAGS.MOBILE.ABOUT_US] },
+    detail: { tags: [SWAGGER_TAGS.MOBILE.ABOUT_US], security: PUBLIC_OPENAPI_SECURITY },
 })
 
     .get('/', async ({ set }) => {

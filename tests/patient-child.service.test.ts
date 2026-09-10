@@ -9,6 +9,8 @@ import patientChildService, {
 import { IPatientGenderEnum } from '../src/interfaces/patient.interface';
 import { PatientChildRelationshipEnum } from '../src/interfaces/patient-child.interface';
 import { parseDateOfBirth } from '../src/services/date-of-birth';
+import { Value } from '@sinclair/typebox/value';
+import { childCreateBodySchema, childUpdateBodySchema } from '../src/controller/mobile/children.controller';
 
 afterEach(() => mock.restore());
 
@@ -74,6 +76,16 @@ describe('Patient child ownership and lifecycle', () => {
         expect(PatientChild.create).toHaveBeenCalledWith(expect.objectContaining({
             relationship: PatientChildRelationshipEnum.SON,
         }));
+    });
+
+    test('create excludes photo while update retains the managed upload reference', () => {
+        const create = {
+            full_name: 'زينب علي', date_of_birth: '2018-04-20', gender: 'female', relationship: 'daughter',
+        };
+        expect(Value.Check(childCreateBodySchema, create)).toBe(true);
+        expect(Value.Check(childCreateBodySchema, { ...create, photo: null })).toBe(false);
+        expect(Value.Check(childUpdateBodySchema, { photo: null })).toBe(true);
+        expect(Value.Check(childUpdateBodySchema, { photo: 'https://cdn.example.test/child.jpg' })).toBe(true);
     });
 
     test('rolls back a newly created child if its health profile cannot be created', async () => {

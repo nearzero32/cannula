@@ -1,7 +1,7 @@
 import Elysia from 'elysia';
 import { mobileAboutUsController } from './about-us.controller';
 import { mobileAdsController } from './ads.controller';
-import { mobileAuthController } from './auth.controller';
+import { mobileProtectedAuthController, mobilePublicAuthController } from './auth.controller';
 import { mobileChronicConditionsController } from './chronic-conditions.controller';
 import { mobileDoctorsController } from './doctors.controller';
 import { mobileSpecialtiesController } from './specialties.controller';
@@ -23,8 +23,8 @@ import { mobileMedicationDosesController } from './medication-doses.controller';
 import { mobileMedicationRemindersController } from './medication-reminders.controller';
 
 /** Public mobile routes — no authentication required */
-const mobilePublicController = new Elysia()
-    .use(mobileAuthController)
+export const mobilePublicController = new Elysia()
+    .use(mobilePublicAuthController)
     .use(mobileAboutUsController)
     .use(mobileAdsController)
     .use(mobileChronicConditionsController)
@@ -34,8 +34,9 @@ const mobilePublicController = new Elysia()
     .use(mobileNotificationsController);
 
 /** Protected mobile routes — each controller explicitly applies the mobile AuthPlugin audience. */
-const mobileProtectedController = new Elysia()
+export const mobileProtectedController = new Elysia()
     .use(RoleGuardPlugin([IUserRoleEnum.PATIENT]))
+    .use(mobileProtectedAuthController)
     .use(mobileProfileController)
     .use(mobileProfileHealthController)
     .use(mobileChildrenController)

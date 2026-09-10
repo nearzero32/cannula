@@ -39,7 +39,7 @@
       "name":"Children",
       "item":[
         {"name":"List Children","request":{"method":"GET","url":"{{baseUrl}}/mobile/children?include_inactive=false"}},
-        {"name":"Create Child","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"full_name\": \"زينب علي\",\n  \"date_of_birth\": \"2018-04-20\",\n  \"gender\": \"female\",\n  \"relationship\": \"daughter\",\n  \"photo\": null\n}"},"url":"{{baseUrl}}/mobile/children"}},
+        {"name":"Create Child","request":{"method":"POST","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"full_name\": \"زينب علي\",\n  \"date_of_birth\": \"2018-04-20\",\n  \"gender\": \"female\",\n  \"relationship\": \"daughter\"\n}"},"url":"{{baseUrl}}/mobile/children"}},
         {"name":"Child Detail","request":{"method":"GET","url":"{{baseUrl}}/mobile/children/{{childId}}"}},
         {"name":"Update Child","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"full_name\": \"زينب علي\"\n}"},"url":"{{baseUrl}}/mobile/children/{{childId}}"}},
         {"name":"Update Child Status","request":{"method":"PATCH","header":[{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"status\": \"inactive\"\n}"},"url":"{{baseUrl}}/mobile/children/{{childId}}/status"}},

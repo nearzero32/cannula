@@ -21,6 +21,7 @@ import {
     MobileHomeCareServiceResponseSchema,
     MobileHomeCareAvailabilityResponseSchema,
 } from '../../schemas/home-care-response.schema';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -50,7 +51,7 @@ export function formatHomeCareService(service: HomeCareServiceDocument) {
 
 export const mobileHomeCareController = new Elysia({
     prefix: '/home-care',
-    detail: { tags: [SWAGGER_TAGS.MOBILE.HOME_CARE] },
+    detail: { tags: [SWAGGER_TAGS.MOBILE.HOME_CARE], security: PUBLIC_OPENAPI_SECURITY },
 })
     .onError(({ code, error, set }) => {
         if (error instanceof DomainError) { set.status = error.status; return { error: true, message: error.message, code: error.code }; }

@@ -5,10 +5,11 @@ import chronicConditionService from '../../services/chronic-condition.service';
 import { IChronicConditionStatusEnum } from '../../interfaces/chronic-condition.interface';
 import { GenericPaginatedResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 import { safeSearchPattern } from '../../services/search-safety.service';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 export const mobileChronicConditionsController = new Elysia({
     prefix: '/chronic-conditions',
-    detail: { tags: [SWAGGER_TAGS.MOBILE.CHRONIC_CONDITIONS] },
+    detail: { tags: [SWAGGER_TAGS.MOBILE.CHRONIC_CONDITIONS], security: PUBLIC_OPENAPI_SECURITY },
 })
 
     .get(

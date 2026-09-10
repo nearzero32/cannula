@@ -25,17 +25,26 @@ import {
     PatientChildrenResponseSchema,
 } from '../../schemas/patient-health-response.schema';
 
-const childCreateBodySchema = t.Object({
+const childMutableFields = {
     full_name: t.String({ minLength: 1, maxLength: 120 }),
     date_of_birth: t.String({ format: 'date', description: 'تاريخ ميلاد ISO بصيغة YYYY-MM-DD' }),
     gender: t.Enum(IPatientGenderEnum),
     relationship: t.Enum(PatientChildRelationshipEnum, {
         description: 'صلة الطفل/المُعال بصاحب الحساب؛ لا تمنح الصلاحية بحد ذاتها',
     }),
-    photo: t.Optional(t.Nullable(t.String())),
-}, { additionalProperties: false });
+};
 
-const childUpdateBodySchema = t.Partial(childCreateBodySchema);
+export const childCreateBodySchema = t.Object(childMutableFields, { additionalProperties: false });
+
+export const childUpdateBodySchema = t.Object({
+    full_name: t.Optional(childMutableFields.full_name),
+    date_of_birth: t.Optional(childMutableFields.date_of_birth),
+    gender: t.Optional(childMutableFields.gender),
+    relationship: t.Optional(childMutableFields.relationship),
+    photo: t.Optional(t.Nullable(t.String({
+        description: 'مرجع رفع جاهز لغرض PATIENT_CHILD_PHOTO ومرتبط بمعرف الطفل',
+    }))),
+}, { additionalProperties: false });
 
 async function requirePatient(phrase: { _id: string; role: string }) {
     if (phrase.role !== IUserRoleEnum.PATIENT) throw new DomainError('غير مصرح لك بالوصول', 403);
@@ -88,6 +97,9 @@ export const mobileChildrenController = new Elysia({
         }
     }, {
         body: childCreateBodySchema,
+        detail: {
+            description: 'ينشئ سجل الطفل دون صورة. بعد استلام _id ارفع PATIENT_CHILD_PHOTO لذلك الطفل ثم حدّث photo عبر PATCH /children/:childId.',
+        },
         response: {
             201: PatientChildResponseSchema,
             400: BadRequestResponseSchema,
@@ -129,7 +141,7 @@ export const mobileChildrenController = new Elysia({
         params: t.Object({ childId: t.String() }),
         body: childUpdateBodySchema,
         detail: {
-            description: 'يعدّل مالك السجل بيانات الطفل، ومنها تاريخ الميلاد وصلة القرابة. العمر مشتق للقراءة فقط، وصلة القرابة لا تمنح صلاحية الإدارة.',
+            description: 'يعدّل مالك السجل بيانات الطفل، ومنها photo بعد إكمال رفع PATIENT_CHILD_PHOTO المرتبط بمعرف الطفل. العمر مشتق للقراءة فقط، وصلة القرابة لا تمنح صلاحية الإدارة.',
         },
         response: {
             200: PatientChildResponseSchema,

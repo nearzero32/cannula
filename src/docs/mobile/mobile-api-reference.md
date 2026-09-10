@@ -4,6 +4,8 @@ Base: `{{baseUrl}}/mobile`, where local `baseUrl` is `http://localhost:3001/api`
 
 Standard page query fields are strings parsed to positive integers; controllers clamp limits. Common failures are `400`, `401`, `403`, `404`, `409`, `422`, `429`, `500`, and dependency `503` as declared per route. Consult the domain chapter and [error guide](15-errors-and-status-codes.md).
 
+Swagger explicitly marks Public operations with `security: []` and Notifications with optional guest-or-Bearer security. Browser guest Notifications use the explicitly CORS-allowed `X-Installation-Id` header. For Specialties, Ads, and Home Care catalogs, preserve the returned array order; server ordering fields remain intentionally absent from Mobile DTOs.
+
 ## Inventory (76 routes)
 
 | Method and path | Auth | Input / success / notable behavior |
@@ -33,7 +35,7 @@ Standard page query fields are strings parsed to positive integers; controllers 
 | `POST /mobile/auth/logout` | Patient | `200`, no data; revokes current |
 | `POST /mobile/auth/logout-all` | Patient | `200`, no data; revokes all |
 | `GET /mobile/children` | Patient | `include_inactive?`; `200` array |
-| `POST /mobile/children` | Patient | child JSON; `201` |
+| `POST /mobile/children` | Patient | child JSON without `photo`; `201`; upload child photo after receiving `_id` |
 | `GET /mobile/children/:childId` | Patient | owned ID; `200` |
 | `PATCH /mobile/children/:childId` | Patient | partial child JSON; `200` |
 | `PATCH /mobile/children/:childId/status` | Patient | `{status}`; `200` |
@@ -43,8 +45,8 @@ Standard page query fields are strings parsed to positive integers; controllers 
 | `GET /mobile/doctor-favorites` | Patient | `page,limit`; `200` page |
 | `POST /mobile/doctor-favorites` | Patient | `{doctor_id}`; `201`; `409` duplicate |
 | `DELETE /mobile/doctor-favorites/:doctor_id` | Patient | `200`; `404` absent |
-| `GET /mobile/doctors` | Public | filters/page; `200` page |
-| `GET /mobile/doctors/available` | Public | filters/page; `200` real bookability; 30s cache |
+| `GET /mobile/doctors` | Public | filters/page; `is_featured=true` featured-only, false/omitted no filter; `200` page |
+| `GET /mobile/doctors/available` | Public | same featured semantics; `200` real bookability; 30s cache |
 | `GET /mobile/doctors/:id` | Public | `200` detail/clinics; `400/404` |
 | `POST /mobile/home-care/requests` | Patient | required UUID v4 `Idempotency-Key`; `availability_slot_id`; first `201`, replay `200`; payload mismatch `409` |
 | `GET /mobile/home-care/requests` | Patient | `page,limit,status`; `200` page |

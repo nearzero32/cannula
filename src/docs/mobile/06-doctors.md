@@ -4,7 +4,7 @@ All Doctor discovery routes are public.
 
 ## List
 
-`GET /mobile/doctors` accepts `page`, `limit` (max 100), `specialty_id`, `clinic_id`, `gender` (`male|female`), `is_featured` (`true|false`), and `search`. Only active, verified, license-verified Doctors are visible. Current ordering is `display_order`, then `_id`; preserve it. Note: `is_featured=true` filters; `false` currently behaves like no filter (recorded as an integration issue).
+`GET /mobile/doctors` accepts `page`, `limit` (max 100), `specialty_id`, `clinic_id`, `gender` (`male|female`), `is_featured` (`true|false`), and `search`. `is_featured=true` means featured-only; `is_featured=false` and omission both mean no featured filter. Other strings are invalid. Only active, verified, license-verified Doctors are visible. Current ordering is `display_order`, then `_id`; preserve it.
 
 List DTO: `_id`, `display_name`, nullable `profile_photo`, nullable `gender`, nullable `primary_specialty`, `specialties`, nullable `experience_years`, nullable `consultation_fee`, nullable `follow_up_fee`, nullable `currency`, `is_featured`, `accepting_new_patients`, and constant `is_verified: true`. Specialty objects are `_id`, `name`, nullable `icon`.
 
@@ -22,7 +22,7 @@ Each Doctor adds:
 {"availability":{"date":"2026-09-05","timezone":"Asia/Baghdad","clinicId":"66f000000000000000000020","nextSlot":{"startsAt":"2026-09-05T08:00:00.000Z","endsAt":"2026-09-05T08:30:00.000Z","localStartsAt":"11:00","localEndsAt":"11:30"},"availableSlotCount":8}}
 ```
 
-The list is cached for 30 seconds. Refresh after creating/rescheduling a booking.
+The list is cached for 30 seconds. `is_featured=false` and omission share the same normalized cache/filter semantics. Refresh after creating/rescheduling a booking.
 
 ## Detail and clinics
 

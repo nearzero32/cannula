@@ -17,8 +17,21 @@ import { toBaghdadLocal } from '../../services/appointment-time.service';
 import Clinic from '../../models/clinics.model';
 import { IClinicStatusEnum } from '../../interfaces/clinic.interface';
 import { ISpecialtyStatusEnum } from '../../interfaces/specialty.interface';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 const ObjectId = mongoose.Types.ObjectId;
+const FEATURED_FILTER_DESCRIPTION = '`true` returns featured Doctors only. `false` and omission apply no featured filter.';
+export const doctorFeaturedQuerySchema = t.Union([
+    t.Literal('true'),
+    t.Literal('false'),
+], { description: FEATURED_FILTER_DESCRIPTION });
+
+export function normalizeDoctorFeaturedFilter(value: string | undefined): true | undefined {
+    if (value !== undefined && value !== 'true' && value !== 'false') {
+        throw new DomainError('قيمة المميز غير صالحة', 400, 'INVALID_FEATURED_FILTER');
+    }
+    return value === 'true' ? true : undefined;
+}
 
 const availableDoctorsResponseSchema = t.Object({
     error: t.Literal(false),
@@ -80,7 +93,7 @@ export function formatDoctorForMobile(doctor: IDoctor & { _id: unknown }, specia
 
 export const mobileDoctorsController = new Elysia({
     prefix: '/doctors',
-    detail: { tags: [SWAGGER_TAGS.MOBILE.DOCTORS] },
+    detail: { tags: [SWAGGER_TAGS.MOBILE.DOCTORS], security: PUBLIC_OPENAPI_SECURITY },
 })
 
     .get(
@@ -98,8 +111,8 @@ export const mobileDoctorsController = new Elysia({
 
             if (query.gender) main_match.gender = query.gender;
 
-            if (query.is_featured && query.is_featured !== 'true' && query.is_featured !== 'false') throw new DomainError('قيمة المميز غير صالحة', 400, 'INVALID_FEATURED_FILTER');
-            if (query.is_featured === 'true') main_match.is_featured = true;
+            const featured = normalizeDoctorFeaturedFilter(query.is_featured);
+            if (featured) main_match.is_featured = true;
 
             if (query.clinic_id) {
                 if (!ObjectId.isValid(query.clinic_id)) throw new DomainError('معرف العيادة غير صالح', 400, 'CLINIC_INVALID');
@@ -133,7 +146,7 @@ export const mobileDoctorsController = new Elysia({
                 specialty_id: t.Optional(t.String()),
                 clinic_id: t.Optional(t.String()),
                 gender: t.Optional(t.Enum(IDoctorGenderEnum)),
-                is_featured: t.Optional(t.String()),
+                is_featured: t.Optional(doctorFeaturedQuerySchema),
                 search: t.Optional(t.String()),
             }),
             response: { 200: GenericPaginatedResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
@@ -148,9 +161,7 @@ export const mobileDoctorsController = new Elysia({
             for (const [name, value] of [['specialty_id', query.specialty_id], ['clinic_id', query.clinic_id]] as const) {
                 if (value && !ObjectId.isValid(value)) throw new DomainError(`معرف ${name === 'specialty_id' ? 'التخصص' : 'العيادة'} غير صالح`, 400, 'INVALID_OBJECT_ID');
             }
-            if (query.is_featured && query.is_featured !== 'true' && query.is_featured !== 'false') {
-                throw new DomainError('قيمة المميز غير صالحة', 400, 'INVALID_FEATURED_FILTER');
-            }
+            const featured = normalizeDoctorFeaturedFilter(query.is_featured);
 
             const now = new Date();
             const date = toBaghdadLocal(now).date;
@@ -158,7 +169,7 @@ export const mobileDoctorsController = new Elysia({
                 specialty_id: query.specialty_id,
                 clinic_id: query.clinic_id,
                 gender: query.gender,
-                is_featured: query.is_featured === 'true',
+                is_featured: featured,
             };
             const key = availableDoctorsCacheKey({ ...filters, date, page, limit });
             let cached: unknown = null;
@@ -198,7 +209,7 @@ export const mobileDoctorsController = new Elysia({
                 specialty_id: t.Optional(t.String()),
                 clinic_id: t.Optional(t.String()),
                 gender: t.Optional(t.Enum(IDoctorGenderEnum)),
-                is_featured: t.Optional(t.String()),
+                is_featured: t.Optional(doctorFeaturedQuerySchema),
             }),
             response: { 200: availableDoctorsResponseSchema, 400: BadRequestResponseSchema, 422: ValidationErrorResponseSchema, ...PublicApiErrorResponses },
         }

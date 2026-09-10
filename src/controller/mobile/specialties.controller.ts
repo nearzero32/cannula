@@ -6,6 +6,7 @@ import { ISpecialtyStatusEnum, type ISpecialty } from '../../interfaces/specialt
 import { BadRequestResponseSchema, GenericDataResponseSchema, GenericPaginatedResponseSchema, NotFoundResponseSchema, PublicApiErrorResponses } from '../../schemas/api-response.schema';
 import { safeSearchPattern } from '../../services/search-safety.service';
 import RedisClient from '../../databases/redis';
+import { PUBLIC_OPENAPI_SECURITY } from '../../constants/openapi-security';
 
 const ObjectId = mongoose.Types.ObjectId;
 
@@ -20,7 +21,7 @@ function formatSpecialtyForMobile(specialty: ISpecialty & { _id: unknown }) {
 
 export const mobileSpecialtiesController = new Elysia({
     prefix: '/specialties',
-    detail: { tags: [SWAGGER_TAGS.MOBILE.SPECIALTIES] },
+    detail: { tags: [SWAGGER_TAGS.MOBILE.SPECIALTIES], security: PUBLIC_OPENAPI_SECURITY },
 })
 
     .get(

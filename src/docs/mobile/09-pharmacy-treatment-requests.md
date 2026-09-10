@@ -50,5 +50,6 @@ Patient cancel is exposed for `open`, `under_review`, and `waiting_customer_appr
 
 Meaningful codes: `INVALID_IDENTIFIER`, `INVALID_INPUT`, `INVALID_PRESCRIPTION_IMAGES`, `TREATMENT_CONTENT_REQUIRED`, `CHILD_NOT_ACTIVE`, `INVALID_DELIVERY_ADDRESS`, `PHARMACY_REQUEST_NOT_FOUND`, `QUOTATION_NOT_ACTIVE`, `STALE_QUOTATION_VERSION`, `STALE_WORKFLOW_VERSION`, `INVALID_STATE_TRANSITION`, `UPLOAD_NOT_READY`, `UPLOAD_PURPOSE_MISMATCH`, `UPLOAD_TARGET_NOT_OWNED`.
 
-Arabic: عند `STALE_QUOTATION_VERSION` أعد جلب التفاصيل واعرض السعر الجديد، ولا توافق تلقائياً على نسخة مختلفة.
+Declared route outcomes follow the executable call graph: create can return `400`, `403`, `404`, `409`, or `422`; list can return `403`, `404`, or `422`; owned detail hides malformed/foreign IDs as `404`; cancel and quote decisions can return `400`, `403`, `404`, `409`, or `422`. All protected routes also declare `401`, `429`, and `500`. Upload storage `503` errors belong to upload intent/completion routes; Pharmacy request creation only validates already-ready references and therefore does not declare an unreachable `503`.
 
+Arabic: عند `STALE_QUOTATION_VERSION` أعد جلب التفاصيل واعرض السعر الجديد، ولا توافق تلقائياً على نسخة مختلفة.
