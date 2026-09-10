@@ -12,6 +12,11 @@ import { INotificationAudienceEnum, INotificationCategoryEnum, INotificationPriv
 import notificationDeliveryService from './notification-delivery.service';
 import NotificationDelivery from '../models/notification-delivery.model';
 import { INotificationDeliveryStatusEnum } from '../interfaces/notification-delivery.interface';
+import {
+    formatMobileNotification,
+    type MobileNotificationDTO,
+    type MobileNotificationSource,
+} from './notification.formatter';
 
 export type NotificationViewer = { userId: string } | { installationHash: string };
 export const NOTIFICATION_READ_ALL_BATCH_SIZE = 500;
@@ -152,7 +157,10 @@ class NotificationService {
         return { $lookup: { from: NotificationRead.collection.name, let: { notificationId: '$_id' }, pipeline: [{ $match: { $expr: { $and: [{ $eq: ['$notification_id', '$$notificationId'] }, { $eq: ['$reader_type', readerType] }, ...identity] } } }, { $limit: 1 }], as: '_read' } } as PipelineStage.Lookup;
     }
 
-    public async getMobileInbox(viewer: NotificationViewer, options: { page: number; limit: number; category?: string }) {
+    public async getMobileInbox(
+        viewer: NotificationViewer,
+        options: { page: number; limit: number; category?: string },
+    ): Promise<{ data: MobileNotificationDTO[]; total: number; unread_count: number }> {
         const now = new Date(), skip = (options.page - 1) * options.limit;
         const result = await this.model.aggregate([
             ...this.visiblePipeline(viewer, now, options.category), { $sort: { createdAt: -1, _id: -1 } },
@@ -160,7 +168,13 @@ class NotificationService {
         ]).exec();
         const aggregate = result[0] ?? { data: [], count: [] };
         const unread_count = await this.unreadCount(viewer, now);
-        return { data: aggregate.data, total: aggregate.count[0]?.total ?? 0, unread_count };
+        return {
+            data: (aggregate.data ?? []).map((notification: MobileNotificationSource) =>
+                formatMobileNotification(notification)
+            ),
+            total: aggregate.count[0]?.total ?? 0,
+            unread_count,
+        };
     }
 
     public async unreadCount(viewer: NotificationViewer, now = new Date()): Promise<number> {

@@ -4,8 +4,11 @@ import {
     MobileNotificationInboxResponseSchema,
     MobileNotificationReadAllResponseSchema,
     MobileNotificationReadResponseSchema,
+    MobileNotificationSchema,
     MobileNotificationUnreadCountResponseSchema,
 } from '../src/schemas/notification-response.schema';
+import mongoose from 'mongoose';
+import { formatMobileNotification } from '../src/services/notification.formatter';
 
 const pagination = { page: 1, limit: 20, total: 2, pages: 1, hasNext: false, hasPrev: false };
 const publicNotification = {
@@ -32,6 +35,76 @@ const targetedNotification = {
 };
 
 describe('Mobile Notification response schemas', () => {
+    test('rejects raw BSON aggregation values and accepts the explicitly formatted DTO', () => {
+        const raw = {
+            _id: new mongoose.Types.ObjectId('65761473c0af5ea3a3eacf86'),
+            category: 'appointments' as const,
+            type: 'appointment_confirmed' as const,
+            title: 'تم تأكيد الموعد',
+            body: 'تم تأكيد موعدك',
+            target: { type: 'appointment' as const, id: new mongoose.Types.ObjectId() },
+            privacy: 'normal' as const,
+            createdAt: new Date('2026-09-05T08:00:00.000Z'),
+            is_read: false,
+            read_at: null,
+        };
+        const envelope = (data: unknown[]) => ({
+            error: false,
+            message: 'تم جلب الإشعارات بنجاح',
+            data,
+            pagination: { ...pagination, total: 1 },
+            unread_count: 1,
+        });
+
+        expect(Value.Check(MobileNotificationInboxResponseSchema, envelope([raw]))).toBe(false);
+        const formatted = formatMobileNotification(raw);
+        expect(formatted._id).toBe('65761473c0af5ea3a3eacf86');
+        expect(typeof formatted.target?.id).toBe('string');
+        expect(formatted.createdAt).toBe('2026-09-05T08:00:00.000Z');
+        expect(formatted.read_at).toBeNull();
+        expect(Value.Check(MobileNotificationInboxResponseSchema, envelope([formatted]))).toBe(true);
+    });
+
+    test('normalizes every supported target and both read states', () => {
+        const targetTypes = ['appointment', 'home_care_request', 'pharmacy_treatment_request', 'medication_dose'] as const;
+        for (const targetType of targetTypes) {
+            const formatted = formatMobileNotification({
+                _id: new mongoose.Types.ObjectId(),
+                type: 'general',
+                title: 'title',
+                body: 'body',
+                target: { type: targetType, id: new mongoose.Types.ObjectId() },
+                createdAt: new Date('2026-09-05T08:00:00.000Z'),
+                is_read: true,
+                read_at: new Date('2026-09-05T09:00:00.000Z'),
+            });
+            expect(typeof formatted.target?.id).toBe('string');
+            expect(formatted.is_read).toBe(true);
+            expect(formatted.read_at).toBe('2026-09-05T09:00:00.000Z');
+        }
+    });
+
+    test('preserves nullable and optional legacy semantics without fabricating fields', () => {
+        const base = {
+            _id: new mongoose.Types.ObjectId(),
+            type: 'general' as const,
+            title: 'legacy',
+            body: 'legacy body',
+            createdAt: '2026-09-05T08:00:00.000Z',
+        };
+        const absent = formatMobileNotification(base);
+        expect(absent).not.toHaveProperty('category');
+        expect(absent).not.toHaveProperty('privacy');
+        expect(absent).not.toHaveProperty('target');
+        expect(absent).toMatchObject({ is_read: false, read_at: null });
+
+        const nullable = formatMobileNotification({ ...base, target: null, read_at: undefined });
+        expect(nullable.target).toBeNull();
+        expect(nullable.read_at).toBeNull();
+        expect(Value.Check(MobileNotificationSchema, absent)).toBe(true);
+        expect(Value.Check(MobileNotificationSchema, nullable)).toBe(true);
+    });
+
     test('accepts public and targeted items with viewer-specific read state and pagination', () => {
         expect(Value.Check(MobileNotificationInboxResponseSchema, {
             error: false,

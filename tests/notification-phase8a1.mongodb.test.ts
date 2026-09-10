@@ -41,6 +41,15 @@ run('Phase 8A1 notification core against MongoDB', () => {
         expect(a.data.map((x: any) => String(x._id))).toEqual(expect.arrayContaining([String(publicNotification._id), String(targetA._id)]));
         expect(a.data.map((x: any) => String(x._id))).not.toContain(String(targetB._id));
         expect(b.data.map((x: any) => String(x._id))).toEqual(expect.arrayContaining([String(publicNotification._id), String(targetB._id)]));
+        for (const inbox of [guest, a, b]) {
+            for (const item of inbox.data) {
+                expect(typeof item._id).toBe('string');
+                expect(typeof item.createdAt).toBe('string');
+                expect(Number.isNaN(Date.parse(item.createdAt))).toBe(false);
+                expect(typeof item.is_read).toBe('boolean');
+                expect(item.read_at).toBeNull();
+            }
+        }
     });
 
     test('category filtering, global unread count, and read receipt identities are isolated', async () => {
@@ -53,12 +62,55 @@ run('Phase 8A1 notification core against MongoDB', () => {
         expect(await notificationService.markRead({ installationHash: guestA }, String(publicNotification._id))).toBe(true);
         expect(await notificationService.markRead({ installationHash: guestA }, String(publicNotification._id))).toBe(true);
         expect(await NotificationRead.countDocuments({ notification_id: publicNotification._id, installation_key_hash: guestA })).toBe(1);
-        expect((await notificationService.getMobileInbox({ installationHash: guestA }, { page: 1, limit: 20 })).data.find((x: any) => String(x._id) === String(publicNotification._id))?.is_read).toBe(true);
+        const rawRead = await NotificationRead.findOne({ notification_id: publicNotification._id, installation_key_hash: guestA }).lean();
+        expect(rawRead?.read_at).toBeInstanceOf(Date);
+        const guestRead = (await notificationService.getMobileInbox({ installationHash: guestA }, { page: 1, limit: 20 })).data.find((x: any) => String(x._id) === String(publicNotification._id));
+        expect(guestRead?.is_read).toBe(true);
+        expect(typeof guestRead?.read_at).toBe('string');
+        expect(Number.isNaN(Date.parse(guestRead!.read_at!))).toBe(false);
         expect((await notificationService.getMobileInbox({ installationHash: guestB }, { page: 1, limit: 20 })).data.find((x: any) => String(x._id) === String(publicNotification._id))?.is_read).toBe(false);
         expect(await notificationService.markRead({ userId: String(userA) }, String(targeted._id))).toBe(true);
         expect(await notificationService.markRead({ userId: String(userB) }, String(targeted._id))).toBe(false);
         expect(await notificationService.unreadCount({ userId: String(userA) })).toBe(2);
         expect(serviceNotification).toBeDefined();
+    });
+
+    test('formats every target type and legacy optional fields from real aggregation values', async () => {
+        const now = new Date('2026-09-05T08:00:00.000Z');
+        const expires = new Date('2030-01-01T00:00:00.000Z');
+        const targetTypes = ['appointment', 'home_care_request', 'pharmacy_treatment_request', 'medication_dose'] as const;
+        const targetIds = targetTypes.map(() => new mongoose.Types.ObjectId());
+        await Notification.insertMany(targetTypes.map((type, index) => ({
+            audience: 'public', category: 'system', type: 'general', title: type, body: 'body', privacy: 'normal',
+            target: { type, id: targetIds[index] }, recipient_ids: [], recipient_model: 'all', status: 'pending',
+            is_read: false, visible_at: new Date('2020-01-01'), expires_at: expires, createdAt: now,
+        })));
+        const legacyMissingId = new mongoose.Types.ObjectId();
+        const legacyNullId = new mongoose.Types.ObjectId();
+        await Notification.collection.insertMany([
+            { _id: legacyMissingId, audience: 'public', type: 'general', title: 'legacy-missing', body: 'body', recipient_ids: [], recipient_model: 'all', status: 'pending', visible_at: new Date('2020-01-01'), expires_at: expires, createdAt: now, updatedAt: now },
+            { _id: legacyNullId, audience: 'public', type: 'general', title: 'legacy-null', body: 'body', target: null, recipient_ids: [], recipient_model: 'all', status: 'pending', visible_at: new Date('2020-01-01'), expires_at: expires, createdAt: now, updatedAt: now },
+        ]);
+
+        const [raw] = await Notification.aggregate([
+            { $match: { title: targetTypes[0] } },
+            { $project: { target: 1, createdAt: 1 } },
+        ]);
+        expect(raw._id).toBeInstanceOf(mongoose.Types.ObjectId);
+        expect(raw.target.id).toBeInstanceOf(mongoose.Types.ObjectId);
+        expect(raw.createdAt).toBeInstanceOf(Date);
+
+        const inbox = await notificationService.getMobileInbox({ installationHash: guestA }, { page: 1, limit: 20 });
+        for (const [index, type] of targetTypes.entries()) {
+            const item = inbox.data.find(notification => notification.title === type)!;
+            expect(item.target).toEqual({ type, id: String(targetIds[index]) });
+        }
+        const missing = inbox.data.find(notification => notification._id === String(legacyMissingId))!;
+        expect(missing).not.toHaveProperty('category');
+        expect(missing).not.toHaveProperty('privacy');
+        expect(missing).not.toHaveProperty('target');
+        expect(missing).toMatchObject({ is_read: false, read_at: null });
+        expect(inbox.data.find(notification => notification._id === String(legacyNullId))?.target).toBeNull();
     });
 
     test('mark-all writes only visible notifications and recipient/read uniqueness is enforced', async () => {
