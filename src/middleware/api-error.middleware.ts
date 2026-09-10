@@ -2,6 +2,34 @@ import Elysia from 'elysia';
 import { DomainError } from '../services/domain-error';
 import { requestIdFor } from './http-security.middleware';
 
+const VALIDATION_FALLBACK_MESSAGE = 'تعذر التحقق من أحد حقول الطلب';
+
+type ValidationIssue = {
+    summary?: unknown;
+    message?: unknown;
+};
+
+/** Returns useful validation context without exposing the submitted payload or validator model. */
+export function validationErrorMessage(error: unknown): string {
+    try {
+        const issues = (error as { all?: unknown }).all;
+        if (!Array.isArray(issues)) return VALIDATION_FALLBACK_MESSAGE;
+
+        for (const issue of issues as ValidationIssue[]) {
+            const reason = typeof issue.summary === 'string'
+                ? issue.summary
+                : typeof issue.message === 'string'
+                    ? issue.message
+                    : null;
+            if (reason?.trim()) return reason.trim().slice(0, 1000);
+        }
+    } catch {
+        // Some third-party validators expose `all` through a getter that may fail.
+    }
+
+    return VALIDATION_FALLBACK_MESSAGE;
+}
+
 /** Keeps framework-level errors aligned with the reusable Swagger response contracts. */
 export const ApiErrorPlugin = new Elysia({ name: 'api-error-plugin' })
     .onError({ as: 'global' }, ({ code, error, request, set }) => {
@@ -21,7 +49,12 @@ export const ApiErrorPlugin = new Elysia({ name: 'api-error-plugin' })
         }
         if (code === 'VALIDATION') {
             set.status = 422;
-            return { error: true, message: 'بيانات الطلب غير صالحة', requestId };
+            return {
+                error: true,
+                message: 'بيانات الطلب غير صالحة',
+                error_message: validationErrorMessage(error),
+                requestId,
+            };
         }
         if (code === 'NOT_FOUND') {
             set.status = 404;

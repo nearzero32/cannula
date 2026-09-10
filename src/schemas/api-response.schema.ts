@@ -68,25 +68,21 @@ export const InternalServerErrorResponseSchema = errorResponse('خطأ داخل�
 export const ServiceUnavailableResponseSchema = errorResponse('الخدمة غير متاحة حالياً', 'الخدمة غير متاحة حالياً');
 
 export const ValidationErrorResponseSchema = t.Object({
-    type: t.Literal('validation'),
-    on: t.String(),
-    property: t.Optional(t.String()),
-    message: t.String(),
-    summary: t.Optional(t.String()),
-    expected: t.Optional(t.Unknown()),
-    found: t.Optional(t.Unknown()),
-    errors: t.Optional(t.Array(t.Unknown())),
+    error: t.Literal(true),
+    message: t.Literal('بيانات الطلب غير صالحة'),
+    error_message: t.String({
+        minLength: 1,
+        description: 'سبب فشل التحقق بصيغة قابلة للعرض أو التسجيل من دون كشف كامل الطلب',
+    }),
+    requestId: t.String(),
 }, {
-    description: 'خطأ تحقق Elysia الأصلي',
+    description: 'خطأ تحقق موحد للموبايل والداشبورد',
+    additionalProperties: false,
     examples: [{
-        type: 'validation',
-        on: 'body',
-        property: '/price',
-        message: 'Expected union value',
-        summary: "Property 'price' should be one of: 'integer', 'integer'",
-        expected: { price: 0 },
-        found: { price: 0 },
-        errors: [],
+        error: true,
+        message: 'بيانات الطلب غير صالحة',
+        error_message: "Property 'phone' is missing",
+        requestId: 'e239ec47-a861-4b37-8783-bfc315f02d00',
     }],
 });
 

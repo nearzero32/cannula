@@ -2,6 +2,19 @@
 
 ## Global handling
 
+Framework validation failures (`422`) use the same envelope in Mobile and Dashboard APIs. `message` remains the stable Arabic summary, while `error_message` explains the failed validation rule:
+
+```json
+{
+  "error": true,
+  "message": "بيانات الطلب غير صالحة",
+  "error_message": "Property 'phone' is missing",
+  "requestId": "e239ec47-a861-4b37-8783-bfc315f02d00"
+}
+```
+
+Clients may display or log `error_message` for troubleshooting and should treat `message` as the stable general description.
+
 | Status | Meaning | Refresh token? | Retry? | UX / refresh entity |
 |---:|---|---:|---:|---|
 | `400` | malformed/invalid input | no | after correction | show field/message; no entity refresh normally |
@@ -43,4 +56,3 @@ Codes are present only when a `DomainError` reaches a handler that includes `cod
 - Mobile upload purposes: `PATIENT_PROFILE_PHOTO|PATIENT_CHILD_PHOTO|PRESCRIPTION_IMAGE`; visibility `PUBLIC|PRIVATE`.
 
 Arabic: افصل الحالة الفارغة الناجحة (`data: []`) عن الخطأ، واعتمد قيمة enum الخام للموديل مع تسمية واجهة محلية.
-

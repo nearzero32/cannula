@@ -5,12 +5,13 @@ import { Value } from '@sinclair/typebox/value';
 import { dashboardController } from '../src/controller/dash/index';
 import { mobileController, mobileProtectedController, mobilePublicController } from '../src/controller/mobile/index';
 import { swaggerConfig } from '../src/constants/swagger.config';
-import { ApiErrorPlugin } from '../src/middleware/api-error.middleware';
+import { ApiErrorPlugin, validationErrorMessage } from '../src/middleware/api-error.middleware';
 import { SWAGGER_TAG_DEFINITIONS, SWAGGER_TAG_GROUPS, SWAGGER_TAGS } from '../src/constants/swagger-tags';
 import {
     BadRequestResponseSchema,
     InternalServerErrorResponseSchema,
     NotFoundResponseSchema,
+    ValidationErrorResponseSchema,
 } from '../src/schemas/api-response.schema';
 
 interface OpenApiOperation {
@@ -271,6 +272,40 @@ describe('API response documentation coverage', () => {
 });
 
 describe('global framework error contracts', () => {
+    test.each(['/mobile/example', '/dash/example'])('%s validation returns the reason in error_message', async path => {
+        const app = new Elysia()
+            .use(ApiErrorPlugin)
+            .post(path, () => ({ error: false }), {
+                body: t.Object({ phone: t.String({ minLength: 7 }) }, { additionalProperties: false }),
+            });
+        const response = await app.handle(new Request(`http://localhost${path}`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({}),
+        }));
+        const body = await responseBody(response);
+
+        expect(response.status).toBe(422);
+        expect(Value.Check(ValidationErrorResponseSchema, body)).toBe(true);
+        expect(body).toMatchObject({
+            error: true,
+            message: 'بيانات الطلب غير صالحة',
+            requestId: expect.any(String),
+        });
+        const errorMessage = body.error_message;
+        expect(typeof errorMessage).toBe('string');
+        if (typeof errorMessage !== 'string') throw new Error('error_message must be a string');
+        expect(errorMessage.length).toBeGreaterThan(0);
+        expect(errorMessage).toContain('phone');
+        expect(JSON.stringify(body)).not.toContain('minLength');
+    });
+
+    test('validation reason formatter fails closed when validator details are unavailable', () => {
+        expect(validationErrorMessage({})).toBe('تعذر التحقق من أحد حقول الطلب');
+        expect(validationErrorMessage({ get all() { throw new Error('validator failed'); } }))
+            .toBe('تعذر التحقق من أحد حقول الطلب');
+    });
+
     test('malformed JSON returns the documented Arabic 400 envelope', async () => {
         const app = new Elysia()
             .use(ApiErrorPlugin)

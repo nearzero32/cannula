@@ -9,6 +9,7 @@ import homeCareCategoryService from '../src/services/home-care-category.service'
 import homeCareServiceService from '../src/services/home-care-service.service';
 import homeCarePolicyService from '../src/services/home-care-policy.service';
 import { HomeCareValidationError } from '../src/services/home-care.validation';
+import { ApiErrorPlugin } from '../src/middleware/api-error.middleware';
 import RedisClient from '../src/databases/redis';
 import { signAccessToken, TokenAudienceEnum } from '../src/constants/jwt';
 import sessionService from '../src/services/session.service';
@@ -141,14 +142,19 @@ describe('Home Care runtime response contracts', () => {
         expect(Value.Check(ConflictResponseSchema, body)).toBe(true);
     });
 
-    test('422 native Elysia validation matches the documented validation schema', async () => {
+    test('422 validation uses the production error envelope and includes its reason', async () => {
         spyOn(homeCarePolicyService, 'getAccess').mockResolvedValue('manage');
-        const response = await homeCareAdminController.handle(authorizedRequest('/home-care/categories/', {
+        const app = new Elysia().use(ApiErrorPlugin).use(homeCareAdminController);
+        const response = await app.handle(authorizedRequest('/home-care/categories/', {
             method: 'POST', body: JSON.stringify({ displayOrder: 1 }),
         }));
         const body = await json(response);
         expect(response.status).toBe(422);
         expect(Value.Check(ValidationErrorResponseSchema, body)).toBe(true);
+        const errorMessage = body.error_message;
+        expect(errorMessage).toBeString();
+        if (typeof errorMessage !== 'string') throw new Error('error_message must be a string');
+        expect(errorMessage.length).toBeGreaterThan(0);
     });
 
     test('429 rate limiter payload matches the reusable documented schema', async () => {
